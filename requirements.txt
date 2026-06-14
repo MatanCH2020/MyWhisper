@@ -1,0 +1,14 @@
+faster-whisper>=1.0.3
+sounddevice>=0.4.6
+numpy>=1.26
+keyboard>=0.13.5
+pyperclip>=1.8.2
+# Qt UI toolkit — native, correct right-to-left/bidi rendering for Hebrew + tray.
+PySide6-Essentials>=6.6
+# Offline Hebrew word-frequency lexicon, used to flag unknown/mis-transcribed words.
+wordfreq>=3.0
+# CUDA runtime libs for CTranslate2 GPU inference (needed by faster-whisper on GPU)
+# cuda-runtime provides cudart64_12.dll, which cublas/cudnn depend on.
+nvidia-cuda-runtime-cu12
+nvidia-cublas-cu12
+nvidia-cudnn-cu12

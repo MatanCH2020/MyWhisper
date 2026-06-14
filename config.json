@@ -1,0 +1,16 @@
+{
+  "hotkey": "ctrl+space",
+  "model": "ivrit-ai/whisper-large-v3-turbo-ct2",
+  "language": "he",
+  "device": "cuda",
+  "compute_type": "float16",
+  "beam_size": 5,
+  "vad_filter": true,
+  "restore_clipboard": true,
+  "sounds": true,
+  "initial_prompt": "שלום, מה שלומך? היום יום יפה.",
+  "highlight_unknown": true,
+  "bidi_isolate": true,
+  "theme": "dark",
+  "sound_volume": 0.25
+}

@@ -1,0 +1,27 @@
+# Python virtual environment (large — includes CUDA libs)
+.venv/
+
+# Python caches
+__pycache__/
+*.pyc
+*.pyo
+
+# User data (personal — must not be published)
+history.json
+corrections.json
+dictionary.json
+
+# Logs and diagnostics
+*.log
+*_log.txt
+diag*.txt
+
+# Local tooling / scratch
+.claude/
+screen*.png
+*_probe.py
+*.tmp
+
+# OS
+Thumbs.db
+desktop.ini
