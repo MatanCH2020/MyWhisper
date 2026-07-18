@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MyWhisper — תמלול עברית מקומי לווינדוז</title>
+<meta name="description" content="לוחצים קיצור, מדברים בעברית, והטקסט מודבק איפה שהסמן. תמלול מקומי על ה-GPU — בלי אינטרנט, בלי מנויים.">
+<link rel="icon" type="image/png" href="icon.png">
+<meta property="og:title" content="MyWhisper — תמלול עברית מקומי לווינדוז">
+<meta property="og:description" content="לוחצים קיצור, מדברים בעברית, והטקסט מודבק איפה שהסמן. 100% מקומי ופרטי.">
+<meta property="og:image" content="https://matanch2020.github.io/MyWhisper/app-history-dark.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Heebo:wght@400;500;700;900&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#0e1015; --surface:#171a21; --surface2:#1e222c; --border:#2a2f3b;
+  --text:#e8eaef; --muted:#98a0ad; --accent:#4c82f7; --accent2:#2456c4;
+  --green:#34c98e; --red:#ff5b5b; --radius:18px;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{
+  font-family:'Heebo',system-ui,sans-serif;background:var(--bg);color:var(--text);
+  line-height:1.65;overflow-x:hidden;
+}
+a{color:var(--accent);text-decoration:none}
+.container{max-width:1080px;margin:0 auto;padding:0 24px}
+
+/* nav */
+nav{
+  position:sticky;top:0;z-index:50;backdrop-filter:blur(14px);
+  background:rgba(14,16,21,.8);border-bottom:1px solid var(--border);
+}
+.nav-inner{display:flex;align-items:center;justify-content:space-between;height:64px}
+.brand{display:flex;align-items:center;gap:10px;font-weight:900;font-size:1.15rem;color:var(--text)}
+.brand img{width:34px;height:34px;border-radius:9px}
+.nav-links{display:flex;gap:22px;align-items:center;font-size:.95rem}
+.nav-links a{color:var(--muted);font-weight:500}
+.nav-links a:hover{color:var(--text)}
+.gh-link{display:flex;align-items:center;gap:7px;border:1px solid var(--border);
+  padding:7px 14px;border-radius:10px;color:var(--text)!important;background:var(--surface)}
+
+/* hero */
+.hero{position:relative;padding:84px 0 40px;text-align:center}
+.hero::before{
+  content:"";position:absolute;inset:-200px 0 auto;height:560px;pointer-events:none;
+  background:radial-gradient(600px 320px at 50% 10%,rgba(76,130,247,.22),transparent 70%);
+}
+.hero img.logo{width:96px;height:96px;border-radius:24px;box-shadow:0 12px 40px rgba(76,130,247,.35)}
+.hero h1{font-size:clamp(2.4rem,6vw,3.6rem);font-weight:900;margin:18px 0 6px;letter-spacing:-.5px}
+.hero h1 span{background:linear-gradient(135deg,#7aa5ff,#4c82f7);-webkit-background-clip:text;background-clip:text;color:transparent}
+.tagline{font-size:clamp(1.05rem,2.6vw,1.35rem);color:var(--muted);max-width:640px;margin:0 auto 8px;font-weight:500}
+.tagline b{color:var(--text)}
+
+.cta{display:flex;flex-direction:column;align-items:center;gap:14px;margin:30px 0 10px}
+.btn-install{
+  display:inline-flex;align-items:center;gap:12px;font-family:inherit;font-weight:700;font-size:1.25rem;
+  color:#fff;background:linear-gradient(135deg,var(--accent),var(--accent2));
+  padding:16px 42px;border-radius:16px;border:none;cursor:pointer;
+  box-shadow:0 10px 34px rgba(76,130,247,.4);transition:transform .15s,box-shadow .15s;
+}
+.btn-install:hover{transform:translateY(-2px);box-shadow:0 14px 44px rgba(76,130,247,.55)}
+.counter{
+  display:inline-flex;align-items:center;gap:8px;background:var(--surface);border:1px solid var(--border);
+  padding:8px 18px;border-radius:999px;font-size:.98rem;color:var(--muted);
+}
+.counter b{color:var(--green);font-size:1.1rem;font-variant-numeric:tabular-nums}
+.hero .fineprint{color:var(--muted);font-size:.85rem;margin-top:4px}
+
+.alt-install{margin-top:18px;color:var(--muted);font-size:.92rem}
+.cmdbox{
+  direction:ltr;display:flex;align-items:center;gap:10px;max-width:640px;margin:10px auto 0;
+  background:#0b0d12;border:1px solid var(--border);border-radius:12px;padding:10px 14px;
+  font-family:Consolas,monospace;font-size:.85rem;color:#9fd0ff;overflow-x:auto;white-space:nowrap;
+}
+.cmdbox button{
+  flex-shrink:0;font-family:'Heebo';background:var(--surface2);color:var(--text);border:1px solid var(--border);
+  border-radius:8px;padding:5px 14px;cursor:pointer;font-size:.85rem;
+}
+.cmdbox button:hover{background:var(--border)}
+
+.hero-shot{margin:46px auto 0;max-width:900px;position:relative}
+.hero-shot img{width:100%;border-radius:16px;box-shadow:0 30px 80px rgba(0,0,0,.55);border:1px solid var(--border)}
+.overlay-float{
+  position:absolute;top:-28px;left:6%;width:150px;filter:drop-shadow(0 12px 26px rgba(0,0,0,.5));
+  animation:bob 3.2s ease-in-out infinite;
+}
+@keyframes bob{0%,100%{transform:translateY(0)}50%{transform:translateY(-9px)}}
+
+/* sections */
+section{padding:72px 0}
+.sec-title{text-align:center;font-size:clamp(1.6rem,4vw,2.2rem);font-weight:900;margin-bottom:8px}
+.sec-sub{text-align:center;color:var(--muted);max-width:600px;margin:0 auto 44px}
+
+/* steps */
+.steps{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}
+.step{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:28px 22px;text-align:center;position:relative}
+.step .num{
+  width:40px;height:40px;border-radius:12px;display:flex;align-items:center;justify-content:center;
+  margin:0 auto 14px;font-weight:900;font-size:1.1rem;color:#fff;
+  background:linear-gradient(135deg,var(--accent),var(--accent2));
+}
+.step h3{font-size:1.1rem;margin-bottom:6px}
+.step p{color:var(--muted);font-size:.95rem}
+.step kbd{
+  background:var(--surface2);border:1px solid var(--border);border-bottom-width:3px;border-radius:7px;
+  padding:2px 9px;font-family:Consolas,monospace;font-size:.85rem;color:#9fd0ff;direction:ltr;display:inline-block;
+}
+
+/* features */
+.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:26px 22px;transition:border-color .2s,transform .2s}
+.card:hover{transform:translateY(-3px);border-color:#3a4558}
+.card .ico{font-size:1.8rem;margin-bottom:10px}
+.card h3{font-size:1.05rem;margin-bottom:6px}
+.card p{color:var(--muted);font-size:.93rem}
+
+/* learn section */
+.split{display:grid;grid-template-columns:1fr 1fr;gap:44px;align-items:center}
+.split img{width:100%;border-radius:14px;border:1px solid var(--border);box-shadow:0 18px 50px rgba(0,0,0,.45)}
+.split h2{font-size:1.9rem;font-weight:900;margin-bottom:14px}
+.split p{color:var(--muted);margin-bottom:12px}
+.split .point{display:flex;gap:10px;margin-bottom:10px}
+.split .point .dot{color:var(--green);font-weight:900}
+
+/* faq */
+details.faq{
+  background:var(--surface);border:1px solid var(--border);border-radius:14px;
+  padding:18px 22px;margin-bottom:12px;max-width:760px;margin-inline:auto;
+}
+details.faq summary{cursor:pointer;font-weight:700;font-size:1.02rem;list-style:none;display:flex;justify-content:space-between;align-items:center}
+details.faq summary::after{content:"+";font-size:1.4rem;color:var(--accent);transition:transform .2s}
+details.faq[open] summary::after{transform:rotate(45deg)}
+details.faq p{color:var(--muted);margin-top:10px;font-size:.95rem}
+details.faq code{direction:ltr;unicode-bidi:embed;background:#0b0d12;padding:1px 7px;border-radius:6px;font-size:.85rem;color:#9fd0ff}
+
+/* footer */
+footer{border-top:1px solid var(--border);padding:36px 0 44px;text-align:center;color:var(--muted);font-size:.92rem}
+footer .heart{color:var(--accent)}
+footer a{font-weight:500}
+
+@media (max-width:820px){
+  .steps,.grid{grid-template-columns:1fr}
+  .split{grid-template-columns:1fr}
+  .overlay-float{display:none}
+  .nav-links a:not(.gh-link){display:none}
+}
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="container nav-inner">
+    <div class="brand"><img src="icon.png" alt=""> MyWhisper</div>
+    <div class="nav-links">
+      <a href="#how">איך זה עובד</a>
+      <a href="#features">יכולות</a>
+      <a href="#learn">למידה חכמה</a>
+      <a href="#faq">שאלות</a>
+      <a class="gh-link" href="https://github.com/MatanCH2020/MyWhisper" target="_blank" rel="noopener">
+        <svg width="17" height="17" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg>
+        GitHub
+      </a>
+    </div>
+  </div>
+</nav>
+
+<header class="hero">
+  <div class="container">
+    <img class="logo" src="icon.png" alt="MyWhisper">
+    <h1>מדברים. <span>MyWhisper</span> כותב.</h1>
+    <p class="tagline">תמלול עברית מקומי לווינדוז — לוחצים <b>Ctrl+Space</b>, מדברים,
+    והטקסט מודבק איפה שהסמן. כולל פיסוק. <b>בלי אינטרנט, בלי מנויים.</b></p>
+
+    <div class="cta">
+      <a class="btn-install" href="https://github.com/MatanCH2020/MyWhisper/releases/latest/download/MyWhisper-Setup.cmd" id="install-btn">
+        ⬇ &nbsp;הורד והתקן — חינם
+      </a>
+      <div class="counter" id="counter" hidden>🔥 <b id="count">—</b> הורדות עד עכשיו</div>
+      <div class="fineprint">Windows 10/11 · מומלץ כרטיס NVIDIA · קוד פתוח</div>
+    </div>
+
+    <div class="alt-install">
+      מעדיפים טרמינל? התקנה בפקודה אחת ב-PowerShell:
+      <div class="cmdbox">
+        <button id="copy-btn">📋 העתק</button>
+        <span id="cmd">irm https://raw.githubusercontent.com/MatanCH2020/MyWhisper/main/install.ps1 | iex</span>
+      </div>
+    </div>
+
+    <div class="hero-shot">
+      <img src="app-history-dark.png" alt="MyWhisper — חלון ההיסטוריה">
+      <img class="overlay-float" src="app-overlay.png" alt="מחוון הקלטה">
+    </div>
+  </div>
+</header>
+
+<section id="how">
+  <div class="container">
+    <h2 class="sec-title">שלוש שניות, וזה בטקסט</h2>
+    <p class="sec-sub">עובד בכל מקום שיש בו שדה טקסט — וורד, דפדפן, ווטסאפ, מייל.</p>
+    <div class="steps">
+      <div class="step"><div class="num">1</div><h3>לוחצים</h3><p><kbd>Ctrl + Space</kbd><br>ביפ קטן, מחוון אדום — מקליט.</p></div>
+      <div class="step"><div class="num">2</div><h3>מדברים</h3><p>בעברית, בקצב שלכם. אפשר לשלב מילים באנגלית — הכיווניות נשמרת.</p></div>
+      <div class="step"><div class="num">3</div><h3>מודבק</h3><p>לוחצים שוב — התמלול (עם פסיקים וסימני שאלה) מודבק ישר לשדה הפעיל.</p></div>
+    </div>
+  </div>
+</section>
+
+<section id="features" style="background:var(--surface);border-block:1px solid var(--border)">
+  <div class="container">
+    <h2 class="sec-title">למה MyWhisper?</h2>
+    <p class="sec-sub">נבנה במיוחד לעברית, רץ אצלך — לא בענן של אף אחד.</p>
+    <div class="grid">
+      <div class="card" style="background:var(--surface2)"><div class="ico">🔒</div><h3>100% פרטי</h3><p>התמלול רץ על כרטיס המסך שלך. אף מילה לא עוזבת את המחשב — עובד גם בלי אינטרנט.</p></div>
+      <div class="card" style="background:var(--surface2)"><div class="ico">🇮🇱</div><h3>מודל עברית ייעודי</h3><p>מבוסס Whisper עם מודל של ivrit.ai שאומן על עברית — כולל פיסוק מלא אוטומטי.</p></div>
+      <div class="card" style="background:var(--surface2)"><div class="ico">⚡</div><h3>מהיר באמת</h3><p>GPU עם CUDA מתמלל משפטים בשניות. אין תורים, אין המתנה לשרת.</p></div>
+      <div class="card" style="background:var(--surface2)"><div class="ico">🧠</div><h3>לומד אותך</h3><p>תיקנת מילה פעם אחת? מעכשיו היא תתומלל נכון תמיד, והמודל יכוון אליה מראש.</p></div>
+      <div class="card" style="background:var(--surface2)"><div class="ico">💸</div><h3>חינם. באמת.</h3><p>בלי מנוי, בלי קרדיטים, בלי API. קוד פתוח שרץ על החומרה שלך.</p></div>
+      <div class="card" style="background:var(--surface2)"><div class="ico">🎨</div><h3>ממשק עברי אמיתי</h3><p>RTL מלא, ערכות כהה/בהיר, היסטוריה עם חיפוש, ואייקון מיקרופון חי במגש.</p></div>
+    </div>
+  </div>
+</section>
+
+<section id="learn">
+  <div class="container split">
+    <div>
+      <h2>הטעות האחרונה שתראה פעמיים 🎯</h2>
+      <p>וויספר משבש מילים לועזיות? ‏MyWhisper מסמן באדום מילים שהוא לא בטוח בהן.
+      לוחצים על המילה, מקלידים את הצורה הנכונה — וזהו:</p>
+      <div class="point"><span class="dot">✔</span><span>התיקון חל אוטומטית על כל תמלול עתידי</span></div>
+      <div class="point"><span class="dot">✔</span><span>המודל מקבל את המילה כרמז ומפיק אותה נכון מראש</span></div>
+      <div class="point"><span class="dot">✔</span><span>מילים באנגלית נשארות LTR בתוך העברית — בלי בלגן כיווניות</span></div>
+    </div>
+    <img src="app-dictionary-dark.png" alt="מילון התיקונים של MyWhisper">
+  </div>
+</section>
+
+<section id="faq" style="background:var(--surface);border-block:1px solid var(--border)">
+  <div class="container">
+    <h2 class="sec-title">שאלות נפוצות</h2>
+    <p class="sec-sub"></p>
+    <details class="faq"><summary>מה צריך כדי שזה ירוץ?</summary><p>Windows 10/11 ומיקרופון. מומלץ כרטיס מסך NVIDIA (התמלול רץ עליו ומהיר מאוד); בלעדיו התוכנה עוברת אוטומטית למעבד — עובד, רק איטי יותר. ההתקנה מסדרת לבד את Python וכל התלויות.</p></details>
+    <details class="faq"><summary>כמה זה עולה?</summary><p>כלום. קוד פתוח, רץ מקומית על החומרה שלך. אין מנוי ואין הגבלת שימוש.</p></details>
+    <details class="faq"><summary>המידע שלי נשלח לענן?</summary><p>לא. המודל יורד פעם אחת (כ-1.5–3GB) ומאז הכול רץ אופליין. אף הקלטה או תמלול לא עוזבים את המחשב.</p></details>
+    <details class="faq"><summary>איך משנים את קיצור המקלדת?</summary><p>בקובץ <code>config.json</code> בתיקיית ההתקנה — למשל מ-<code>ctrl+space</code> ל-<code>ctrl+alt+space</code> אם הקיצור תפוס אצלך.</p></details>
+    <details class="faq"><summary>ווינדוס מציג אזהרה על קובץ ההתקנה?</summary><p>זה SmartScreen על קבצים חדשים שאין להם עדיין מוניטין. הקוד פתוח וניתן לקריאה בגיטהאב; אפשר גם להתקין בפקודת ה-PowerShell שלמעלה במקום.</p></details>
+    <details class="faq"><summary>ביטלתי הקלטה בטעות / שכחתי מיקרופון פתוח?</summary><p><code>Esc</code> באמצע הקלטה מבטל בלי לתמלל, והקלטה שנשכחה נעצרת אוטומטית אחרי 10 דקות.</p></details>
+  </div>
+</section>
+
+<footer>
+  <div class="container">
+    <p><b>MyWhisper</b> · נבנה בישראל ע"י <a href="https://github.com/MatanCH2020" target="_blank" rel="noopener">Matan Digital</a> <span class="heart">💙</span></p>
+    <p style="margin-top:6px">מבוסס <a href="https://github.com/SYSTRAN/faster-whisper" target="_blank" rel="noopener">faster-whisper</a> ומודל העברית של <a href="https://huggingface.co/ivrit-ai" target="_blank" rel="noopener">ivrit.ai</a> · <a href="https://github.com/MatanCH2020/MyWhisper" target="_blank" rel="noopener">קוד המקור</a></p>
+  </div>
+</footer>
+
+<script>
+// Live download counter — sums release-asset downloads (GitHub counts these forever).
+fetch('https://api.github.com/repos/MatanCH2020/MyWhisper/releases')
+  .then(r => r.json())
+  .then(rels => {
+    if (!Array.isArray(rels)) return;
+    const total = rels.flatMap(r => r.assets || []).reduce((s, a) => s + (a.download_count || 0), 0);
+    document.getElementById('count').textContent = total.toLocaleString('he-IL');
+    document.getElementById('counter').hidden = false;
+  })
+  .catch(() => {});
+
+// Copy the one-liner.
+document.getElementById('copy-btn').addEventListener('click', function () {
+  navigator.clipboard.writeText(document.getElementById('cmd').textContent.trim()).then(() => {
+    this.textContent = '✔ הועתק';
+    setTimeout(() => { this.textContent = '📋 העתק'; }, 1800);
+  });
+});
+</script>
+</body>
+</html>
