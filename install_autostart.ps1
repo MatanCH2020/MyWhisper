@@ -13,6 +13,8 @@ $shortcut.TargetPath = "wscript.exe"
 $shortcut.Arguments = """$vbs"""
 $shortcut.WorkingDirectory = $root
 $shortcut.Description = "MyWhisper - Hebrew dictation"
+$icon = Join-Path $root "app\assets\icon.ico"
+if (Test-Path $icon) { $shortcut.IconLocation = "$icon,0" }
 $shortcut.Save()
 
 Write-Host "Autostart shortcut created:" -ForegroundColor Green

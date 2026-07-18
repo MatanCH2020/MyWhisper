@@ -3,6 +3,18 @@
 כל שינוי מתועד כאן. הפורמט מבוסס על [Keep a Changelog](https://keepachangelog.com/he/),
 וניהול הגרסאות לפי [Semantic Versioning](https://semver.org/lang/he/) (MAJOR.MINOR.PATCH).
 
+## [1.2.0] — 2026-07-18
+
+### נוסף (Added)
+- **אייקון אפליקציה ממותג** (`app/assets/icon.ico`, נוצר ע"י `app/make_icon.py`): מיקרופון לבן
+  על כחול המותג — מוצג בשורת המשימות, ב-Alt-Tab ובקיצורי הדרך (במקום אייקון פייתון).
+  `SetCurrentProcessExplicitAppUserModelID` כדי ש-Windows ישייך את החלון לאפליקציה ולא ל-python.exe.
+- **אייקון ה-tray הוא עכשיו מיקרופון** בצבעי המצב (אפור=מוכן, אדום=מקליט, צהוב=מתמלל).
+
+### שונה (Changed)
+- **X ממזער למגש**: סגירת החלון מסתירה אותו והתוכנה ממשיכה לרוץ ברקע (עם הודעת הסבר
+  חד-פעמית). יציאה אמיתית — קליק ימני על אייקון המגש ← "יציאה".
+
 ## [1.1.0] — 2026-07-18
 
 ### נוסף (Added)
@@ -57,5 +69,6 @@
 - טעינת היסטוריה איטית (מטמון ל-`wordfreq` ולקבצי ה-JSON, הגבלת כרטיסים מוצגים).
 - כפילות תהליכים בהפעלה.
 
+[1.2.0]: https://github.com/MatanCH2020/MyWhisper/releases/tag/v1.2.0
 [1.1.0]: https://github.com/MatanCH2020/MyWhisper/releases/tag/v1.1.0
 [1.0.0]: https://github.com/MatanCH2020/MyWhisper/releases/tag/v1.0.0

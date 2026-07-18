@@ -46,6 +46,7 @@ log = logging.getLogger("main")
 
 import keyboard
 from PySide6.QtCore import QTimer
+from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import QApplication
 
 import corrections
@@ -90,6 +91,7 @@ class Mywishper:
             on_settings=self.ui.open_settings,
             hotkey=self.config.get("hotkey"),
         )
+        self.ui.notify = self.tray.notify  # balloon hints (minimize-to-tray etc.)
         self.hotkeys = HotkeyManager(self.config.get("hotkey"), self.toggle)
 
         self._lock = threading.Lock()
@@ -209,7 +211,7 @@ class Mywishper:
             QTimer.singleShot(1500, lambda: self.tray.notify(
                 "MyWhisper — מצב CPU",
                 "טעינת ה-GPU נכשלה, התמלול ירוץ על המעבד (איטי יותר). "
-                "בדוק דרייבר NVIDIA וספריות CUDA (setup.ps1)."))
+                "בדוק דרייבר NVIDIA וספריות CUDA (setup.ps1).", "warning"))
 
     def quit(self):
         try:
@@ -225,6 +227,16 @@ def main():
     # QApplication must exist before any widget (tray / overlay / windows).
     qapp = QApplication.instance() or QApplication(sys.argv)
     qapp.setQuitOnLastWindowClosed(False)  # closing settings keeps the tray alive
+    # Own taskbar identity: without an explicit AppUserModelID Windows groups
+    # the window under python.exe and shows the Python icon.
+    try:
+        ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(
+            "MatanDigital.MyWhisper")
+    except Exception:
+        pass
+    icon_path = Path(__file__).resolve().parent / "assets" / "icon.ico"
+    if icon_path.exists():
+        qapp.setWindowIcon(QIcon(str(icon_path)))
     app = Mywishper()  # loads the Whisper model
     app.start()
     # Open the window shortly after the event loop starts so it's visibly "there"

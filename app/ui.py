@@ -203,6 +203,7 @@ class MainWindow(FramelessWindow):
         super().__init__()
         self.ui = ui
         self.p = palette
+        self._force_close = False  # set by AppUI._rebuild for a real close
         self.setWindowTitle("MyWhisper — Matan Digital")
         self.setMinimumSize(720, 560)
         self.resize(900, 680)
@@ -238,6 +239,16 @@ class MainWindow(FramelessWindow):
 
     def _goto(self, i):
         self.stack.setCurrentIndex(i)
+
+    def closeEvent(self, e):
+        # X minimizes to the tray — the app keeps listening for the hotkey.
+        # Really quitting is done from the tray menu ("יציאה").
+        if self._force_close:
+            e.accept()
+            return
+        e.ignore()
+        self.hide()
+        self.ui.notify_minimized()
 
     # ---------------- history ----------------
     def _history_page(self):
@@ -554,6 +565,8 @@ class AppUI(QObject):
         self.format_bidi = format_bidi or (lambda t: t)
         self.update_history = update_history or (lambda i, t: None)
         self.delete_history = delete_history or (lambda i: None)
+        self.notify = lambda *a, **k: None  # wired to Tray.notify by main
+        self._minimize_hint_shown = False
 
         self.p = theme.palette(config.get("theme", "dark"))
         self._apply_global_style()
@@ -599,6 +612,7 @@ class AppUI(QObject):
         idx = self._win.stack.currentIndex() if self._win else 0
         geo = self._win.geometry() if self._win else None
         if self._win is not None:
+            self._win._force_close = True  # real close, not minimize-to-tray
             self._win.close()
             self._win.deleteLater()
             self._win = None
@@ -610,6 +624,14 @@ class AppUI(QObject):
         self._win.nav.set_index(idx)
         self._win._goto(idx)
         self._show_window()
+
+    def notify_minimized(self):
+        """One-time balloon so the user knows X hid the window, not the app."""
+        if not self._minimize_hint_shown:
+            self._minimize_hint_shown = True
+            self.notify("MyWhisper",
+                        "התוכנה ממשיכה לרוץ ברקע. הקיצור עדיין פעיל; "
+                        "ליציאה מלאה — קליק ימני על האייקון במגש ← יציאה.")
 
     # ---- thread-safe API ----
     def set_overlay_state(self, state):

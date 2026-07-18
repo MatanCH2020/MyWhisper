@@ -50,6 +50,8 @@ $lnk.TargetPath = "wscript.exe"
 $lnk.Arguments = '"' + (Join-Path $InstallDir "run_mywishper.vbs") + '"'
 $lnk.WorkingDirectory = $InstallDir
 $lnk.Description = "MyWhisper - Hebrew dictation"
+$icon = Join-Path $InstallDir "app\assets\icon.ico"
+if (Test-Path $icon) { $lnk.IconLocation = "$icon,0" }
 $lnk.Save()
 
 Write-Host ""
