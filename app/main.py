@@ -44,7 +44,6 @@ applog.setup()  # before the component imports so their import-time logs are cap
 import logging
 log = logging.getLogger("main")
 
-import keyboard
 from PySide6.QtCore import QTimer
 from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import QApplication
@@ -55,7 +54,7 @@ import sounds
 from config import load_config, save_config
 from recorder import Recorder
 from transcriber import Transcriber
-from hotkey import HotkeyManager
+from hotkey import HotkeyManager, TempHotkey
 from ui import AppUI
 from paste import paste_text
 from tray import Tray
@@ -174,28 +173,27 @@ class Mywishper:
         self.tray.set_state("recording", "MyWhisper — מקליט...")
         self.ui.set_overlay_state("recording")
         sounds.start_recording()
-        # Esc cancels the recording without transcribing (hooked only while
-        # recording, so Esc behaves normally the rest of the time).
-        try:
-            self._esc_hook = keyboard.add_hotkey("esc", self.cancel_recording)
-        except Exception:
-            self._esc_hook = None
+        # Esc cancels the recording without transcribing (registered only while
+        # recording, so Esc behaves normally the rest of the time). Runs on the
+        # GUI thread, same as the toggle, since both arrive via WM_HOTKEY.
+        self._esc_hook = TempHotkey("esc", self.cancel_recording)
+        self._esc_hook.start()
         max_sec = self.config.get("max_record_seconds", 600)
         if max_sec and max_sec > 0:
-            self._max_timer = threading.Timer(max_sec, self._auto_stop)
-            self._max_timer.daemon = True
-            self._max_timer.start()
+            # QTimer (not threading.Timer) so _auto_stop fires on the GUI thread
+            # — hotkey (un)registration must stay on the thread that owns it.
+            self._max_timer = QTimer()
+            self._max_timer.setSingleShot(True)
+            self._max_timer.timeout.connect(self._auto_stop)
+            self._max_timer.start(int(max_sec * 1000))
 
     def _end_recording_hooks(self):
-        """Remove the Esc hook and the auto-stop timer (recording is over)."""
+        """Remove the Esc hotkey and the auto-stop timer (recording is over)."""
         if self._esc_hook is not None:
-            try:
-                keyboard.remove_hotkey(self._esc_hook)
-            except Exception:
-                pass
+            self._esc_hook.stop()
             self._esc_hook = None
         if self._max_timer is not None:
-            self._max_timer.cancel()
+            self._max_timer.stop()
             self._max_timer = None
 
     def cancel_recording(self):
@@ -252,7 +250,15 @@ class Mywishper:
             self._busy = False
 
     def start(self):
-        self.hotkeys.start()
+        try:
+            self.hotkeys.start()
+        except Exception:
+            log.exception("Hotkey registration failed")
+            hk = self.config.get("hotkey")
+            QTimer.singleShot(1500, lambda: self.tray.notify(
+                "MyWhisper — הקיצור תפוס",
+                f"לא ניתן לרשום את הקיצור '{hk}' — כנראה תפוס בתוכנה אחרת. "
+                "פתח הגדרות ← קיצור מקלדת ובחר צירוף אחר.", "warning"))
         self.tray.set_state("loading", "MyWhisper — טוען מודל...")
         threading.Thread(target=self._load_model, daemon=True).start()
         # If loading is still going after a few seconds (first-run download),

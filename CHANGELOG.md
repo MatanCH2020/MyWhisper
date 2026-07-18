@@ -3,6 +3,19 @@
 כל שינוי מתועד כאן. הפורמט מבוסס על [Keep a Changelog](https://keepachangelog.com/he/),
 וניהול הגרסאות לפי [Semantic Versioning](https://semver.org/lang/he/) (MAJOR.MINOR.PATCH).
 
+## [1.5.0] — 2026-07-19
+
+### שונה (Changed)
+- **מנגנון הקיצור הוחלף ל-`RegisterHotKey` המובנה של Windows** במקום ספריית `keyboard`.
+  הספרייה משתמשת ב-hook גלובלי שנחסם בשקט ע"י אנטי-וירוס/הרשאות במחשבים מסוימים —
+  ואז הקיצור פשוט לא הגיב. המנגנון החדש אמין יותר, לא דורש הרשאות מנהל, ונכשל בקול
+  אם הצירוף כבר תפוס (במקום שתיקה) — כך ה-UI/מגש מיידעים לבחור צירוף אחר. WM_HOTKEY
+  נתפס על ה-thread הראשי של Qt (native event filter + חלון-מארח נסתר), עם dedup להודעה
+  הכפולה ש-Qt מוסר.
+- **הזרקת ה-Ctrl+V עברה ל-`keybd_event` נייטיב** (`paste.py`) — ההדבקה כבר לא תלויה
+  בספריית `keyboard`.
+- ספריית `keyboard` הוסרה כתלות (`requirements.txt`).
+
 ## [1.4.1] — 2026-07-18
 
 ### תוקן (Fixed)
@@ -106,6 +119,7 @@
 - טעינת היסטוריה איטית (מטמון ל-`wordfreq` ולקבצי ה-JSON, הגבלת כרטיסים מוצגים).
 - כפילות תהליכים בהפעלה.
 
+[1.5.0]: https://github.com/MatanCH2020/MyWhisper/releases/tag/v1.5.0
 [1.4.1]: https://github.com/MatanCH2020/MyWhisper/releases/tag/v1.4.1
 [1.4.0]: https://github.com/MatanCH2020/MyWhisper/releases/tag/v1.4.0
 [1.3.0]: https://github.com/MatanCH2020/MyWhisper/releases/tag/v1.3.0

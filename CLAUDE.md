@@ -39,7 +39,7 @@ No linter is configured. `app/check_gpu.py` is the manual smoke test for the tra
 
 `app/main.py` is the orchestrator. `Mywishper` wires the components and runs a toggle-based state machine driven by the global hotkey:
 
-1. `HotkeyManager` (`hotkey.py`) registers one global hotkey via the `keyboard` lib that toggles `Mywishper.toggle` (idle → recording → transcribing → idle).
+1. `HotkeyManager` (`hotkey.py`) registers one global hotkey via the native Win32 `RegisterHotKey` API (not the `keyboard` lib, whose low-level hook is silently blocked by security software on some machines). WM_HOTKEY messages are caught on the Qt main thread via a `QAbstractNativeEventFilter` bound to a hidden host window (`_ensure_host`), de-duplicated (Qt delivers each message to filters twice), and routed to `Mywishper.toggle` (idle → recording → transcribing → idle). `rebind()` re-registers live from the settings UI; `TempHotkey` registers Esc only while recording. The toggle callback runs on the GUI thread, so the max-record cap uses a `QTimer` (not `threading.Timer`).
 2. First press: `Recorder.start()` (`recorder.py`, `sounddevice`) captures mic audio; start beep; tray + overlay turn red. UI/tray updates from the hotkey/worker threads are marshaled to the Qt main thread via signals.
 3. Second press: `Recorder.stop()` returns samples; transcription runs on a worker thread (`_worker`) so the UI stays responsive.
 4. `Transcriber.transcribe()` (`transcriber.py`) runs `faster-whisper` on GPU (`cuda`/`float16`, falls back to CPU/`int8`). `transcriber._add_cuda_dll_dirs()` injects the pip CUDA DLL folders into the DLL search path before importing `faster_whisper` — required or GPU load fails.
@@ -74,5 +74,5 @@ Runtime source of truth is `config.json` (gitignored, per-user; created from the
 ## GPU / environment notes
 
 - GPU inference needs the NVIDIA CUDA runtime DLLs from the pip packages `nvidia-cuda-runtime-cu12`, `nvidia-cublas-cu12`, `nvidia-cudnn-cu12` (installed by `setup.ps1`). Without them, `faster-whisper` falls back to (slow) CPU.
-- The `keyboard` library and input injection may require running **as administrator** on some setups (hotkey not firing, or paste blocked by the target app).
+- The global hotkey uses native `RegisterHotKey` (no admin needed); `paste.py` injects Ctrl+V via native `keybd_event`. The `keyboard` library is no longer a dependency. If a hotkey combo is already claimed by another app, `RegisterHotKey` fails and the UI/tray surfaces it (pick another combo in Settings).
 - Console output can hit Windows `charmap` encoding errors on Hebrew text (see `app_run_log.txt`); this is cosmetic logging, not a transcription failure.
