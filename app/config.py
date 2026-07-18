@@ -16,6 +16,7 @@ DEFAULTS = {
     "compute_type": "float16",
     "beam_size": 5,
     "vad_filter": True,
+    "input_device": "",  # microphone name; "" = system default
     "restore_clipboard": True,
     "clipboard_restore_delay": 0.5,  # seconds; raise for apps slow to consume paste
     "max_record_seconds": 600,       # auto-stop cap for a forgotten recording; 0 = off

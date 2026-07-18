@@ -3,6 +3,14 @@
 כל שינוי מתועד כאן. הפורמט מבוסס על [Keep a Changelog](https://keepachangelog.com/he/),
 וניהול הגרסאות לפי [Semantic Versioning](https://semver.org/lang/he/) (MAJOR.MINOR.PATCH).
 
+## [1.6.0] — 2026-07-19
+
+### נוסף (Added)
+- **בחירת מיקרופון בהגדרות**: כרטיס "מיקרופון" חדש עם רשימת כל התקני הקלט הזמינים
+  (`list_input_devices`) וכפתור רענן. בוחרים את המיקרופון להקלטה, או "ברירת מחדל של
+  המערכת". הבחירה נשמרת (`input_device` ב-`config.json`) ומיושמת בהקלטה הבאה; אם ההתקן
+  הנבחר נעלם, יש נפילה חלקה לברירת המחדל.
+
 ## [1.5.3] — 2026-07-19
 
 ### תוקן (Fixed)
@@ -146,6 +154,7 @@
 - טעינת היסטוריה איטית (מטמון ל-`wordfreq` ולקבצי ה-JSON, הגבלת כרטיסים מוצגים).
 - כפילות תהליכים בהפעלה.
 
+[1.6.0]: https://github.com/MatanCH2020/MyWhisper/releases/tag/v1.6.0
 [1.5.3]: https://github.com/MatanCH2020/MyWhisper/releases/tag/v1.5.3
 [1.5.2]: https://github.com/MatanCH2020/MyWhisper/releases/tag/v1.5.2
 [1.5.1]: https://github.com/MatanCH2020/MyWhisper/releases/tag/v1.5.1

@@ -6,6 +6,7 @@
   "compute_type": "float16",
   "beam_size": 5,
   "vad_filter": true,
+  "input_device": "",
   "restore_clipboard": true,
   "clipboard_restore_delay": 0.5,
   "max_record_seconds": 600,

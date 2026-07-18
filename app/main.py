@@ -52,7 +52,7 @@ import corrections
 import history
 import sounds
 from config import load_config, save_config
-from recorder import Recorder, has_input_device
+from recorder import Recorder, has_input_device, list_input_devices
 from transcriber import Transcriber
 from hotkey import HotkeyManager, TempHotkey
 from ui import AppUI
@@ -65,7 +65,7 @@ class Mywishper:
         self.config = load_config()
         self._apply_sound_config()
 
-        self.recorder = Recorder()
+        self.recorder = Recorder(self.config.get("input_device") or None)
         # Loaded in the background by start(): on first run the model is a
         # ~2GB download, and blocking here would leave the user with no tray,
         # no window and a dead hotkey for minutes.
@@ -97,6 +97,8 @@ class Mywishper:
         self.hotkeys = HotkeyManager(self.config.get("hotkey"), self.toggle)
         self.ui.set_hotkey = self._set_hotkey            # live hotkey editor
         self.ui.relaunch_as_admin = self._relaunch_as_admin
+        self.ui.list_input_devices = lambda: [n for _, n in list_input_devices()]
+        self.ui.set_input_device = self._set_input_device
 
         self._lock = threading.Lock()
         self._busy = False  # True while transcribing (ignore toggles)
@@ -133,6 +135,13 @@ class Mywishper:
         self.tray.set_hotkey_label(new_hotkey)
         log.info("Hotkey changed to '%s'.", new_hotkey)
         return True
+
+    def _set_input_device(self, name):
+        """Change the microphone used for recording (from the settings UI)."""
+        self.recorder.set_device(name or None)
+        self.config["input_device"] = name or ""
+        save_config(self.config)
+        log.info("Input device set to %r.", name or "system default")
 
     def _relaunch_as_admin(self):
         """Relaunch the app elevated (UAC). Returns False if elevation was

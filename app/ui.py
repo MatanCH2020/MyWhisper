@@ -11,9 +11,9 @@ import math
 from PySide6.QtCore import QObject, Qt, QTimer, Signal
 from PySide6.QtGui import QColor, QFont, QPainter
 from PySide6.QtWidgets import (
-    QApplication, QDialog, QFileDialog, QFrame, QHBoxLayout, QLabel, QLineEdit,
-    QMessageBox, QPushButton, QScrollArea, QSlider, QStackedWidget, QVBoxLayout,
-    QWidget,
+    QApplication, QComboBox, QDialog, QFileDialog, QFrame, QHBoxLayout, QLabel,
+    QLineEdit, QMessageBox, QPushButton, QScrollArea, QSlider, QStackedWidget,
+    QVBoxLayout, QWidget,
 )
 
 import icons
@@ -513,6 +513,26 @@ class MainWindow(FramelessWindow):
         ap.vbox.addLayout(row)
         v.addWidget(ap)
 
+        # microphone
+        mc = Card()
+        mc.vbox.addWidget(self._section("מיקרופון"))
+        mrow = QHBoxLayout()
+        mrow.addWidget(self._plain("התקן קלט"))
+        mrow.addStretch(1)
+        self._mic_combo = QComboBox()
+        self._mic_combo.setMinimumWidth(240)
+        self._mic_combo.currentIndexChanged.connect(self._on_mic_changed)
+        mrow.addWidget(self._mic_combo)
+        mrow.addWidget(self._tool_btn("refresh", "רענן", self._populate_mics))
+        mc.vbox.addLayout(mrow)
+        mic_hint = QLabel("בחר את המיקרופון להקלטה. \"ברירת מחדל של המערכת\" עוקב אחר "
+                          "ההתקן שמוגדר ב-Windows. אם הרשימה ריקה — אין מיקרופון מחובר.")
+        mic_hint.setWordWrap(True)
+        mic_hint.setStyleSheet(f"color:{self.p['text_muted']}; font-size:11px;")
+        mc.vbox.addWidget(mic_hint)
+        v.addWidget(mc)
+        self._populate_mics()
+
         # sound
         sc = Card()
         sc.vbox.addWidget(self._section("צליל"))
@@ -620,6 +640,20 @@ class MainWindow(FramelessWindow):
             QMessageBox.warning(self, "MyWhisper",
                                 "לא ניתן היה להפעיל כמנהל — ייתכן שאין לך הרשאות מנהל "
                                 "במחשב, או שהפעולה בוטלה. נסה לשנות את הקיצור במקום.")
+
+    def _populate_mics(self):
+        self._mic_combo.blockSignals(True)
+        self._mic_combo.clear()
+        self._mic_combo.addItem("ברירת מחדל של המערכת", "")
+        for name in self.ui.list_input_devices():
+            self._mic_combo.addItem(name, name)
+        current = self.ui.config.get("input_device", "")
+        idx = self._mic_combo.findData(current)
+        self._mic_combo.setCurrentIndex(idx if idx >= 0 else 0)
+        self._mic_combo.blockSignals(False)
+
+    def _on_mic_changed(self, _idx):
+        self.ui.set_input_device(self._mic_combo.currentData() or "")
 
     def _on_sound_toggle(self, on):
         self.ui.config["sounds"] = bool(on)
@@ -733,6 +767,8 @@ class AppUI(QObject):
         self.notify = lambda *a, **k: None  # wired to Tray.notify by main
         self.set_hotkey = lambda h: True    # wired to Mywishper._set_hotkey by main
         self.relaunch_as_admin = lambda: False
+        self.list_input_devices = lambda: []       # wired by main
+        self.set_input_device = lambda n: None      # wired by main
         self._minimize_hint_shown = False
 
         self.p = theme.palette(config.get("theme", "dark"))

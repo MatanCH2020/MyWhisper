@@ -19,15 +19,46 @@ def has_input_device() -> bool:
         return False
 
 
+def list_input_devices():
+    """Return [(index, name), ...] for microphones, de-duplicated by name."""
+    seen, out = set(), []
+    try:
+        for i, d in enumerate(sd.query_devices()):
+            name = (d.get("name") or "").strip()
+            if d.get("max_input_channels", 0) > 0 and name and name not in seen:
+                seen.add(name)
+                out.append((i, name))
+    except Exception:
+        pass
+    return out
+
+
 class Recorder:
     """Streams microphone audio into a buffer between start() and stop()."""
 
-    def __init__(self):
+    def __init__(self, device=None):
         self._stream = None
         self._chunks = []
         self._q = queue.Queue()
         self.recording = False
         self._level = 0.0  # smoothed RMS level (0..1-ish) for the live animation
+        # Selected input device name (str), or None for the system default.
+        self.device = device or None
+
+    def set_device(self, device):
+        """Set the input device by name (or None for the system default)."""
+        self.device = device or None
+
+    def _resolve_device(self):
+        """Map the stored device name to a sounddevice index; None (system
+        default) if unset or if the named device is no longer present."""
+        if not self.device:
+            return None
+        for i, name in list_input_devices():
+            if name == self.device:
+                return i
+        log.warning("Selected mic %r not found — using the system default.", self.device)
+        return None
 
     def _callback(self, indata, frames, time_info, status):
         if status:
@@ -54,6 +85,7 @@ class Recorder:
             samplerate=SAMPLE_RATE,
             channels=CHANNELS,
             dtype="float32",
+            device=self._resolve_device(),
             callback=self._callback,
         )
         self._stream.start()

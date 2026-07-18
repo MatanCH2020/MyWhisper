@@ -127,6 +127,7 @@ irm https://raw.githubusercontent.com/MatanCH2020/MyWhisper/main/install.ps1 | i
 | `compute_type` | `float16` ל-GPU, `int8` ל-CPU |
 | `beam_size` | איכות מול מהירות (5 = איכותי) |
 | `vad_filter` | סינון שקט אוטומטי |
+| `input_device` | שם המיקרופון להקלטה (`""` = ברירת מחדל של המערכת). ניתן לבחור מ**הגדרות ← מיקרופון** |
 | `restore_clipboard` | שחזור ה-clipboard המקורי אחרי ההדבקה |
 | `clipboard_restore_delay` | שניות המתנה לפני שחזור ה-clipboard (הגדל לאפליקציות איטיות) |
 | `max_record_seconds` | תקרת הקלטה — עצירה אוטומטית להקלטה שנשכחה (0 = כבוי) |
