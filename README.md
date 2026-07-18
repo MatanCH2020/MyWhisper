@@ -1,81 +1,122 @@
-# MyWhisper · Matan Digital — תמלול עברית גלובלי לווינדוז 🎙️
+<div align="center">
 
-תוכנה בסגנון **SuperWhisper** לווינדוז: לוחצים קיצור מקלדת גלובלי בכל מקום (דפדפן, חיפוש, וורד, כל שדה טקסט),
-מדברים **בעברית**, והדיבור מתומלל מקומית **כולל פיסוק** (פסיק, סימן שאלה, סימן קריאה) ומודבק אוטומטית איפה שהסמן.
+<img src="docs/icon.png" width="110" alt="MyWhisper icon">
 
-התמלול רץ **מקומית על ה-GPU** עם `faster-whisper` — חינם, פרטי, בלי אינטרנט ובלי עלויות API.
+# MyWhisper
+
+**תמלול עברית מקומי לווינדוז 🎙️ — לוחצים קיצור, מדברים, והטקסט מודבק איפה שהסמן.**
+**רץ כולו על ה-GPU שלך. בלי אינטרנט, בלי מנויים, בלי API.**
+
+[![Release](https://img.shields.io/github/v/release/MatanCH2020/MyWhisper?color=4C82F7&label=release)](https://github.com/MatanCH2020/MyWhisper/releases)
+[![Windows](https://img.shields.io/badge/Windows-10%20%7C%2011-0078D6?logo=windows&logoColor=white)](#-%D7%93%D7%A8%D7%99%D7%A9%D7%95%D7%AA)
+[![Python](https://img.shields.io/badge/Python-3.12-3776AB?logo=python&logoColor=white)](#)
+[![GPU](https://img.shields.io/badge/faster--whisper-CUDA-76B900?logo=nvidia&logoColor=white)](#)
+[![Offline](https://img.shields.io/badge/100%25-Offline%20%26%20Private-2ea44f)](#)
+[![RTL](https://img.shields.io/badge/%D7%A2%D7%91%D7%A8%D7%99%D7%AA-RTL%20Native-4C82F7)](#)
+
+<br>
+
+<img src="docs/app-history-dark.png" width="840" alt="MyWhisper — חלון ההיסטוריה במצב כהה">
+
+<br>
+
+*מחוון ההקלטה הצף — מופיע בראש המסך בזמן שמדברים:*
+
+<img src="docs/app-overlay.png" width="190" alt="מחוון הקלטה">
+
+</div>
 
 ---
 
-## דרישות
-- Windows 10/11
-- כרטיס מסך NVIDIA עם CUDA (מומלץ) — אחרת התוכנה תיפול אוטומטית ל-CPU (איטי יותר)
-- מיקרופון
+<div dir="rtl" align="right">
 
-## התקנה בפקודה אחת ⚡
+## ✨ מה מקבלים
+
+| | |
+|---|---|
+| 🎤 **הכתבה בכל מקום** | קיצור מקלדת גלובלי — עובד בדפדפן, וורד, ווטסאפ, כל שדה טקסט |
+| 🧠 **מודל עברית ייעודי** | `ivrit-ai/whisper-large-v3-turbo-ct2` עם פיסוק מלא (פסיק, סימן שאלה, קריאה) |
+| ⚡ **מהיר ופרטי** | תמלול מקומי על ה-GPU — שום דבר לא עוזב את המחשב |
+| 📚 **לומד אותך** | תיקנת מילה פעם אחת? מעכשיו היא תתומלל נכון אוטומטית |
+| 🔤 **עברית + אנגלית** | מילים לועזיות נשארות LTR בתוך הטקסט העברי (בידוד BiDi) |
+| 🎨 **ממשק מעוצב** | Qt עם RTL אמיתי, ערכות בהיר/כהה, היסטוריה עם חיפוש |
+
+## ⚡ התקנה בפקודה אחת
+
 פתח PowerShell והדבק:
 
 ```powershell
 irm https://raw.githubusercontent.com/MatanCH2020/MyWhisper/main/install.ps1 | iex
 ```
 
-זהו. הפקודה מתקינה Git ו-Python 3.12 אם חסרים, משכפלת את הפרויקט ל-`%USERPROFILE%\MyWhisper`,
-מתקינה את כל התלויות (כולל ספריות CUDA) ויוצרת קיצור **MyWhisper** על שולחן העבודה.
-הרצה חוזרת של אותה פקודה מעדכנת התקנה קיימת.
+הפקודה מתקינה Git ו-Python 3.12 אם חסרים, מורידה את הפרויקט ל-`%USERPROFILE%\MyWhisper`,
+מתקינה את כל התלויות (כולל ספריות CUDA) ושמה קיצור **MyWhisper** על שולחן העבודה.
+הרצה חוזרת של אותה פקודה = עדכון לגרסה האחרונה.
 
-## התקנה ידנית (חלופה)
-שכפל את הריפו ומתוך תיקיית הפרויקט הרץ ב-PowerShell:
+> בהרצה הראשונה יורד מודל התמלול (‎~1.5–3GB) — פעם אחת בלבד.
 
-```powershell
-powershell -ExecutionPolicy Bypass -File setup.ps1
-```
+## 🎬 איך משתמשים
 
-זה יוצר סביבת Python 3.12 מבודדת (`.venv`), מתקין את כל התלויות (כולל ספריות CUDA)
-ויוצר `config.json` מתוך `config.example.json`.
+| מקש | פעולה |
+|---|---|
+| `Ctrl+Alt+Space` | התחלת הקלטה 🔴 (ביפ + מחוון בראש המסך) |
+| `Ctrl+Alt+Space` שוב | עצירה → תמלול 🟡 → הטקסט מודבק לשדה הפעיל |
+| `Esc` בזמן הקלטה | ביטול — ההקלטה נזרקת בלי תמלול |
+| `X` על החלון | מזעור למגש — התוכנה ממשיכה להאזין ברקע |
 
-> **למה Python 3.12?** במחסנית ה-ML (ctranslate2/faster-whisper) עדיין אין wheels יציבים ל-Python 3.14
-> שמותקן במחשב. ה-venv מבודד ולא משפיע על שאר השימושים.
+יציאה מלאה: חץ למעלה ליד השעון ← קליק ימני על אייקון המיקרופון ← **יציאה**.
+הקלטה שנשכחה פתוחה נעצרת ומתומללת אוטומטית אחרי 10 דקות.
 
-## בדיקה ראשונית (מומלץ לפני הכל)
-```powershell
-.\.venv\Scripts\python app\check_gpu.py
-```
-מקליט 4 שניות ומתמלל — דבר משפט עברי עם שאלה (למשל "מה השעה עכשיו?") ובדוק שהפלט עברי ותקין.
-**בריצה הראשונה המודל יורד (~1.5–3GB)** — זה קורה פעם אחת.
+## 🧠 התוכנה לומדת אותך
 
-## הפעלה
-```powershell
-.\.venv\Scripts\python app\main.py
-```
-או בלי חלון קונסולה (לרקע):
-```powershell
-wscript run_mywishper.vbs
-```
+כל תמלול נשמר בלשונית **היסטוריה**. מילים שהמערכת לא מכירה (בעיקר מונחים לועזיים
+שוויספר משבש) מסומנות **באדום** — לוחצים על המילה ובוחרים:
 
-## שימוש
-1. אייקון אפור מופיע ב-System Tray = מוכן.
-2. לחץ **`Ctrl+Alt+Space`** בכל מקום → ביפ, האייקון אדום = מקליט.
-3. דבר בעברית.
-4. לחץ **`Ctrl+Alt+Space`** שוב → האייקון צהוב = מתמלל → הטקסט מודבק לשדה הפעיל.
-5. **`Esc`** בזמן הקלטה = ביטול (ההקלטה נזרקת, בלי תמלול).
-6. סגירת החלון ב-**X** רק ממזערת למגש — התוכנה ממשיכה להאזין לקיצור.
-7. יציאה אמיתית: קליק-ימני על אייקון המיקרופון במגש (ליד השעון) → "יציאה".
+- **"שמור תיקון"** — מקלידים את הצורה הנכונה (מילה לועזית? באנגלית: `render`, `thumbnail`).
+  מעכשיו התיקון חל אוטומטית על כל תמלול, והמודל מכוון להפיק אותה נכון מלכתחילה.
+- **"המילה תקינה"** — נכנסת למילון האישי ולא תסומן שוב.
 
-הקלטה ששכחת פתוחה נעצרת ומתומללת אוטומטית אחרי 10 דקות (`max_record_seconds`).
+לשונית **מילון** מרכזת את כל מה שנלמד ומאפשרת למחוק תיקון.
 
-## הפעלה אוטומטית עם ווינדוז (אופציונלי)
-```powershell
-powershell -ExecutionPolicy Bypass -File install_autostart.ps1
-```
-התוכנה תעלה לבד ל-tray בכל כניסה למחשב. לביטול — מחק את הקיצור `MyWhisper.lnk` מתיקיית ה-Startup.
+## 🖼️ עוד מהאפליקציה
 
----
+<details>
+<summary><b>מצב בהיר, מילון והגדרות (לחץ להרחבה)</b></summary>
+<br>
 
-## הגדרות — `config.json`
+<div align="center">
+
+*מצב בהיר:*
+
+<img src="docs/app-history-light.png" width="780" alt="מצב בהיר">
+
+*המילון — תיקונים שנלמדו:*
+
+<img src="docs/app-dictionary-dark.png" width="780" alt="מילון תיקונים">
+
+*הגדרות — ערכת נושא, צלילים ועוצמה:*
+
+<img src="docs/app-settings-light.png" width="780" alt="הגדרות">
+
+</div>
+</details>
+
+## 📋 דרישות
+
+- Windows 10/11
+- כרטיס מסך NVIDIA עם CUDA (מומלץ) — בלעדיו התוכנה עוברת אוטומטית ל-CPU (איטי יותר, עם התראה)
+- מיקרופון
+
+## ⚙️ הגדרות מתקדמות
+
+<details>
+<summary><b><code>config.json</code> — כל המפתחות (לחץ להרחבה)</b></summary>
+<br>
+
 | שדה | משמעות |
 |------|--------|
 | `hotkey` | קיצור המקלדת (ברירת מחדל `ctrl+alt+space`) |
-| `model` | מודל Whisper. ברירת מחדל: מודל עברית-ייעודי של ivrit.ai. חלופה: `large-v3` |
+| `model` | מודל Whisper. ברירת מחדל: מודל עברית של ivrit.ai; חלופה מדויקת יותר: `large-v3` |
 | `language` | שפת התמלול (`he`) |
 | `device` | `cuda` ל-GPU או `cpu` |
 | `compute_type` | `float16` ל-GPU, `int8` ל-CPU |
@@ -83,56 +124,64 @@ powershell -ExecutionPolicy Bypass -File install_autostart.ps1
 | `vad_filter` | סינון שקט אוטומטי |
 | `restore_clipboard` | שחזור ה-clipboard המקורי אחרי ההדבקה |
 | `clipboard_restore_delay` | שניות המתנה לפני שחזור ה-clipboard (הגדל לאפליקציות איטיות) |
-| `max_record_seconds` | תקרת הקלטה בשניות — עצירה אוטומטית להקלטה שנשכחה (0 = כבוי) |
-| `sounds` | ביפים של התחלה/סיום |
-| `sound_volume` | עוצמת הצלילים (0–1) |
-| `highlight_unknown` | סימון אוטומטי באדום של מילים לא־מוכרות בהיסטוריה (לתיקון) |
-| `bidi_isolate` | שמירה על כיווניות נכונה — מילים באנגלית נשארות LTR בתוך טקסט עברי RTL |
-| `initial_prompt` | טקסט עברי שמכוון את המודל לעברית עם פיסוק |
+| `max_record_seconds` | תקרת הקלטה — עצירה אוטומטית להקלטה שנשכחה (0 = כבוי) |
+| `sounds` / `sound_volume` | צלילי התחלה/סיום ועוצמתם (0–1) |
+| `highlight_unknown` | סימון אדום של מילים לא-מוכרות בהיסטוריה |
+| `bidi_isolate` | שמירת כיווניות — אנגלית נשארת LTR בתוך עברית |
+| `initial_prompt` | טקסט עברי שמכוון את המודל לפיסוק |
+| `theme` | `dark` / `light` |
 
-### החלפת מודל לאיכות עברית מקסימלית
-ברירת המחדל היא `ivrit-ai/whisper-large-v3-turbo-ct2` (מהיר, עברית מצוינת).
-לדיוק מקסימלי אפשר לנסות `large-v3` (איטי מעט יותר) — פשוט שנה את `model` ב-`config.json`.
+ההגדרות האישיות נשמרות ב-`config.json` (נוצר אוטומטית מ-`config.example.json`).
 
----
+</details>
 
-## שיפור דיוק לאורך זמן (לְמידה ותיקונים)
-כל מה שאתה מכתיב נשמר בלשונית **היסטוריה** שבחלון ההגדרות. מילים עבריות שהמערכת לא מזהה
-(בעיקר מילים לועזיות/טכניות שווויספר משבש, כמו *תאמנל* במקום *תמבנייל*) **מסומנות אוטומטית בקו אדום**.
+<details>
+<summary><b>הפעלה ידנית ואוטומטית (לחץ להרחבה)</b></summary>
+<br>
 
-- **לחיצה על מילה** (כל מילה, לא רק אדומה) פותחת חלון תיקון:
-  - **"שמור תיקון"** — מזין את המילה הנכונה. מעכשיו המערכת תחליף אותה אוטומטית בכל תמלול עתידי,
-    וגם תכוון את וויספר להפיק אותה נכון מלכתחילה.
-  - **"המילה תקינה"** — מוסיף את המילה למילון האישי כך שלא תסומן שוב.
-- לשונית **מילון** מציגה את כל התיקונים שנלמדו (שגוי ← נכון) ומאפשרת למחוק תיקון.
+```powershell
+# התקנה ידנית (מתוך תיקיית הפרויקט)
+powershell -ExecutionPolicy Bypass -File setup.ps1
 
-**מילים לועזיות נכתבות באנגלית**: כשמילה לועזית מסומנת, פשוט הקלד אותה באנגלית בחלון התיקון
-(למשל *render*, *thumbnail*). הטקסט נשמר בכיווניות נכונה — האנגלית נשארת LTR בתוך העברית RTL
-(באמצעות סימני בידי בלתי־נראים בהדבקה; ניתן לכבות עם `bidi_isolate`).
+# בדיקת GPU + עברית (מקליט 4 שניות ומתמלל)
+.\.venv\Scripts\python app\check_gpu.py
 
-התיקונים נשמרים ב-`corrections.json` והמילים המאושרות ב-`dictionary.json` (בשורש הפרויקט).
-זיהוי המילים הלא־מוכרות מבוסס על מילון עברי מקומי (`wordfreq`) — בלי אינטרנט.
+# הרצה עם קונסולה
+.\.venv\Scripts\python app\main.py
 
----
+# הרצה שקטה לרקע (בלי חלון קונסולה)
+wscript run_mywishper.vbs
 
-## פתרון תקלות
+# הפעלה אוטומטית עם ווינדוז
+powershell -ExecutionPolicy Bypass -File install_autostart.ps1
+
+# בדיקות יחידה
+.\.venv\Scripts\python -m unittest discover tests
+```
+
+</details>
+
+## 🛠️ פתרון תקלות
+
+<details>
+<summary><b>לחץ להרחבה</b></summary>
+<br>
+
 כל האירועים נרשמים ל-`mywhisper.log` בתיקיית הפרויקט — זה המקום הראשון לבדוק.
 
-- **התראת "מצב CPU" מה-tray** — טעינת ה-GPU נכשלה: חסרות ספריות CUDA או דרייבר. ודא `nvidia-cublas-cu12` ו-`nvidia-cudnn-cu12` מותקנים (מותקנים ע"י `setup.ps1`).
-- **הקיצור לא עובד** — ספריית `keyboard` לפעמים דורשת הרצה **כמנהל** (Run as administrator).
-- **לא מודבק טקסט** — חלק מהאפליקציות חוסמות הזרקת קלט; נסה כמנהל, או הטקסט עדיין ב-clipboard להדבקה ידנית (Ctrl+V).
+- **התראת "מצב CPU" מהמגש** — טעינת ה-GPU נכשלה: בדוק דרייבר NVIDIA וש-`nvidia-cublas-cu12` ו-`nvidia-cudnn-cu12` מותקנים (מותקנים ע"י `setup.ps1`).
+- **הקיצור לא עובד** — ספריית `keyboard` לפעמים דורשת הרצה **כמנהל**.
+- **לא מודבק טקסט** — חלק מהאפליקציות חוסמות הזרקת קלט; נסה כמנהל, או שהטקסט עדיין ב-clipboard להדבקה ידנית (`Ctrl+V`).
+
+</details>
 
 ---
 
-## מבנה
-```
-app\main.py         מתזמר ראשי + ניהול מצב
-app\transcriber.py  עטיפת faster-whisper (טעינת מודל + transcribe)
-app\recorder.py     הקלטת מיקרופון (sounddevice)
-app\hotkey.py       קיצור גלובלי (toggle)
-app\paste.py        clipboard + הזרקת Ctrl+V
-app\tray.py         אייקון System Tray
-app\sounds.py       ביפים (winsound)
-app\config.py       קריאת config.json
-app\check_gpu.py    סקריפט בדיקת תמלול
-```
+<div align="center">
+
+**MyWhisper** · נבנה על ידי [Matan Digital](https://github.com/MatanCH2020) 💙
+מבוסס [faster-whisper](https://github.com/SYSTRAN/faster-whisper) + מודל העברית של [ivrit.ai](https://huggingface.co/ivrit-ai)
+
+</div>
+
+</div>
