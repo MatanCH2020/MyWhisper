@@ -1,5 +1,8 @@
 """Global hotkey registration (toggle mode) using the keyboard library."""
+import logging
 import keyboard
+
+log = logging.getLogger("hotkey")
 
 
 class HotkeyManager:
@@ -13,7 +16,7 @@ class HotkeyManager:
     def start(self):
         # suppress=False so the keypress still reaches other apps if needed.
         self._handle = keyboard.add_hotkey(self.hotkey, self.on_toggle)
-        print(f"[hotkey] Listening for '{self.hotkey}' (press to start/stop recording).")
+        log.info("Listening for '%s' (press to start/stop recording).", self.hotkey)
 
     def stop(self):
         if self._handle is not None:

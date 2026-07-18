@@ -1,7 +1,10 @@
 """Microphone recording via sounddevice -> float32 numpy buffer at 16 kHz mono."""
+import logging
 import queue
 import numpy as np
 import sounddevice as sd
+
+log = logging.getLogger("recorder")
 
 SAMPLE_RATE = 16000  # Whisper expects 16 kHz
 CHANNELS = 1
@@ -19,7 +22,7 @@ class Recorder:
 
     def _callback(self, indata, frames, time_info, status):
         if status:
-            print(f"[recorder] {status}")
+            log.warning("%s", status)
         # Track a smoothed loudness level for the recording animation.
         rms = float(np.sqrt(np.mean(np.square(indata, dtype=np.float64))))
         # Map RMS to a lively 0..1 range and smooth to avoid jitter.

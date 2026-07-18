@@ -10,6 +10,7 @@ __pycache__/
 history.json
 corrections.json
 dictionary.json
+config.json
 
 # Logs and diagnostics
 *.log

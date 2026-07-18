@@ -1,12 +1,15 @@
 """Soft audio feedback cues. Plays the Kolbo-generated WAV chimes via sounddevice
 at a gentle, configurable volume. Falls back to a quiet winsound beep if the WAV
 assets are missing."""
+import logging
 import wave
 import winsound
 from pathlib import Path
 
 import numpy as np
 import sounddevice as sd
+
+log = logging.getLogger("sounds")
 
 ASSETS = Path(__file__).resolve().parent / "assets"
 
@@ -97,7 +100,7 @@ def import_sound(name: str, src_path: str) -> bool:
         _cache.pop(name, None)  # force reload on next play
         return True
     except Exception as e:
-        print(f"[sounds] import_sound failed: {e}")
+        log.error("import_sound failed: %s", e)
         return False
 
 

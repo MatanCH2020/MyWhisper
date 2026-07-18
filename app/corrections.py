@@ -12,9 +12,12 @@ Unknown-word detection uses the wordfreq Hebrew lexicon (offline). If wordfreq i
 not installed the feature degrades gracefully: nothing is flagged.
 """
 import json
+import logging
 import re
 from functools import lru_cache
 from pathlib import Path
+
+log = logging.getLogger("corrections")
 
 _ROOT = Path(__file__).resolve().parent.parent
 CORRECTIONS_PATH = _ROOT / "corrections.json"
@@ -57,7 +60,7 @@ def _zipf():
 # Small mtime-keyed caches so rendering 100s of history cards doesn't re-read and
 # re-parse the JSON files once per word.
 _corr_cache = {"mtime": -1.0, "data": {}}
-_dict_cache = {"mtime": -1.0, "data": set()}
+_dict_cache = {"mtime": -1.0, "list": [], "set": set()}
 
 
 def _load_corrections() -> dict:
@@ -81,31 +84,43 @@ def _save_corrections(data: dict):
         with open(CORRECTIONS_PATH, "w", encoding="utf-8") as f:
             json.dump(data, f, ensure_ascii=False, indent=2)
     except OSError as e:
-        print(f"[corrections] Failed to write: {e}")
+        log.error("Failed to write: %s", e)
 
 
-def _load_dictionary() -> set:
+def _load_dictionary() -> list:
+    """Approved words in the order they were added (oldest first)."""
     try:
         mtime = DICTIONARY_PATH.stat().st_mtime
     except OSError:
-        return set()
+        _dict_cache.update(mtime=-1.0, list=[], set=set())
+        return []
     if mtime != _dict_cache["mtime"]:
         try:
             with open(DICTIONARY_PATH, "r", encoding="utf-8") as f:
                 data = json.load(f)
-            _dict_cache["data"] = set(data) if isinstance(data, list) else set()
+            words = [w for w in data if isinstance(w, str)] if isinstance(data, list) else []
         except (json.JSONDecodeError, OSError):
-            _dict_cache["data"] = set()
+            words = []
+        _dict_cache["list"] = words
+        _dict_cache["set"] = set(words)
         _dict_cache["mtime"] = mtime
-    return _dict_cache["data"]
+    return _dict_cache["list"]
 
 
-def _save_dictionary(words: set):
+def _dictionary_set() -> set:
+    """The approved words as a set, for O(1) membership checks."""
+    _load_dictionary()
+    return _dict_cache["set"]
+
+
+def _save_dictionary(words: list):
+    """Persist the dictionary, preserving insertion order (newest last) so
+    bias_terms() can favor recently approved words."""
     try:
         with open(DICTIONARY_PATH, "w", encoding="utf-8") as f:
-            json.dump(sorted(words), f, ensure_ascii=False, indent=2)
+            json.dump(words, f, ensure_ascii=False, indent=2)
     except OSError as e:
-        print(f"[corrections] Failed to write: {e}")
+        log.error("Failed to write: %s", e)
 
 
 # ---------------- helpers ----------------
@@ -146,7 +161,7 @@ def is_known(word: str, approved: set = None, targets: set = None) -> bool:
     if len(w) < 2:
         return True  # don't flag single letters
     if approved is None:
-        approved = _load_dictionary()
+        approved = _dictionary_set()
     if targets is None:
         targets = set(_load_corrections().values())
     if w in approved or w in targets:
@@ -161,7 +176,7 @@ def flag_tokens(text: str):
     Only Hebrew-letter runs are words (clickable); unknown=True marks ones to
     highlight. Separators (spaces/punctuation/other scripts) come back as word=False.
     """
-    approved = _load_dictionary()
+    approved = _dictionary_set()
     targets = set(_load_corrections().values())
     tokens = []
     pos = 0
@@ -179,19 +194,21 @@ def flag_tokens(text: str):
 
 def apply(text: str) -> str:
     """Apply the learned {wrong: right} map to a transcription, matching whole
-    Hebrew words only (so a correction never fires inside a larger word)."""
+    Hebrew words only (so a correction never fires inside a larger word).
+
+    All corrections run in a single pass (one alternation regex, longest keys
+    first), so the output of one replacement can never be re-matched by another
+    (no A->B, B->C chaining into A->C)."""
     if not text:
         return text
     corr = _load_corrections()
     if not corr:
         return text
-    # Longest keys first so multi-word / longer corrections win over shorter ones.
-    for wrong in sorted(corr, key=len, reverse=True):
-        right = corr[wrong]
-        pattern = re.compile(
-            f"(?<![{_HEB_LETTER}]){re.escape(wrong)}(?![{_HEB_LETTER}])")
-        text = pattern.sub(right, text)
-    return text
+    alternation = "|".join(
+        re.escape(wrong) for wrong in sorted(corr, key=len, reverse=True))
+    pattern = re.compile(
+        f"(?<![{_HEB_LETTER}])(?:{alternation})(?![{_HEB_LETTER}])")
+    return pattern.sub(lambda m: corr[m.group()], text)
 
 
 def add_correction(wrong: str, right: str):
@@ -210,10 +227,8 @@ def approve_word(word: str):
     w = _normalize(word)
     if not w:
         return
-    words = _load_dictionary()
-    if w not in words:
-        words.add(w)
-        _save_dictionary(words)
+    if w not in _dictionary_set():
+        _save_dictionary(_load_dictionary() + [w])
 
 
 def list_corrections() -> dict:
@@ -232,12 +247,17 @@ def remove_correction(wrong: str):
 def bias_terms() -> str:
     """Space-joined string of corrected/approved words to bias Whisper toward.
 
-    Capped at the most recent _MAX_BIAS_TERMS so the prompt stays bounded.
+    Correction targets come first and are never dropped in favor of plain
+    dictionary words (they are the highest-signal vocabulary); the most
+    recently approved dictionary words fill the remaining slots, so the prompt
+    stays bounded at _MAX_BIAS_TERMS.
     """
-    terms = list(dict.fromkeys(list(_load_corrections().values()) + sorted(_load_dictionary())))
-    if not terms:
-        return ""
-    return " ".join(terms[-_MAX_BIAS_TERMS:])
+    corr_terms = list(dict.fromkeys(_load_corrections().values()))[:_MAX_BIAS_TERMS]
+    seen = set(corr_terms)
+    dict_terms = [w for w in _load_dictionary() if w not in seen]
+    remaining = _MAX_BIAS_TERMS - len(corr_terms)
+    terms = corr_terms + (dict_terms[-remaining:] if remaining > 0 else [])
+    return " ".join(terms)
 
 
 def format_bidi(text: str) -> str:

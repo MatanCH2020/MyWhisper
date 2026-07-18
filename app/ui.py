@@ -146,7 +146,7 @@ class CorrectionDialog(QDialog):
 class HistoryCard(QFrame):
     """A transcription card: timestamp, RTL clickable text, hover actions."""
 
-    def __init__(self, win, idx, text, time_str):
+    def __init__(self, win, entry_id, text, time_str):
         super().__init__()
         self.setObjectName("card")
         p = win.p
@@ -164,14 +164,14 @@ class HistoryCard(QFrame):
         ah.setContentsMargins(0, 0, 0, 0)
         ah.setSpacing(2)
         copy = self._icon_btn("copy", p["text_muted"], lambda: win.copy_text(text))
-        trash = self._icon_btn("trash", p["danger"], lambda: win.delete_entry(idx))
+        trash = self._icon_btn("trash", p["danger"], lambda: win.delete_entry(entry_id))
         ah.addWidget(copy)
         ah.addWidget(trash)
         self._actions.setVisible(False)
         top.addWidget(self._actions)
         v.addLayout(top)
 
-        body = QLabel(win.card_html(idx, text))
+        body = QLabel(win.card_html(entry_id, text))
         body.setTextFormat(Qt.RichText)
         body.setWordWrap(True)
         body.setOpenExternalLinks(False)
@@ -266,12 +266,12 @@ class MainWindow(FramelessWindow):
         entries = self.ui.get_history()
         shown = 0
         empty = True
-        for idx, e in enumerate(entries):
+        for e in entries:
             text = (e.get("text", "") or "").strip()
             if q and q not in text.lower():
                 continue
             empty = False
-            self._hist_box.addWidget(HistoryCard(self, idx, text,
+            self._hist_box.addWidget(HistoryCard(self, e.get("id", ""), text,
                                                  self._fmt_time(e.get("time", ""))))
             shown += 1
             if shown >= MAX_HISTORY_CARDS:
@@ -281,7 +281,7 @@ class MainWindow(FramelessWindow):
                 "לא נמצאו תוצאות" if q else "אין עדיין תמלולים"))
         self._hist_box.addStretch(1)
 
-    def card_html(self, idx, text):
+    def card_html(self, entry_id, text):
         highlight = self.ui.config.get("highlight_unknown", True)
         parts = []
         for i, tok in enumerate(self.ui.flag_tokens(text)):
@@ -293,18 +293,22 @@ class MainWindow(FramelessWindow):
                 style = f"color:{self.p['unknown_fg']};text-decoration:underline;font-weight:bold;"
             else:
                 style = f"color:{self.p['text']};text-decoration:none;"
-            parts.append(f'<a href="{idx}:{i}" style="{style}">{t}</a>')
+            parts.append(f'<a href="{entry_id}:{i}" style="{style}">{t}</a>')
         return f'<div dir="rtl">{"".join(parts)}</div>'
 
     def on_word_clicked(self, href):
+        # href is "<entry_id>:<token_index>" — a stable id, so the link stays
+        # valid even if new transcriptions shifted the list meanwhile.
+        entry_id, _, ti = href.rpartition(":")
         try:
-            idx, ti = (int(x) for x in href.split(":"))
+            ti = int(ti)
         except ValueError:
             return
-        entries = self.ui.get_history()
-        if not (0 <= idx < len(entries)):
+        entry = next((e for e in self.ui.get_history()
+                      if e.get("id") == entry_id), None)
+        if entry is None:
             return
-        text = (entries[idx].get("text", "") or "").strip()
+        text = (entry.get("text", "") or "").strip()
         tokens = self.ui.flag_tokens(text)
         if not (0 <= ti < len(tokens)):
             return
@@ -312,7 +316,7 @@ class MainWindow(FramelessWindow):
 
         def on_save(w, new):
             self.ui.add_correction(w, new)
-            self.ui.update_history(idx, self.ui.apply_corrections(text))
+            self.ui.update_history(entry_id, self.ui.apply_corrections(text))
             self.refresh_history()
             self.refresh_dict()
 
@@ -328,8 +332,8 @@ class MainWindow(FramelessWindow):
         out = self.ui.format_bidi(text) if self.ui.config.get("bidi_isolate", True) else text
         QApplication.clipboard().setText(out)
 
-    def delete_entry(self, idx):
-        self.ui.delete_history(idx)
+    def delete_entry(self, entry_id):
+        self.ui.delete_history(entry_id)
         self.refresh_history()
 
     def _clear_all(self):

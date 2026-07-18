@@ -17,8 +17,23 @@ try {
 if (-not $py312) {
     Write-Host "Python 3.12 not found. Installing via winget..." -ForegroundColor Yellow
     winget install -e --id Python.Python.3.12 --accept-source-agreements --accept-package-agreements
-    Write-Host "Installed. You may need to re-open the terminal if 'py -3.12' is not found next." -ForegroundColor Yellow
+    # Refresh PATH so the just-installed launcher is visible in this session.
+    $env:Path = [Environment]::GetEnvironmentVariable("Path", "Machine") + ";" +
+                [Environment]::GetEnvironmentVariable("Path", "User")
+    try {
+        $check = & py -3.12 --version 2>$null
+        if ($LASTEXITCODE -ne 0) { throw }
+    } catch {
+        Write-Host "Python 3.12 still not visible - close this terminal, open a new one and re-run setup.ps1." -ForegroundColor Red
+        exit 1
+    }
     $py312 = "py -3.12"
+}
+
+# Default config: copy the example on first install (config.json is per-user).
+if ((Test-Path "config.example.json") -and -not (Test-Path "config.json")) {
+    Copy-Item "config.example.json" "config.json"
+    Write-Host "Created config.json from config.example.json" -ForegroundColor Green
 }
 
 # 2. Create the virtual environment.

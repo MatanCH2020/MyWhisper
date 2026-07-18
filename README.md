@@ -12,14 +12,26 @@
 - כרטיס מסך NVIDIA עם CUDA (מומלץ) — אחרת התוכנה תיפול אוטומטית ל-CPU (איטי יותר)
 - מיקרופון
 
-## התקנה
-מתוך תיקיית הפרויקט, הרץ ב-PowerShell:
+## התקנה בפקודה אחת ⚡
+פתח PowerShell והדבק:
+
+```powershell
+irm https://raw.githubusercontent.com/MatanCH2020/MyWhisper/main/install.ps1 | iex
+```
+
+זהו. הפקודה מתקינה Git ו-Python 3.12 אם חסרים, משכפלת את הפרויקט ל-`%USERPROFILE%\MyWhisper`,
+מתקינה את כל התלויות (כולל ספריות CUDA) ויוצרת קיצור **MyWhisper** על שולחן העבודה.
+הרצה חוזרת של אותה פקודה מעדכנת התקנה קיימת.
+
+## התקנה ידנית (חלופה)
+שכפל את הריפו ומתוך תיקיית הפרויקט הרץ ב-PowerShell:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File setup.ps1
 ```
 
-זה יוצר סביבת Python 3.12 מבודדת (`.venv`) ומתקין את כל התלויות (כולל ספריות CUDA).
+זה יוצר סביבת Python 3.12 מבודדת (`.venv`), מתקין את כל התלויות (כולל ספריות CUDA)
+ויוצר `config.json` מתוך `config.example.json`.
 
 > **למה Python 3.12?** במחסנית ה-ML (ctranslate2/faster-whisper) עדיין אין wheels יציבים ל-Python 3.14
 > שמותקן במחשב. ה-venv מבודד ולא משפיע על שאר השימושים.
@@ -45,7 +57,10 @@ wscript run_mywishper.vbs
 2. לחץ **`Ctrl+Alt+Space`** בכל מקום → ביפ, האייקון אדום = מקליט.
 3. דבר בעברית.
 4. לחץ **`Ctrl+Alt+Space`** שוב → האייקון צהוב = מתמלל → הטקסט מודבק לשדה הפעיל.
-5. יציאה: קליק-ימני על האייקון → "יציאה".
+5. **`Esc`** בזמן הקלטה = ביטול (ההקלטה נזרקת, בלי תמלול).
+6. יציאה: קליק-ימני על האייקון → "יציאה".
+
+הקלטה ששכחת פתוחה נעצרת ומתומללת אוטומטית אחרי 10 דקות (`max_record_seconds`).
 
 ## הפעלה אוטומטית עם ווינדוז (אופציונלי)
 ```powershell
@@ -66,7 +81,10 @@ powershell -ExecutionPolicy Bypass -File install_autostart.ps1
 | `beam_size` | איכות מול מהירות (5 = איכותי) |
 | `vad_filter` | סינון שקט אוטומטי |
 | `restore_clipboard` | שחזור ה-clipboard המקורי אחרי ההדבקה |
+| `clipboard_restore_delay` | שניות המתנה לפני שחזור ה-clipboard (הגדל לאפליקציות איטיות) |
+| `max_record_seconds` | תקרת הקלטה בשניות — עצירה אוטומטית להקלטה שנשכחה (0 = כבוי) |
 | `sounds` | ביפים של התחלה/סיום |
+| `sound_volume` | עוצמת הצלילים (0–1) |
 | `highlight_unknown` | סימון אוטומטי באדום של מילים לא־מוכרות בהיסטוריה (לתיקון) |
 | `bidi_isolate` | שמירה על כיווניות נכונה — מילים באנגלית נשארות LTR בתוך טקסט עברי RTL |
 | `initial_prompt` | טקסט עברי שמכוון את המודל לעברית עם פיסוק |
@@ -97,7 +115,9 @@ powershell -ExecutionPolicy Bypass -File install_autostart.ps1
 ---
 
 ## פתרון תקלות
-- **"GPU load failed... Falling back to CPU"** — חסרות ספריות CUDA או דרייבר. ודא `nvidia-cublas-cu12` ו-`nvidia-cudnn-cu12` מותקנים (מותקנים ע"י `setup.ps1`).
+כל האירועים נרשמים ל-`mywhisper.log` בתיקיית הפרויקט — זה המקום הראשון לבדוק.
+
+- **התראת "מצב CPU" מה-tray** — טעינת ה-GPU נכשלה: חסרות ספריות CUDA או דרייבר. ודא `nvidia-cublas-cu12` ו-`nvidia-cudnn-cu12` מותקנים (מותקנים ע"י `setup.ps1`).
 - **הקיצור לא עובד** — ספריית `keyboard` לפעמים דורשת הרצה **כמנהל** (Run as administrator).
 - **לא מודבק טקסט** — חלק מהאפליקציות חוסמות הזרקת קלט; נסה כמנהל, או הטקסט עדיין ב-clipboard להדבקה ידנית (Ctrl+V).
 

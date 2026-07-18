@@ -1,7 +1,10 @@
 """faster-whisper wrapper — loads the model once and transcribes audio buffers."""
 import glob
+import logging
 import os
 import sys
+
+log = logging.getLogger("transcriber")
 
 
 def _add_cuda_dll_dirs():
@@ -32,7 +35,7 @@ def _add_cuda_dll_dirs():
             except OSError:
                 pass
         os.environ["PATH"] = bindir + os.pathsep + os.environ.get("PATH", "")
-    print(f"[transcriber] CUDA DLL dirs added: {bindirs}")
+    log.info("CUDA DLL dirs added: %s", bindirs)
 
 
 _add_cuda_dll_dirs()
@@ -50,20 +53,27 @@ class Transcriber:
         self.beam_size = config.get("beam_size", 5)
         self.vad_filter = config.get("vad_filter", True)
         self.initial_prompt = config.get("initial_prompt") or None
+        self.device = None            # actual device in use after load
+        self.fallback_reason = None   # set when GPU load failed and CPU took over
         self.model = self._load_model(config)
 
     def _load_model(self, config):
         model_name = config["model"]
         device = config.get("device", "cuda")
         compute_type = config.get("compute_type", "float16")
-        print(f"[transcriber] Loading model '{model_name}' on {device} ({compute_type})...")
+        log.info("Loading model '%s' on %s (%s)...", model_name, device, compute_type)
         try:
             model = WhisperModel(model_name, device=device, compute_type=compute_type)
+            self.device = device
         except Exception as e:
             # Graceful fallback to CPU if CUDA is unavailable / misconfigured.
-            print(f"[transcriber] GPU load failed ({e}). Falling back to CPU int8.")
+            # The caller can check device/fallback_reason to warn the user —
+            # otherwise the only symptom is 10x slower transcription.
+            log.warning("GPU load failed (%s). Falling back to CPU int8.", e)
             model = WhisperModel(model_name, device="cpu", compute_type="int8")
-        print("[transcriber] Model loaded.")
+            self.device = "cpu"
+            self.fallback_reason = str(e)
+        log.info("Model loaded on %s.", self.device)
         return model
 
     def transcribe(self, audio: np.ndarray, hotwords: str = None) -> str:

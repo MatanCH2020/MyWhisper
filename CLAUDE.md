@@ -28,7 +28,12 @@ wscript run_mywishper.vbs
 powershell -ExecutionPolicy Bypass -File install_autostart.ps1
 ```
 
-There is no test suite or linter configured. `app/check_gpu.py` is the manual smoke test for the transcription pipeline; `app/model_check.py` / `app/gpu_infer_check.py` are similar diagnostics.
+```powershell
+# Unit tests (corrections + history layers)
+.\.venv\Scripts\python -m unittest discover tests
+```
+
+No linter is configured. `app/check_gpu.py` is the manual smoke test for the transcription pipeline; `app/model_check.py` / `app/gpu_infer_check.py` are similar diagnostics. Runtime logs go to `mywhisper.log` (UTF-8, rotating) via `app/applog.py`.
 
 ## Architecture
 
@@ -64,7 +69,7 @@ If `wordfreq` is unavailable, detection degrades gracefully (nothing is flagged)
 
 ## Config (`config.json`, defaults in `config.py`)
 
-Runtime source of truth is `config.json`; `config.py` merges it over `DEFAULTS` (so missing keys are fine). Note `config.json` currently sets `hotkey` to `ctrl+space` while the README documents `Ctrl+Alt+Space` — the file wins. Keys: hotkey, model (default `ivrit-ai/whisper-large-v3-turbo-ct2`; `large-v3` is the higher-accuracy alternative), language=`he`, device, compute_type, beam_size, vad_filter, restore_clipboard, sounds, sound_volume, initial_prompt, highlight_unknown.
+Runtime source of truth is `config.json` (gitignored, per-user; created from the tracked `config.example.json` by `setup.ps1`); `config.py` merges it over `DEFAULTS` (so missing keys are fine). Note the local `config.json` sets `hotkey` to `ctrl+space` while the README documents `Ctrl+Alt+Space` — the file wins. Keys: hotkey, model (default `ivrit-ai/whisper-large-v3-turbo-ct2`; `large-v3` is the higher-accuracy alternative), language=`he`, device, compute_type, beam_size, vad_filter, restore_clipboard, clipboard_restore_delay, max_record_seconds (Esc cancels a recording; the cap auto-stops a forgotten one), sounds, sound_volume, initial_prompt, highlight_unknown, bidi_isolate, theme.
 
 ## GPU / environment notes
 

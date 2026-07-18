@@ -29,7 +29,8 @@ def _make_icon(color_hex: str) -> QIcon:
 class Tray(QObject):
     """Wraps a QSystemTrayIcon; call set_state() (thread-safe) to change the dot."""
 
-    _state_sig = Signal(str, str)  # (state, tooltip)
+    _state_sig = Signal(str, str)   # (state, tooltip)
+    _notify_sig = Signal(str, str)  # (title, message) -> balloon notification
 
     def __init__(self, on_quit, on_settings=None, hotkey="ctrl+alt+space"):
         super().__init__()
@@ -54,6 +55,7 @@ class Tray(QObject):
             if reason == QSystemTrayIcon.ActivationReason.Trigger else None)
 
         self._state_sig.connect(self._apply_state)
+        self._notify_sig.connect(self._show_message)
         self._tray.show()
 
     def _apply_state(self, state: str, tooltip: str):
@@ -65,6 +67,14 @@ class Tray(QObject):
     def set_state(self, state: str, title: str = None):
         """Thread-safe: update the tray dot/tooltip from any thread."""
         self._state_sig.emit(state, title or "")
+
+    def _show_message(self, title: str, msg: str):
+        self._tray.showMessage(title, msg,
+                               QSystemTrayIcon.MessageIcon.Warning, 8000)
+
+    def notify(self, title: str, msg: str):
+        """Thread-safe: show a balloon notification from any thread."""
+        self._notify_sig.emit(title, msg)
 
     def stop(self):
         self._tray.hide()

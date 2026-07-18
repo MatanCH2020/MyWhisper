@@ -38,6 +38,13 @@ if not _acquire_single_instance():
     print("[mywishper] Another instance is already running. Exiting.")
     sys.exit(0)
 
+import applog
+applog.setup()  # before the component imports so their import-time logs are captured
+
+import logging
+log = logging.getLogger("main")
+
+import keyboard
 from PySide6.QtCore import QTimer
 from PySide6.QtWidgets import QApplication
 
@@ -87,6 +94,8 @@ class Mywishper:
 
         self._lock = threading.Lock()
         self._busy = False  # True while transcribing (ignore toggles)
+        self._esc_hook = None   # Esc-to-cancel, registered only while recording
+        self._max_timer = None  # auto-stop for a forgotten recording
 
     def _apply_sound_config(self):
         sounds.configure(
@@ -114,9 +123,53 @@ class Mywishper:
         self.tray.set_state("recording", "MyWhisper — מקליט...")
         self.ui.set_overlay_state("recording")
         sounds.start_recording()
+        # Esc cancels the recording without transcribing (hooked only while
+        # recording, so Esc behaves normally the rest of the time).
+        try:
+            self._esc_hook = keyboard.add_hotkey("esc", self.cancel_recording)
+        except Exception:
+            self._esc_hook = None
+        max_sec = self.config.get("max_record_seconds", 600)
+        if max_sec and max_sec > 0:
+            self._max_timer = threading.Timer(max_sec, self._auto_stop)
+            self._max_timer.daemon = True
+            self._max_timer.start()
+
+    def _end_recording_hooks(self):
+        """Remove the Esc hook and the auto-stop timer (recording is over)."""
+        if self._esc_hook is not None:
+            try:
+                keyboard.remove_hotkey(self._esc_hook)
+            except Exception:
+                pass
+            self._esc_hook = None
+        if self._max_timer is not None:
+            self._max_timer.cancel()
+            self._max_timer = None
+
+    def cancel_recording(self):
+        """Discard the current recording without transcribing (Esc)."""
+        with self._lock:
+            if self._busy or not self.recorder.recording:
+                return
+            self._end_recording_hooks()
+            self.recorder.stop()  # audio discarded
+            sounds.stop_recording()
+            self.tray.set_state("idle", "MyWhisper — מוכן")
+            self.ui.set_overlay_state("idle")
+            log.info("Recording cancelled (Esc).")
+
+    def _auto_stop(self):
+        """Stop-and-transcribe when the recording cap is reached (forgotten mic)."""
+        with self._lock:
+            if self._busy or not self.recorder.recording:
+                return
+            log.warning("Max recording length reached — stopping automatically.")
+            self._stop_and_transcribe()
 
     def _stop_and_transcribe(self):
         self._busy = True
+        self._end_recording_hooks()
         audio = self.recorder.stop()
         sounds.stop_recording()
         self.tray.set_state("transcribing", "MyWhisper — מתמלל...")
@@ -134,12 +187,13 @@ class Mywishper:
                 out = text
                 if self.config.get("bidi_isolate", True):
                     out = corrections.format_bidi(text)  # keep English LTR in RTL
-                paste_text(out, self.config.get("restore_clipboard", True))
-                print(f"[mywishper] -> {text}")
+                paste_text(out, self.config.get("restore_clipboard", True),
+                           self.config.get("clipboard_restore_delay", 0.5))
+                log.info("-> %s", text)
             else:
-                print("[mywishper] (empty transcription)")
-        except Exception as e:
-            print(f"[mywishper] Error: {e}")
+                log.info("(empty transcription)")
+        except Exception:
+            log.exception("Transcription failed")
             sounds.error()
         finally:
             self.tray.set_state("idle", "MyWhisper — מוכן")
@@ -148,13 +202,22 @@ class Mywishper:
 
     def start(self):
         self.hotkeys.start()
-        print("[mywishper] Ready. Press the hotkey to dictate. (Quit from the tray icon.)")
+        log.info("Ready. Press the hotkey to dictate. (Quit from the tray icon.)")
+        # A silent GPU->CPU fallback would otherwise only show as 10x slower
+        # transcription; surface it once the event loop is up.
+        if self.transcriber.fallback_reason:
+            QTimer.singleShot(1500, lambda: self.tray.notify(
+                "MyWhisper — מצב CPU",
+                "טעינת ה-GPU נכשלה, התמלול ירוץ על המעבד (איטי יותר). "
+                "בדוק דרייבר NVIDIA וספריות CUDA (setup.ps1)."))
 
     def quit(self):
         try:
             self.hotkeys.stop()
         except Exception:
             pass
+        self._end_recording_hooks()
+        self.tray.stop()  # hide now, or the icon ghosts in the tray until hover
         self.ui.request_quit()  # ask the Qt event loop to quit
 
 
