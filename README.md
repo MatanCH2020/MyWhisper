@@ -14,6 +14,8 @@
 [![Offline](https://img.shields.io/badge/100%25-Offline%20%26%20Private-2ea44f)](#)
 [![RTL](https://img.shields.io/badge/%D7%A2%D7%91%D7%A8%D7%99%D7%AA-RTL%20Native-4C82F7)](#)
 
+### 🌐 [דף הבית ← matanch2020.github.io/MyWhisper](https://matanch2020.github.io/MyWhisper/) · ⬇️ [הורדת מתקין](https://github.com/MatanCH2020/MyWhisper/releases/latest/download/MyWhisper-Setup.cmd)
+
 <br>
 
 <img src="docs/app-history-dark.png" width="840" alt="MyWhisper — חלון ההיסטוריה במצב כהה">
