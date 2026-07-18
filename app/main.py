@@ -52,7 +52,7 @@ import corrections
 import history
 import sounds
 from config import load_config, save_config
-from recorder import Recorder
+from recorder import Recorder, has_input_device
 from transcriber import Transcriber
 from hotkey import HotkeyManager, TempHotkey
 from ui import AppUI
@@ -164,10 +164,33 @@ class Mywishper:
                 return
             if self._busy:
                 return  # mid-transcription, ignore extra presses
-            if not self.recorder.recording:
-                self._start_recording()
-            else:
-                self._stop_and_transcribe()
+            try:
+                if not self.recorder.recording:
+                    self._start_recording()
+                else:
+                    self._stop_and_transcribe()
+            except Exception:
+                # Most often: no microphone / no default input device, so
+                # sounddevice fails to open the stream. Surface it instead of
+                # dying silently inside the hotkey callback.
+                log.exception("Recording toggle failed")
+                self._recover_from_error()
+
+    def _recover_from_error(self):
+        self._end_recording_hooks()
+        try:
+            self.recorder.stop()
+        except Exception:
+            pass
+        self._busy = False
+        self.tray.set_state("idle", "MyWhisper — שגיאה")
+        self.ui.set_overlay_state("idle")
+        sounds.error()
+        self.tray.notify(
+            "MyWhisper — בעיית מיקרופון",
+            "לא ניתן להתחיל הקלטה. ודא שמחובר מיקרופון והוא מוגדר כהתקן הקלט "
+            "ברירת המחדל ב-Windows (הגדרות ← מערכת ← קול). פרטים ב-mywhisper.log.",
+            "warning")
 
     def _start_recording(self):
         self.recorder.start()
@@ -260,6 +283,11 @@ class Mywishper:
                 "MyWhisper — הקיצור תפוס",
                 f"לא ניתן לרשום את הקיצור '{hk}' — כנראה תפוס בתוכנה אחרת. "
                 "פתח הגדרות ← קיצור מקלדת ובחר צירוף אחר.", "warning"))
+        if not has_input_device():
+            QTimer.singleShot(2500, lambda: self.tray.notify(
+                "MyWhisper — לא נמצא מיקרופון",
+                "לא זוהה התקן הקלטה. חבר מיקרופון והגדר אותו כברירת מחדל ב-Windows "
+                "(הגדרות ← מערכת ← קול), אחרת ההקלטה לא תעבוד.", "warning"))
         self.tray.set_state("loading", "MyWhisper — טוען מודל...")
         threading.Thread(target=self._load_model, daemon=True).start()
         # If loading is still going after a few seconds (first-run download),

@@ -10,6 +10,15 @@ SAMPLE_RATE = 16000  # Whisper expects 16 kHz
 CHANNELS = 1
 
 
+def has_input_device() -> bool:
+    """True if Windows exposes a usable default input (microphone) device."""
+    try:
+        sd.query_devices(kind="input")  # raises if there is no default input
+        return True
+    except Exception:
+        return False
+
+
 class Recorder:
     """Streams microphone audio into a buffer between start() and stop()."""
 

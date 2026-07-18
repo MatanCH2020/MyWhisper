@@ -86,7 +86,12 @@ class _HotkeyFilter(QAbstractNativeEventFilter):
                     log.info("WM_HOTKEY received id=%s (routed=%s)",
                              int(msg.wParam), cb is not None)
                     if cb:
-                        cb()
+                        try:
+                            cb()
+                        except Exception:
+                            # Never let a callback error die silently inside the
+                            # Qt native filter — it would look like a dead hotkey.
+                            log.exception("Hotkey callback raised")
         return False, 0
 
 

@@ -3,6 +3,18 @@
 כל שינוי מתועד כאן. הפורמט מבוסס על [Keep a Changelog](https://keepachangelog.com/he/),
 וניהול הגרסאות לפי [Semantic Versioning](https://semver.org/lang/he/) (MAJOR.MINOR.PATCH).
 
+## [1.5.3] — 2026-07-19
+
+### תוקן (Fixed)
+- **כשל הקלטה נבלע בשקט**: אם `recorder.start()` נכשל (לרוב — אין מיקרופון/התקן קלט
+  ברירת מחדל), השגיאה מתה בתוך קולבק ה-hotkey בלי שום סימן — הלחיצה "לא עשתה כלום".
+  עכשיו כל כשל נתפס, נרשם ללוג (traceback מלא), והמשתמש מקבל התראת **"בעיית מיקרופון"**
+  עם הסבר. הקולבק של ה-hotkey גם עטוף כך ששום שגיאה לא נבלעת יותר.
+
+### נוסף (Added)
+- **בדיקת מיקרופון בהפעלה**: אם לא זוהה התקן קלט, מוצגת התראה מיד (`has_input_device`),
+  במקום לגלות זאת רק בלחיצה הראשונה.
+
 ## [1.5.2] — 2026-07-19
 
 ### נוסף (Added)
@@ -134,6 +146,7 @@
 - טעינת היסטוריה איטית (מטמון ל-`wordfreq` ולקבצי ה-JSON, הגבלת כרטיסים מוצגים).
 - כפילות תהליכים בהפעלה.
 
+[1.5.3]: https://github.com/MatanCH2020/MyWhisper/releases/tag/v1.5.3
 [1.5.2]: https://github.com/MatanCH2020/MyWhisper/releases/tag/v1.5.2
 [1.5.1]: https://github.com/MatanCH2020/MyWhisper/releases/tag/v1.5.1
 [1.5.0]: https://github.com/MatanCH2020/MyWhisper/releases/tag/v1.5.0
