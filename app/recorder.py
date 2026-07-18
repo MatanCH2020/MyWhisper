@@ -19,28 +19,68 @@ def has_input_device() -> bool:
         return False
 
 
-def list_input_devices():
-    """Return [(index, name), ...] for microphones, de-duplicated by name."""
-    seen, out = set(), []
+# Input "devices" that are not real microphones — virtual mappers, loopback
+# (records system audio, not your voice), line-in, etc. Filtered out of the UI.
+_NON_MIC_KEYWORDS = ("sound mapper", "primary sound capture", "stereo mix",
+                     "line in", "what u hear", "loopback", "wave out")
+
+
+def _input_devices_raw():
+    """[(index, name, hostapi), ...] for every device with input channels,
+    plus the host-API index of the default input device (or None)."""
+    devs = []
+    pref_api = None
     try:
+        try:
+            pref_api = sd.query_devices(kind="input").get("hostapi")
+        except Exception:
+            pref_api = None
         for i, d in enumerate(sd.query_devices()):
-            name = (d.get("name") or "").strip()
-            if d.get("max_input_channels", 0) > 0 and name and name not in seen:
-                seen.add(name)
-                out.append((i, name))
+            if d.get("max_input_channels", 0) > 0:
+                devs.append((i, (d.get("name") or "").strip(), d.get("hostapi")))
     except Exception:
         pass
-    return out
+    return devs, pref_api
+
+
+def list_input_devices():
+    """Real microphones only, de-duplicated by name.
+
+    Drops virtual mappers, loopback (Stereo Mix), line-in, and cross-host-API
+    duplicates (keeps only the default host API). Falls back to the unfiltered
+    list if strict filtering would hide every device, so a machine with only an
+    oddly-named mic is never left with an empty list.
+    """
+    devs, pref_api = _input_devices_raw()
+
+    def build(strict):
+        seen, out = set(), []
+        for i, name, api in devs:
+            if not name or name in seen:
+                continue
+            if strict:
+                if any(k in name.lower() for k in _NON_MIC_KEYWORDS):
+                    continue
+                if pref_api is not None and api != pref_api:
+                    continue
+            seen.add(name)
+            out.append((i, name))
+        return out
+
+    return build(True) or build(False)
 
 
 def resolve_device(name):
-    """Map an input-device name to a sounddevice index; None (system default)
-    if unset or the named device is not currently present."""
+    """Map an input-device name to a sounddevice index (checked against ALL
+    input devices, not just the filtered display list); None if not present."""
     if not name:
         return None
-    for i, n in list_input_devices():
-        if n == name:
-            return i
+    try:
+        for i, d in enumerate(sd.query_devices()):
+            if d.get("max_input_channels", 0) > 0 and (d.get("name") or "").strip() == name:
+                return i
+    except Exception:
+        pass
     return None
 
 

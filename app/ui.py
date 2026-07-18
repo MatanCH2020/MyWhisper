@@ -501,6 +501,7 @@ class MainWindow(FramelessWindow):
     # ---------------- settings ----------------
     def _settings_page(self):
         w = QWidget()
+        w.setStyleSheet("background:transparent;")
         v = QVBoxLayout(w)
         v.setContentsMargins(18, 16, 18, 14)
         v.setSpacing(14)
@@ -640,7 +641,14 @@ class MainWindow(FramelessWindow):
         v.addWidget(pc)
 
         v.addStretch(1)
-        return w
+        # Wrap in a scroll area so a small window scrolls instead of squeezing
+        # all the cards into an unreadable, overlapping stack.
+        area = QScrollArea()
+        area.setWidgetResizable(True)
+        area.setFrameShape(QFrame.NoFrame)
+        area.setStyleSheet("background:transparent;")
+        area.setWidget(w)
+        return area
 
     def _on_hotkey_captured(self, combo):
         if self.ui.set_hotkey(combo):

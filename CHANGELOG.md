@@ -3,6 +3,15 @@
 כל שינוי מתועד כאן. הפורמט מבוסס על [Keep a Changelog](https://keepachangelog.com/he/),
 וניהול הגרסאות לפי [Semantic Versioning](https://semver.org/lang/he/) (MAJOR.MINOR.PATCH).
 
+## [1.7.1] — 2026-07-19
+
+### תוקן (Fixed)
+- **רשימת המיקרופונים הציגה גם רכיבים שאינם מיקרופון** (Sound Mapper, Stereo Mix,
+  Line In, דרייברים וכפילויות בין host-APIs). עכשיו מוצגים רק מיקרופונים אמיתיים,
+  ללא כפילויות, עם נפילה חלקה לרשימה המלאה אם הסינון היה מותיר אותה ריקה.
+- **ה-UI נדחס בחלון קטן**: מסך ההגדרות נעטף ב-scroll area, כך שחלון קטן גולל במקום
+  לרסק את הכרטיסים אלה על אלה.
+
 ## [1.7.0] — 2026-07-19
 
 ### נוסף (Added)
@@ -163,6 +172,7 @@
 - טעינת היסטוריה איטית (מטמון ל-`wordfreq` ולקבצי ה-JSON, הגבלת כרטיסים מוצגים).
 - כפילות תהליכים בהפעלה.
 
+[1.7.1]: https://github.com/MatanCH2020/MyWhisper/releases/tag/v1.7.1
 [1.7.0]: https://github.com/MatanCH2020/MyWhisper/releases/tag/v1.7.0
 [1.6.0]: https://github.com/MatanCH2020/MyWhisper/releases/tag/v1.6.0
 [1.5.3]: https://github.com/MatanCH2020/MyWhisper/releases/tag/v1.5.3
