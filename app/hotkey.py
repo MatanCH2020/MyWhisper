@@ -18,6 +18,19 @@ class HotkeyManager:
         self._handle = keyboard.add_hotkey(self.hotkey, self.on_toggle)
         log.info("Listening for '%s' (press to start/stop recording).", self.hotkey)
 
+    def rebind(self, new_hotkey: str):
+        """Switch to a new hotkey live. Registers the new binding first, so an
+        invalid combo raises before the old one is removed (old stays working)."""
+        new_handle = keyboard.add_hotkey(new_hotkey, self.on_toggle)  # raises on bad combo
+        if self._handle is not None:
+            try:
+                keyboard.remove_hotkey(self._handle)
+            except (KeyError, ValueError):
+                pass
+        self._handle = new_handle
+        self.hotkey = new_hotkey
+        log.info("Hotkey rebound to '%s'.", new_hotkey)
+
     def stop(self):
         if self._handle is not None:
             keyboard.remove_hotkey(self._handle)

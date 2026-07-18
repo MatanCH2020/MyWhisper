@@ -3,6 +3,16 @@
 כל שינוי מתועד כאן. הפורמט מבוסס על [Keep a Changelog](https://keepachangelog.com/he/),
 וניהול הגרסאות לפי [Semantic Versioning](https://semver.org/lang/he/) (MAJOR.MINOR.PATCH).
 
+## [1.4.0] — 2026-07-18
+
+### נוסף (Added)
+- **עורך קיצור בתוך האפליקציה**: מסך ההגדרות → "קיצור מקלדת" → לוחצים ומקישים צירוף חדש
+  (למשל `Ctrl+Alt+Space`). הקיצור נרשם מחדש **חי** בלי הפעלה מחדש, ונשמר ל-`config.json`.
+  פתרון ישיר למצב שבו `Ctrl+Space` תפוס בתוכנה אחרת ולא מגיב.
+- **כפתור "הפעל מחדש כמנהל"** בהגדרות: מפעיל את האפליקציה מחדש עם הרשאות מוגברות (UAC),
+  למקרים שבהם הקיצור הגלובלי לא נקלט בלי הרשאות מנהל. אם אין הרשאות מנהל — מוצגת הודעה
+  שמפנה לשינוי הקיצור.
+
 ## [1.3.0] — 2026-07-18
 
 ### תוקן (Fixed)
@@ -89,6 +99,9 @@
 - טעינת היסטוריה איטית (מטמון ל-`wordfreq` ולקבצי ה-JSON, הגבלת כרטיסים מוצגים).
 - כפילות תהליכים בהפעלה.
 
+[1.4.0]: https://github.com/MatanCH2020/MyWhisper/releases/tag/v1.4.0
+[1.3.0]: https://github.com/MatanCH2020/MyWhisper/releases/tag/v1.3.0
+[1.2.1]: https://github.com/MatanCH2020/MyWhisper/releases/tag/v1.2.1
 [1.2.0]: https://github.com/MatanCH2020/MyWhisper/releases/tag/v1.2.0
 [1.1.0]: https://github.com/MatanCH2020/MyWhisper/releases/tag/v1.1.0
 [1.0.0]: https://github.com/MatanCH2020/MyWhisper/releases/tag/v1.0.0

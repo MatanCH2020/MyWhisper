@@ -96,6 +96,8 @@ class Mywishper:
         )
         self.ui.notify = self.tray.notify  # balloon hints (minimize-to-tray etc.)
         self.hotkeys = HotkeyManager(self.config.get("hotkey"), self.toggle)
+        self.ui.set_hotkey = self._set_hotkey            # live hotkey editor
+        self.ui.relaunch_as_admin = self._relaunch_as_admin
 
         self._lock = threading.Lock()
         self._busy = False  # True while transcribing (ignore toggles)
@@ -113,6 +115,46 @@ class Mywishper:
         self.config = config
         self._apply_sound_config()
         save_config(self.config)
+
+    def _set_hotkey(self, new_hotkey):
+        """Live-rebind the global hotkey from the settings UI. Returns True on
+        success, False if the combo is invalid / rejected by the OS."""
+        new_hotkey = (new_hotkey or "").strip().lower()
+        if not new_hotkey:
+            return False
+        if new_hotkey == self.config.get("hotkey"):
+            return True
+        try:
+            self.hotkeys.rebind(new_hotkey)
+        except Exception:
+            log.exception("Failed to set hotkey '%s'", new_hotkey)
+            return False
+        self.config["hotkey"] = new_hotkey
+        save_config(self.config)
+        self.tray.set_hotkey_label(new_hotkey)
+        log.info("Hotkey changed to '%s'.", new_hotkey)
+        return True
+
+    def _relaunch_as_admin(self):
+        """Relaunch the app elevated (UAC). Returns False if elevation was
+        cancelled or unavailable (e.g. no admin rights on this machine)."""
+        import ctypes
+        root = Path(__file__).resolve().parent.parent
+        vbs = str(root / "run_mywishper.vbs")
+        try:
+            shell32 = ctypes.windll.shell32
+            shell32.ShellExecuteW.restype = ctypes.c_void_p
+            r = shell32.ShellExecuteW(None, "runas", "wscript.exe",
+                                      f'"{vbs}"', str(root), 1)
+        except Exception:
+            log.exception("Elevation failed")
+            return False
+        if int(r) <= 32:  # ShellExecute error / user declined UAC
+            return False
+        # The elevated instance will take over; quit this one after the UAC
+        # dialog clears (by then this process has released the single mutex).
+        QTimer.singleShot(600, self.quit)
+        return True
 
     def toggle(self):
         with self._lock:

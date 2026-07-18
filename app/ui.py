@@ -143,6 +143,93 @@ class CorrectionDialog(QDialog):
         self.accept()
 
 
+def _qt_key_name(key, text):
+    """Map a Qt key code to the name the `keyboard` library expects, or None
+    for keys we don't accept as a hotkey trigger (bare modifiers etc.)."""
+    if Qt.Key_A <= key <= Qt.Key_Z:
+        return chr(key).lower()
+    if Qt.Key_0 <= key <= Qt.Key_9:
+        return chr(key)
+    if Qt.Key_F1 <= key <= Qt.Key_F12:
+        return "f" + str(key - Qt.Key_F1 + 1)
+    special = {
+        Qt.Key_Space: "space", Qt.Key_Return: "enter", Qt.Key_Enter: "enter",
+        Qt.Key_Tab: "tab", Qt.Key_Backspace: "backspace", Qt.Key_Insert: "insert",
+        Qt.Key_Delete: "delete", Qt.Key_Home: "home", Qt.Key_End: "end",
+        Qt.Key_PageUp: "page up", Qt.Key_PageDown: "page down",
+        Qt.Key_Up: "up", Qt.Key_Down: "down", Qt.Key_Left: "left", Qt.Key_Right: "right",
+    }
+    return special.get(key)
+
+
+class HotkeyEdit(QPushButton):
+    """A button that captures a key combo when clicked and emits it as a
+    keyboard-library string (e.g. 'ctrl+alt+space'). Esc cancels capture."""
+
+    captured = Signal(str)
+    _MODS = {Qt.Key_Control, Qt.Key_Alt, Qt.Key_Shift, Qt.Key_Meta,
+             Qt.Key_AltGr, Qt.Key_Super_L, Qt.Key_Super_R}
+
+    def __init__(self, palette, current):
+        super().__init__(current or "לא הוגדר")
+        self._current = current
+        self._capturing = False
+        self.setProperty("variant", "primary")
+        self.setMinimumWidth(150)
+        self.setCursor(Qt.PointingHandCursor)
+        self.clicked.connect(self._begin)
+
+    def _begin(self):
+        self._capturing = True
+        self.setText("הקש צירוף מקשים…")
+        self.grabKeyboard()
+        self.setFocus()
+
+    def _finish(self, combo):
+        self._capturing = False
+        self.releaseKeyboard()
+        if combo:
+            self._current = combo
+            self.setText(combo)
+            self.captured.emit(combo)
+        else:
+            self.setText(self._current or "לא הוגדר")
+
+    def reset(self):
+        """Revert the label to the last accepted hotkey (after a rejection)."""
+        self.setText(self._current or "לא הוגדר")
+
+    def keyPressEvent(self, e):
+        if not self._capturing:
+            return super().keyPressEvent(e)
+        key = e.key()
+        if key == Qt.Key_Escape:
+            self._finish(None)
+            return
+        if key in self._MODS:
+            return  # wait for a real key while modifiers are held
+        name = _qt_key_name(key, e.text())
+        if not name:
+            return
+        parts = []
+        m = e.modifiers()
+        if m & Qt.ControlModifier:
+            parts.append("ctrl")
+        if m & Qt.AltModifier:
+            parts.append("alt")
+        if m & Qt.ShiftModifier:
+            parts.append("shift")
+        if m & Qt.MetaModifier:
+            parts.append("windows")
+        parts.append(name)
+        self._finish("+".join(parts))
+
+    def focusOutEvent(self, e):
+        if self._capturing:
+            self._finish(None)  # clicking away cancels
+        super().focusOutEvent(e)
+
+
 class HistoryCard(QFrame):
     """A transcription card: timestamp, RTL clickable text, hover actions."""
 
@@ -451,10 +538,57 @@ class MainWindow(FramelessWindow):
         # hotkey
         hc = Card()
         hc.vbox.addWidget(self._section("קיצור מקלדת"))
-        hc.vbox.addWidget(self._plain(self.ui.config.get("hotkey", "ctrl+space")))
+        row = QHBoxLayout()
+        row.addWidget(self._plain("קיצור להקלטה"))
+        row.addStretch(1)
+        self._hk_edit = HotkeyEdit(self.p, self.ui.config.get("hotkey", "ctrl+space"))
+        self._hk_edit.captured.connect(self._on_hotkey_captured)
+        row.addWidget(self._hk_edit)
+        hc.vbox.addLayout(row)
+        hk_hint = QLabel("לחץ על הכפתור ואז הקש את צירוף המקשים הרצוי (למשל Ctrl+Alt+Space). "
+                         "אם הקיצור לא מגיב — נסה צירוף אחר שאינו תפוס בתוכנה אחרת.")
+        hk_hint.setWordWrap(True)
+        hk_hint.setStyleSheet(f"color:{self.p['text_muted']}; font-size:11px;")
+        hc.vbox.addWidget(hk_hint)
         v.addWidget(hc)
+
+        # permissions / run as admin
+        pc = Card()
+        pc.vbox.addWidget(self._section("הרשאות"))
+        pr = QHBoxLayout()
+        pr.addWidget(self._plain("הקיצור לא עובד בכלל?"))
+        pr.addStretch(1)
+        admin_btn = QPushButton("הפעל מחדש כמנהל")
+        admin_btn.setProperty("variant", "primary")
+        admin_btn.setCursor(Qt.PointingHandCursor)
+        admin_btn.clicked.connect(self._on_run_as_admin)
+        pr.addWidget(admin_btn)
+        pc.vbox.addLayout(pr)
+        adm_hint = QLabel("קיצורים גלובליים דורשים לפעמים הרשאות מנהל. הכפתור יפעיל את "
+                          "האפליקציה מחדש עם הרשאות מוגברות (אישור UAC). אם אין לך הרשאות "
+                          "מנהל במחשב — שינוי הקיצור למעלה הוא הפתרון.")
+        adm_hint.setWordWrap(True)
+        adm_hint.setStyleSheet(f"color:{self.p['text_muted']}; font-size:11px;")
+        pc.vbox.addWidget(adm_hint)
+        v.addWidget(pc)
+
         v.addStretch(1)
         return w
+
+    def _on_hotkey_captured(self, combo):
+        if self.ui.set_hotkey(combo):
+            QMessageBox.information(self, "MyWhisper",
+                                    f"הקיצור עודכן ל-{combo}. נסה אותו עכשיו בכל שדה טקסט.")
+        else:
+            QMessageBox.warning(self, "MyWhisper",
+                                f"לא ניתן להגדיר את הקיצור '{combo}'. נסה צירוף אחר.")
+            self._hk_edit.reset()
+
+    def _on_run_as_admin(self):
+        if self.ui.relaunch_as_admin() is False:
+            QMessageBox.warning(self, "MyWhisper",
+                                "לא ניתן היה להפעיל כמנהל — ייתכן שאין לך הרשאות מנהל "
+                                "במחשב, או שהפעולה בוטלה. נסה לשנות את הקיצור במקום.")
 
     def _on_sound_toggle(self, on):
         self.ui.config["sounds"] = bool(on)
@@ -566,6 +700,8 @@ class AppUI(QObject):
         self.update_history = update_history or (lambda i, t: None)
         self.delete_history = delete_history or (lambda i: None)
         self.notify = lambda *a, **k: None  # wired to Tray.notify by main
+        self.set_hotkey = lambda h: True    # wired to Mywishper._set_hotkey by main
+        self.relaunch_as_admin = lambda: False
         self._minimize_hint_shown = False
 
         self.p = theme.palette(config.get("theme", "dark"))

@@ -55,8 +55,8 @@ class Tray(QObject):
         menu = QMenu()
         menu.setLayoutDirection(Qt.RightToLeft)
         menu.addAction("הגדרות", lambda: on_settings())
-        act_hotkey = menu.addAction(f"קיצור: {hotkey}")
-        act_hotkey.setEnabled(False)
+        self._act_hotkey = menu.addAction(f"קיצור: {hotkey}")
+        self._act_hotkey.setEnabled(False)
         menu.addSeparator()
         menu.addAction("יציאה", lambda: on_quit())
         self._tray.setContextMenu(menu)
@@ -69,6 +69,10 @@ class Tray(QObject):
         self._state_sig.connect(self._apply_state)
         self._notify_sig.connect(self._show_message)
         self._tray.show()
+
+    def set_hotkey_label(self, hotkey: str):
+        """Update the disabled 'קיצור: …' menu row after a live rebind."""
+        self._act_hotkey.setText(f"קיצור: {hotkey}")
 
     def _apply_state(self, state: str, tooltip: str):
         if state in self._icons:
