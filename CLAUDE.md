@@ -69,7 +69,7 @@ If `wordfreq` is unavailable, detection degrades gracefully (nothing is flagged)
 
 ## Config (`config.json`, defaults in `config.py`)
 
-Runtime source of truth is `config.json` (gitignored, per-user; created from the tracked `config.example.json` by `setup.ps1`); `config.py` merges it over `DEFAULTS` (so missing keys are fine). Note the local `config.json` sets `hotkey` to `ctrl+space` while the README documents `Ctrl+Alt+Space` — the file wins. Keys: hotkey, model (default `ivrit-ai/whisper-large-v3-turbo-ct2`; `large-v3` is the higher-accuracy alternative), language=`he`, device, compute_type, beam_size, vad_filter, restore_clipboard, clipboard_restore_delay, max_record_seconds (Esc cancels a recording; the cap auto-stops a forgotten one), sounds, sound_volume, initial_prompt, highlight_unknown, bidi_isolate, theme.
+Runtime source of truth is `config.json` (gitignored, per-user; created from the tracked `config.example.json` by `setup.ps1`); `config.py` merges it over `DEFAULTS` (so missing keys are fine). The default hotkey is `ctrl+space` everywhere (DEFAULTS, example, README). Keys: hotkey, model (default `ivrit-ai/whisper-large-v3-turbo-ct2`; `large-v3` is the higher-accuracy alternative), language=`he`, device, compute_type, beam_size, vad_filter, restore_clipboard, clipboard_restore_delay, max_record_seconds (Esc cancels a recording; the cap auto-stops a forgotten one), sounds, sound_volume, initial_prompt, highlight_unknown, bidi_isolate, theme.
 
 ## GPU / environment notes
 

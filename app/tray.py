@@ -43,7 +43,7 @@ class Tray(QObject):
     _state_sig = Signal(str, str)        # (state, tooltip)
     _notify_sig = Signal(str, str, str)  # (title, message, level) -> balloon
 
-    def __init__(self, on_quit, on_settings=None, hotkey="ctrl+alt+space"):
+    def __init__(self, on_quit, on_settings=None, hotkey="ctrl+space"):
         super().__init__()
         self._icons = {s: _make_icon(c) for s, c in COLORS.items()}
         on_settings = on_settings or (lambda: None)

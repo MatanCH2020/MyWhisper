@@ -59,8 +59,8 @@ irm https://raw.githubusercontent.com/MatanCH2020/MyWhisper/main/install.ps1 | i
 
 | מקש | פעולה |
 |---|---|
-| `Ctrl+Alt+Space` | התחלת הקלטה 🔴 (ביפ + מחוון בראש המסך) |
-| `Ctrl+Alt+Space` שוב | עצירה → תמלול 🟡 → הטקסט מודבק לשדה הפעיל |
+| `Ctrl+Space` | התחלת הקלטה 🔴 (ביפ + מחוון בראש המסך) |
+| `Ctrl+Space` שוב | עצירה → תמלול 🟡 → הטקסט מודבק לשדה הפעיל |
 | `Esc` בזמן הקלטה | ביטול — ההקלטה נזרקת בלי תמלול |
 | `X` על החלון | מזעור למגש — התוכנה ממשיכה להאזין ברקע |
 
@@ -115,7 +115,7 @@ irm https://raw.githubusercontent.com/MatanCH2020/MyWhisper/main/install.ps1 | i
 
 | שדה | משמעות |
 |------|--------|
-| `hotkey` | קיצור המקלדת (ברירת מחדל `ctrl+alt+space`) |
+| `hotkey` | קיצור המקלדת (ברירת מחדל `ctrl+space`; אם הוא מתנגש אצלך עם קיצור של אפליקציה אחרת, שנה למשל ל-`ctrl+alt+space`) |
 | `model` | מודל Whisper. ברירת מחדל: מודל עברית של ivrit.ai; חלופה מדויקת יותר: `large-v3` |
 | `language` | שפת התמלול (`he`) |
 | `device` | `cuda` ל-GPU או `cpu` |

@@ -9,7 +9,7 @@ log = logging.getLogger("config")
 CONFIG_PATH = Path(__file__).resolve().parent.parent / "config.json"
 
 DEFAULTS = {
-    "hotkey": "ctrl+alt+space",
+    "hotkey": "ctrl+space",
     "model": "ivrit-ai/whisper-large-v3-turbo-ct2",
     "language": "he",
     "device": "cuda",

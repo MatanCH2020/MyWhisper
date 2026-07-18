@@ -3,6 +3,12 @@
 כל שינוי מתועד כאן. הפורמט מבוסס על [Keep a Changelog](https://keepachangelog.com/he/),
 וניהול הגרסאות לפי [Semantic Versioning](https://semver.org/lang/he/) (MAJOR.MINOR.PATCH).
 
+## [1.2.1] — 2026-07-18
+
+### שונה (Changed)
+- ברירת המחדל של הקיצור היא עכשיו **`Ctrl+Space`** בכל מקום (DEFAULTS, config.example.json,
+  README) — שני מקשים במקום שלושה. מי שהקיצור מתנגש אצלו יכול לשנות ב-`config.json`.
+
 ## [1.2.0] — 2026-07-18
 
 ### נוסף (Added)
