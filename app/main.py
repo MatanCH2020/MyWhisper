@@ -67,7 +67,10 @@ class Mywishper:
         self._apply_sound_config()
 
         self.recorder = Recorder()
-        self.transcriber = Transcriber(self.config)  # loads model into GPU memory
+        # Loaded in the background by start(): on first run the model is a
+        # ~2GB download, and blocking here would leave the user with no tray,
+        # no window and a dead hotkey for minutes.
+        self.transcriber = None
         self.ui = AppUI(
             self.config,
             level_provider=self.recorder.get_level,
@@ -113,6 +116,10 @@ class Mywishper:
 
     def toggle(self):
         with self._lock:
+            if self.transcriber is None:
+                self.tray.notify("MyWhisper",
+                                 "מודל התמלול עדיין נטען — נסה שוב בעוד רגע.")
+                return
             if self._busy:
                 return  # mid-transcription, ignore extra presses
             if not self.recorder.recording:
@@ -204,14 +211,41 @@ class Mywishper:
 
     def start(self):
         self.hotkeys.start()
+        self.tray.set_state("loading", "MyWhisper — טוען מודל...")
+        threading.Thread(target=self._load_model, daemon=True).start()
+        # If loading is still going after a few seconds (first-run download),
+        # tell the user what's happening instead of looking dead.
+        hint = threading.Timer(4.0, self._loading_hint)
+        hint.daemon = True
+        hint.start()
+
+    def _loading_hint(self):
+        if self.transcriber is None:
+            self.tray.notify(
+                "MyWhisper — טוען מודל",
+                "מודל התמלול נטען ברקע. בהפעלה הראשונה זו הורדה חד-פעמית "
+                "של כ-2GB — האייקון במגש יהפוך אפור כשהכול מוכן.")
+
+    def _load_model(self):
+        try:
+            transcriber = Transcriber(self.config)
+        except Exception:
+            log.exception("Model load failed")
+            self.tray.set_state("idle", "MyWhisper — שגיאה בטעינת המודל")
+            self.tray.notify("MyWhisper — שגיאה",
+                             "טעינת מודל התמלול נכשלה. בדוק את mywhisper.log.",
+                             "warning")
+            return
+        self.transcriber = transcriber
+        self.tray.set_state("idle", "MyWhisper — מוכן")
         log.info("Ready. Press the hotkey to dictate. (Quit from the tray icon.)")
         # A silent GPU->CPU fallback would otherwise only show as 10x slower
-        # transcription; surface it once the event loop is up.
-        if self.transcriber.fallback_reason:
-            QTimer.singleShot(1500, lambda: self.tray.notify(
+        # transcription; surface it.
+        if transcriber.fallback_reason:
+            self.tray.notify(
                 "MyWhisper — מצב CPU",
                 "טעינת ה-GPU נכשלה, התמלול ירוץ על המעבד (איטי יותר). "
-                "בדוק דרייבר NVIDIA וספריות CUDA (setup.ps1).", "warning"))
+                "בדוק דרייבר NVIDIA וספריות CUDA (setup.ps1).", "warning")
 
     def quit(self):
         try:

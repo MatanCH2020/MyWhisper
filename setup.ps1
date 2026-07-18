@@ -30,10 +30,33 @@ if (-not $py312) {
     $py312 = "py -3.12"
 }
 
+# Detect an NVIDIA GPU once — decides CUDA libs install and the config default.
+$hasNvidia = $false
+try {
+    if ((Get-CimInstance Win32_VideoController -ErrorAction Stop).Name -match "NVIDIA") {
+        $hasNvidia = $true
+    }
+} catch {}
+
 # Default config: copy the example on first install (config.json is per-user).
 if ((Test-Path "config.example.json") -and -not (Test-Path "config.json")) {
     Copy-Item "config.example.json" "config.json"
     Write-Host "Created config.json from config.example.json" -ForegroundColor Green
+}
+
+# No NVIDIA card -> point the config at the CPU so the app doesn't try CUDA.
+if (-not $hasNvidia -and (Test-Path "config.json")) {
+    try {
+        $cfg = Get-Content "config.json" -Raw | ConvertFrom-Json
+        if ($cfg.device -eq "cuda") {
+            $cfg.device = "cpu"
+            $cfg.compute_type = "int8"
+            $json = $cfg | ConvertTo-Json
+            [IO.File]::WriteAllText((Join-Path $root "config.json"), $json,
+                (New-Object System.Text.UTF8Encoding($false)))
+            Write-Host "No NVIDIA GPU detected - config.json set to CPU mode." -ForegroundColor Yellow
+        }
+    } catch {}
 }
 
 # 2. Create the virtual environment.
@@ -50,8 +73,15 @@ $venvPy = Join-Path $root ".venv\Scripts\python.exe"
 Write-Host "Upgrading pip..." -ForegroundColor Cyan
 & $venvPy -m pip install --upgrade pip
 
-Write-Host "Installing dependencies (this includes CUDA libs - large download)..." -ForegroundColor Cyan
+Write-Host "Installing dependencies..." -ForegroundColor Cyan
 & $venvPy -m pip install -r requirements.txt
+
+if ($hasNvidia) {
+    Write-Host "NVIDIA GPU detected - installing CUDA libraries (large download, one time)..." -ForegroundColor Cyan
+    & $venvPy -m pip install -r requirements-cuda.txt
+} else {
+    Write-Host "No NVIDIA GPU detected - skipping CUDA libraries (transcription will run on the CPU)." -ForegroundColor Yellow
+}
 
 Write-Host ""
 Write-Host "=== Setup complete ===" -ForegroundColor Green

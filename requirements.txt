@@ -7,8 +7,5 @@ pyperclip>=1.8.2
 PySide6-Essentials>=6.6
 # Offline Hebrew word-frequency lexicon, used to flag unknown/mis-transcribed words.
 wordfreq>=3.0
-# CUDA runtime libs for CTranslate2 GPU inference (needed by faster-whisper on GPU)
-# cuda-runtime provides cudart64_12.dll, which cublas/cudnn depend on.
-nvidia-cuda-runtime-cu12
-nvidia-cublas-cu12
-nvidia-cudnn-cu12
+# CUDA runtime libs live in requirements-cuda.txt — setup.ps1 installs them
+# only when an NVIDIA GPU is detected (they are a ~2GB+ download).

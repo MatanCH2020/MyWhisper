@@ -8,6 +8,7 @@ from PySide6.QtGui import QIcon, QPixmap, QPainter, QPen, QColor
 from PySide6.QtWidgets import QSystemTrayIcon, QMenu
 
 COLORS = {
+    "loading": "#4c82f7",     # brand blue — model loading at startup
     "idle": "#787878",        # grey
     "recording": "#dc2828",   # red
     "transcribing": "#e6be1e",  # yellow

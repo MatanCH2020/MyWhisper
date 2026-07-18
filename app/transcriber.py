@@ -61,6 +61,8 @@ class Transcriber:
         model_name = config["model"]
         device = config.get("device", "cuda")
         compute_type = config.get("compute_type", "float16")
+        if device == "cpu" and compute_type == "float16":
+            compute_type = "int8"  # float16 is a GPU type; int8 is the CPU choice
         log.info("Loading model '%s' on %s (%s)...", model_name, device, compute_type)
         try:
             model = WhisperModel(model_name, device=device, compute_type=compute_type)
