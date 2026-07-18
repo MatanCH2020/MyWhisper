@@ -3,6 +3,13 @@
 כל שינוי מתועד כאן. הפורמט מבוסס על [Keep a Changelog](https://keepachangelog.com/he/),
 וניהול הגרסאות לפי [Semantic Versioning](https://semver.org/lang/he/) (MAJOR.MINOR.PATCH).
 
+## [1.5.1] — 2026-07-19
+
+### שונה (Changed)
+- **המתקין פותח את האפליקציה מיד** בסיום — גם בהתקנה ראשונה וגם בעדכון. בעדכון הוא
+  סוגר קודם את המופע הרץ (כדי שהקוד החדש ייכנס לתוקף ולא ייחסם ע"י קבצים נעולים),
+  מושך את הקוד ופותח מחדש. קיצור שולחן העבודה נוצר בכל הרצה כמו קודם.
+
 ## [1.5.0] — 2026-07-19
 
 ### שונה (Changed)
@@ -119,6 +126,7 @@
 - טעינת היסטוריה איטית (מטמון ל-`wordfreq` ולקבצי ה-JSON, הגבלת כרטיסים מוצגים).
 - כפילות תהליכים בהפעלה.
 
+[1.5.1]: https://github.com/MatanCH2020/MyWhisper/releases/tag/v1.5.1
 [1.5.0]: https://github.com/MatanCH2020/MyWhisper/releases/tag/v1.5.0
 [1.4.1]: https://github.com/MatanCH2020/MyWhisper/releases/tag/v1.4.1
 [1.4.0]: https://github.com/MatanCH2020/MyWhisper/releases/tag/v1.4.0

@@ -4,7 +4,8 @@
 #
 # What it does: installs Git if missing, clones (or updates) the repo into
 # %USERPROFILE%\MyWhisper, runs setup.ps1 (Python 3.12 venv + all deps incl.
-# CUDA), and puts a MyWhisper shortcut on the Desktop.
+# CUDA), puts a MyWhisper shortcut on the Desktop, and launches the app.
+# On update it also closes the running instance first so the new code takes over.
 
 $ErrorActionPreference = "Stop"
 $RepoUrl = "https://github.com/MatanCH2020/MyWhisper.git"
@@ -25,6 +26,17 @@ if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
         exit 1
     }
 }
+
+# Stop any running instance first, so an update isn't blocked by locked files
+# and the new code takes over on launch below.
+function Stop-MyWhisper {
+    Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object {
+        $_.Name -eq "pythonw.exe" -and $_.CommandLine -and
+        $_.CommandLine -match "main\.py" -and $_.CommandLine -like "*$InstallDir*"
+    } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
+}
+Stop-MyWhisper
+Start-Sleep -Milliseconds 800
 
 # 2. Clone or update
 if (Test-Path (Join-Path $InstallDir ".git")) {
@@ -54,9 +66,17 @@ $icon = Join-Path $InstallDir "app\assets\icon.ico"
 if (Test-Path $icon) { $lnk.IconLocation = "$icon,0" }
 $lnk.Save()
 
+# 5. Launch the app now (silent, to the tray). Stop a leftover instance first
+# in case one was started during setup.
+Stop-MyWhisper
+Start-Sleep -Milliseconds 500
+$vbs = Join-Path $InstallDir "run_mywishper.vbs"
+Start-Process wscript.exe -ArgumentList ('"' + $vbs + '"') -WorkingDirectory $InstallDir
+
 Write-Host ""
 Write-Host "=== Installation complete ===" -ForegroundColor Green
-Write-Host "Run:  double-click 'MyWhisper' on the Desktop." -ForegroundColor White
-Write-Host "First run downloads the Whisper model (~1.5-3 GB, one time)." -ForegroundColor DarkGray
+Write-Host "MyWhisper is starting - look for the microphone icon in the system tray." -ForegroundColor White
+Write-Host "First run downloads the Whisper model (~1.5-3 GB, one time); the tray icon" -ForegroundColor DarkGray
+Write-Host "is blue while it loads and turns grey when ready. A Desktop shortcut was created." -ForegroundColor DarkGray
 Write-Host "Start with Windows (optional):" -ForegroundColor White
 Write-Host "  powershell -ExecutionPolicy Bypass -File `"$InstallDir\install_autostart.ps1`"" -ForegroundColor DarkGray
