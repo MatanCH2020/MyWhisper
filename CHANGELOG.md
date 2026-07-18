@@ -3,6 +3,15 @@
 כל שינוי מתועד כאן. הפורמט מבוסס על [Keep a Changelog](https://keepachangelog.com/he/),
 וניהול הגרסאות לפי [Semantic Versioning](https://semver.org/lang/he/) (MAJOR.MINOR.PATCH).
 
+## [1.7.0] — 2026-07-19
+
+### נוסף (Added)
+- **בדיקת מיקרופון חיה בהגדרות**: כפתור "בדוק מיקרופון" + מד-קול. פותח את ההתקן הנבחר,
+  מציג את עוצמת הקלט בזמן אמת, ומאשר "✓ קלט זוהה" ברגע שמתקבל קול — כך אפשר לוודא
+  שהמיקרופון באמת קולט לפני שמסתמכים עליו (`MicMonitor`). אם ההתקן לא נפתח, מוצגת שגיאה.
+- **התראה על תמלול ריק**: אם הקלטה לא הכילה קול, מוצגת התראה שמפנה לבדיקת המיקרופון,
+  במקום ש"כלום לא קורה".
+
 ## [1.6.0] — 2026-07-19
 
 ### נוסף (Added)
@@ -154,6 +163,7 @@
 - טעינת היסטוריה איטית (מטמון ל-`wordfreq` ולקבצי ה-JSON, הגבלת כרטיסים מוצגים).
 - כפילות תהליכים בהפעלה.
 
+[1.7.0]: https://github.com/MatanCH2020/MyWhisper/releases/tag/v1.7.0
 [1.6.0]: https://github.com/MatanCH2020/MyWhisper/releases/tag/v1.6.0
 [1.5.3]: https://github.com/MatanCH2020/MyWhisper/releases/tag/v1.5.3
 [1.5.2]: https://github.com/MatanCH2020/MyWhisper/releases/tag/v1.5.2

@@ -33,6 +33,58 @@ def list_input_devices():
     return out
 
 
+def resolve_device(name):
+    """Map an input-device name to a sounddevice index; None (system default)
+    if unset or the named device is not currently present."""
+    if not name:
+        return None
+    for i, n in list_input_devices():
+        if n == name:
+            return i
+    return None
+
+
+def _rms_level(indata, prev):
+    """Smoothed 0..1-ish loudness from an audio block (shared by mic monitor)."""
+    rms = float(np.sqrt(np.mean(np.square(indata, dtype=np.float64))))
+    target = min(1.0, rms * 12.0)
+    return prev + (target - prev) * 0.5
+
+
+class MicMonitor:
+    """Lightweight input-level monitor for the settings mic test — opens a stream
+    on a chosen device and exposes a live level, independent of the Recorder."""
+
+    def __init__(self):
+        self._stream = None
+        self._level = 0.0
+
+    def _callback(self, indata, frames, time_info, status):
+        self._level = _rms_level(indata, self._level)
+
+    def start(self, device_name=None):
+        """Open the given mic (name or None=default). Raises if it can't open."""
+        self.stop()
+        self._level = 0.0
+        self._stream = sd.InputStream(
+            samplerate=SAMPLE_RATE, channels=CHANNELS, dtype="float32",
+            device=resolve_device(device_name), callback=self._callback)
+        self._stream.start()
+
+    def level(self):
+        return self._level if self._stream is not None else 0.0
+
+    def stop(self):
+        if self._stream is not None:
+            try:
+                self._stream.stop()
+                self._stream.close()
+            except Exception:
+                pass
+            self._stream = None
+        self._level = 0.0
+
+
 class Recorder:
     """Streams microphone audio into a buffer between start() and stop()."""
 
@@ -52,13 +104,10 @@ class Recorder:
     def _resolve_device(self):
         """Map the stored device name to a sounddevice index; None (system
         default) if unset or if the named device is no longer present."""
-        if not self.device:
-            return None
-        for i, name in list_input_devices():
-            if name == self.device:
-                return i
-        log.warning("Selected mic %r not found — using the system default.", self.device)
-        return None
+        idx = resolve_device(self.device)
+        if self.device and idx is None:
+            log.warning("Selected mic %r not found — using the system default.", self.device)
+        return idx
 
     def _callback(self, indata, frames, time_info, status):
         if status:

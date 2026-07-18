@@ -12,8 +12,8 @@ from PySide6.QtCore import QObject, Qt, QTimer, Signal
 from PySide6.QtGui import QColor, QFont, QPainter
 from PySide6.QtWidgets import (
     QApplication, QComboBox, QDialog, QFileDialog, QFrame, QHBoxLayout, QLabel,
-    QLineEdit, QMessageBox, QPushButton, QScrollArea, QSlider, QStackedWidget,
-    QVBoxLayout, QWidget,
+    QLineEdit, QMessageBox, QProgressBar, QPushButton, QScrollArea, QSlider,
+    QStackedWidget, QVBoxLayout, QWidget,
 )
 
 import icons
@@ -335,11 +335,16 @@ class MainWindow(FramelessWindow):
         self.refresh_dict()
 
     def _goto(self, i):
+        # Leaving the settings page stops a running mic test (frees the stream).
+        if i != 2 and getattr(self, "_mic_testing", False):
+            self._stop_mic_test()
         self.stack.setCurrentIndex(i)
 
     def closeEvent(self, e):
         # X minimizes to the tray — the app keeps listening for the hotkey.
         # Really quitting is done from the tray menu ("יציאה").
+        if getattr(self, "_mic_testing", False):
+            self._stop_mic_test()
         if self._force_close:
             e.accept()
             return
@@ -530,6 +535,28 @@ class MainWindow(FramelessWindow):
         mic_hint.setWordWrap(True)
         mic_hint.setStyleSheet(f"color:{self.p['text_muted']}; font-size:11px;")
         mc.vbox.addWidget(mic_hint)
+        # live test: open the selected mic and show the input level
+        trow = QHBoxLayout()
+        self._mic_test_btn = QPushButton("בדוק מיקרופון")
+        self._mic_test_btn.setCursor(Qt.PointingHandCursor)
+        self._mic_test_btn.clicked.connect(self._toggle_mic_test)
+        trow.addWidget(self._mic_test_btn)
+        self._mic_level = QProgressBar()
+        self._mic_level.setRange(0, 100)
+        self._mic_level.setTextVisible(False)
+        self._mic_level.setFixedHeight(12)
+        self._mic_level.setStyleSheet(
+            f"QProgressBar{{background:{self.p['surface_alt']};border:none;border-radius:6px;}}"
+            f"QProgressBar::chunk{{background:{self.p['accent']};border-radius:6px;}}")
+        trow.addWidget(self._mic_level, 1)
+        mc.vbox.addLayout(trow)
+        self._mic_status = QLabel("")
+        self._mic_status.setStyleSheet(f"color:{self.p['text_muted']}; font-size:11px;")
+        mc.vbox.addWidget(self._mic_status)
+        self._mic_testing = False
+        self._mic_detected = False
+        self._mic_timer = QTimer(self)
+        self._mic_timer.timeout.connect(self._update_mic_level)
         v.addWidget(mc)
         self._populate_mics()
 
@@ -653,7 +680,43 @@ class MainWindow(FramelessWindow):
         self._mic_combo.blockSignals(False)
 
     def _on_mic_changed(self, _idx):
+        if self._mic_testing:
+            self._stop_mic_test()  # the old device stream is stale now
         self.ui.set_input_device(self._mic_combo.currentData() or "")
+
+    def _toggle_mic_test(self):
+        if self._mic_testing:
+            self._stop_mic_test()
+            return
+        device = self._mic_combo.currentData() or ""
+        if not self.ui.mic_test_start(device):
+            QMessageBox.warning(self, "MyWhisper",
+                                "לא ניתן לפתוח את המיקרופון הזה. בחר התקן אחר מהרשימה.")
+            return
+        self._mic_testing = True
+        self._mic_detected = False
+        self._mic_test_btn.setText("עצור בדיקה")
+        self._mic_status.setText("דבר עכשיו כדי לבדוק…")
+        self._mic_timer.start(50)
+
+    def _stop_mic_test(self):
+        self._mic_timer.stop()
+        self.ui.mic_test_stop()
+        self._mic_testing = False
+        self._mic_test_btn.setText("בדוק מיקרופון")
+        self._mic_level.setValue(0)
+
+    def _update_mic_level(self):
+        lvl = self.ui.mic_level()
+        self._mic_level.setValue(int(max(0.0, min(1.0, lvl)) * 100))
+        if lvl > 0.06:
+            self._mic_detected = True
+        if self._mic_detected:
+            self._mic_status.setText("✓ קלט זוהה — המיקרופון עובד")
+            self._mic_status.setStyleSheet("color:#2ea043; font-size:11px; font-weight:bold;")
+        else:
+            self._mic_status.setText("דבר עכשיו כדי לבדוק…")
+            self._mic_status.setStyleSheet(f"color:{self.p['text_muted']}; font-size:11px;")
 
     def _on_sound_toggle(self, on):
         self.ui.config["sounds"] = bool(on)
@@ -769,6 +832,9 @@ class AppUI(QObject):
         self.relaunch_as_admin = lambda: False
         self.list_input_devices = lambda: []       # wired by main
         self.set_input_device = lambda n: None      # wired by main
+        self.mic_test_start = lambda n: False       # wired by main
+        self.mic_test_stop = lambda: None
+        self.mic_level = lambda: 0.0
         self._minimize_hint_shown = False
 
         self.p = theme.palette(config.get("theme", "dark"))

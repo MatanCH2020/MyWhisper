@@ -52,7 +52,7 @@ import corrections
 import history
 import sounds
 from config import load_config, save_config
-from recorder import Recorder, has_input_device, list_input_devices
+from recorder import Recorder, has_input_device, list_input_devices, MicMonitor
 from transcriber import Transcriber
 from hotkey import HotkeyManager, TempHotkey
 from ui import AppUI
@@ -99,6 +99,10 @@ class Mywishper:
         self.ui.relaunch_as_admin = self._relaunch_as_admin
         self.ui.list_input_devices = lambda: [n for _, n in list_input_devices()]
         self.ui.set_input_device = self._set_input_device
+        self.mic_monitor = MicMonitor()          # live level meter for the mic test
+        self.ui.mic_test_start = self._mic_test_start
+        self.ui.mic_test_stop = self.mic_monitor.stop
+        self.ui.mic_level = self.mic_monitor.level
 
         self._lock = threading.Lock()
         self._busy = False  # True while transcribing (ignore toggles)
@@ -142,6 +146,15 @@ class Mywishper:
         self.config["input_device"] = name or ""
         save_config(self.config)
         log.info("Input device set to %r.", name or "system default")
+
+    def _mic_test_start(self, name):
+        """Open the given mic for the live level meter. False if it won't open."""
+        try:
+            self.mic_monitor.start(name or None)
+            return True
+        except Exception:
+            log.exception("Mic test failed to open device %r", name)
+            return False
 
     def _relaunch_as_admin(self):
         """Relaunch the app elevated (UAC). Returns False if elevation was
@@ -274,6 +287,11 @@ class Mywishper:
                 log.info("-> %s", text)
             else:
                 log.info("(empty transcription)")
+                sounds.error()
+                self.tray.notify(
+                    "MyWhisper — לא זוהה דיבור",
+                    "ההקלטה לא הכילה קול. ודא שנבחר המיקרופון הנכון ובדוק אותו "
+                    "ב-הגדרות ← מיקרופון ← בדוק מיקרופון.", "warning")
         except Exception:
             log.exception("Transcription failed")
             sounds.error()
