@@ -143,6 +143,15 @@ class CorrectionDialog(QDialog):
         self.accept()
 
 
+def _primary_btn_qss(p):
+    """Inline primary-button style. Set directly on the widget so it never
+    depends on the global [variant="primary"] property selector being matched."""
+    return (
+        f"QPushButton{{background:{p['accent']};color:{p['on_accent']};"
+        f"border:none;border-radius:9px;padding:7px 18px;font-size:13px;font-weight:600;}}"
+        f"QPushButton:hover{{background:{p['accent_hover']};}}")
+
+
 def _qt_key_name(key, text):
     """Map a Qt key code to the name the `keyboard` library expects, or None
     for keys we don't accept as a hotkey trigger (bare modifiers etc.)."""
@@ -172,9 +181,10 @@ class HotkeyEdit(QPushButton):
 
     def __init__(self, palette, current):
         super().__init__(current or "לא הוגדר")
+        self._p = palette
         self._current = current
         self._capturing = False
-        self.setProperty("variant", "primary")
+        self.setStyleSheet(_primary_btn_qss(palette))
         self.setMinimumWidth(150)
         self.setCursor(Qt.PointingHandCursor)
         self.clicked.connect(self._begin)
@@ -559,7 +569,7 @@ class MainWindow(FramelessWindow):
         pr.addWidget(self._plain("הקיצור לא עובד בכלל?"))
         pr.addStretch(1)
         admin_btn = QPushButton("הפעל מחדש כמנהל")
-        admin_btn.setProperty("variant", "primary")
+        admin_btn.setStyleSheet(_primary_btn_qss(self.p))
         admin_btn.setCursor(Qt.PointingHandCursor)
         admin_btn.clicked.connect(self._on_run_as_admin)
         pr.addWidget(admin_btn)
