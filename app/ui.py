@@ -555,11 +555,21 @@ class MainWindow(FramelessWindow):
         self._hk_edit.captured.connect(self._on_hotkey_captured)
         row.addWidget(self._hk_edit)
         hc.vbox.addLayout(row)
-        hk_hint = QLabel("לחץ על הכפתור ואז הקש את צירוף המקשים הרצוי (למשל Ctrl+Alt+Space). "
-                         "אם הקיצור לא מגיב — נסה צירוף אחר שאינו תפוס בתוכנה אחרת.")
+        hk_hint = QLabel("לחץ על הכפתור הכחול ואז הקש צירוף (למשל Ctrl+Alt+Space), "
+                         "או בחר צירוף מוכן למטה. אם הקיצור לא מגיב — הצירוף כנראה תפוס "
+                         "בתוכנה אחרת; נסה אחד אחר.")
         hk_hint.setWordWrap(True)
         hk_hint.setStyleSheet(f"color:{self.p['text_muted']}; font-size:11px;")
         hc.vbox.addWidget(hk_hint)
+        presets = QHBoxLayout()
+        presets.addWidget(self._plain("מהיר:"))
+        for combo in ("ctrl+alt+space", "ctrl+shift+space", "alt+q", "f9"):
+            pb = QPushButton(combo)
+            pb.setCursor(Qt.PointingHandCursor)
+            pb.clicked.connect(lambda _=False, c=combo: self._apply_preset(c))
+            presets.addWidget(pb)
+        presets.addStretch(1)
+        hc.vbox.addLayout(presets)
         v.addWidget(hc)
 
         # permissions / run as admin
@@ -593,6 +603,17 @@ class MainWindow(FramelessWindow):
             QMessageBox.warning(self, "MyWhisper",
                                 f"לא ניתן להגדיר את הקיצור '{combo}'. נסה צירוף אחר.")
             self._hk_edit.reset()
+
+    def _apply_preset(self, combo):
+        """Set a ready-made combo without needing the key-capture interaction."""
+        if self.ui.set_hotkey(combo):
+            self._hk_edit._current = combo
+            self._hk_edit.setText(combo)
+            QMessageBox.information(self, "MyWhisper",
+                                    f"הקיצור עודכן ל-{combo}. נסה אותו עכשיו בכל שדה טקסט.")
+        else:
+            QMessageBox.warning(self, "MyWhisper",
+                                f"'{combo}' תפוס בתוכנה אחרת. נסה צירוף אחר.")
 
     def _on_run_as_admin(self):
         if self.ui.relaunch_as_admin() is False:

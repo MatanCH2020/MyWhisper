@@ -3,6 +3,14 @@
 כל שינוי מתועד כאן. הפורמט מבוסס על [Keep a Changelog](https://keepachangelog.com/he/),
 וניהול הגרסאות לפי [Semantic Versioning](https://semver.org/lang/he/) (MAJOR.MINOR.PATCH).
 
+## [1.5.2] — 2026-07-19
+
+### נוסף (Added)
+- **כפתורי צירוף-מהיר בהגדרות** (Ctrl+Alt+Space, Ctrl+Shift+Space, Alt+Q, F9) — בחירת
+  קיצור בקליק אחד, בלי תלות בלכידת-מקשים. שימושי כשהצירוף הנוכחי "נבלע" בתוכנה אחרת.
+- **רישום ללוג של קבלת הקיצור**: `WM_HOTKEY received` בכל לחיצה שמגיעה, ו-`Hotkey toggle
+  triggered` בכניסה ל-toggle — כדי לאבחן מיידית אם לחיצה בכלל מגיעה לאפליקציה.
+
 ## [1.5.1] — 2026-07-19
 
 ### שונה (Changed)
@@ -126,6 +134,7 @@
 - טעינת היסטוריה איטית (מטמון ל-`wordfreq` ולקבצי ה-JSON, הגבלת כרטיסים מוצגים).
 - כפילות תהליכים בהפעלה.
 
+[1.5.2]: https://github.com/MatanCH2020/MyWhisper/releases/tag/v1.5.2
 [1.5.1]: https://github.com/MatanCH2020/MyWhisper/releases/tag/v1.5.1
 [1.5.0]: https://github.com/MatanCH2020/MyWhisper/releases/tag/v1.5.0
 [1.4.1]: https://github.com/MatanCH2020/MyWhisper/releases/tag/v1.4.1

@@ -156,6 +156,7 @@ class Mywishper:
         return True
 
     def toggle(self):
+        log.info("Hotkey toggle triggered.")
         with self._lock:
             if self.transcriber is None:
                 self.tray.notify("MyWhisper",

@@ -83,6 +83,8 @@ class _HotkeyFilter(QAbstractNativeEventFilter):
                 if identity != self._last:
                     self._last = identity
                     cb = self._cbs.get(int(msg.wParam))
+                    log.info("WM_HOTKEY received id=%s (routed=%s)",
+                             int(msg.wParam), cb is not None)
                     if cb:
                         cb()
         return False, 0
