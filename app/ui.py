@@ -16,7 +16,7 @@ from PySide6.QtGui import QColor, QFont, QPainter
 from PySide6.QtWidgets import (
     QApplication, QComboBox, QDialog, QFileDialog, QFrame, QHBoxLayout, QLabel,
     QLineEdit, QMessageBox, QProgressBar, QPushButton, QScrollArea, QSlider,
-    QStackedWidget, QVBoxLayout, QWidget,
+    QStackedWidget, QVBoxLayout, QWidget, QTextBrowser,
 )
 
 import icons
@@ -144,6 +144,57 @@ class CorrectionDialog(QDialog):
     def _approve(self):
         self._on_approve(self._word)
         self.accept()
+
+
+class ChangelogDialog(QDialog):
+    def __init__(self, parent, palette):
+        super().__init__(parent)
+        self.setWindowTitle("מה חדש ב-MyWhisper")
+        self.setStyleSheet(f"QDialog{{background:{palette['bg']};}}")
+        self.resize(600, 500)
+        lay = QVBoxLayout(self)
+        lay.setContentsMargins(20, 20, 20, 16)
+        
+        t = QLabel("מה חדש בגרסאות האחרונות?")
+        t.setFont(QFont(theme.pick_font(), 16, QFont.Bold))
+        lay.addWidget(t)
+        
+        self.browser = QTextBrowser()
+        self.browser.setStyleSheet(f"""
+            QTextBrowser {{
+                background: {palette['surface']};
+                color: {palette['text']};
+                border: 1px solid {palette['border']};
+                border-radius: 8px;
+                padding: 10px;
+                font-size: 14px;
+            }}
+        """)
+        self.browser.setOpenExternalLinks(True)
+        lay.addWidget(self.browser)
+        
+        row = QHBoxLayout()
+        row.addStretch(1)
+        close_btn = QPushButton("סגור")
+        close_btn.setProperty("variant", "primary")
+        close_btn.clicked.connect(self.accept)
+        row.addWidget(close_btn)
+        lay.addLayout(row)
+        
+        self._load_changelog()
+
+    def _load_changelog(self):
+        try:
+            from pathlib import Path
+            root = Path(__file__).resolve().parent.parent
+            cl_path = root / "CHANGELOG.md"
+            if cl_path.exists():
+                text = cl_path.read_text(encoding="utf-8")
+                self.browser.setMarkdown(text)
+            else:
+                self.browser.setPlainText("לא נמצא קובץ יומן שינויים (CHANGELOG.md).")
+        except Exception as e:
+            self.browser.setPlainText(f"שגיאה בטעינת הקובץ:\\n{e}")
 
 
 def _version_gt(a, b):
@@ -677,6 +728,10 @@ class MainWindow(FramelessWindow):
         urow = QHBoxLayout()
         urow.addWidget(self._plain(f"גרסה נוכחית: v{APP_VERSION}"))
         urow.addStretch(1)
+        self._cl_btn = QPushButton("מה חדש?")
+        self._cl_btn.setCursor(Qt.PointingHandCursor)
+        self._cl_btn.clicked.connect(self._show_changelog)
+        urow.addWidget(self._cl_btn)
         self._upd_btn = QPushButton("בדוק עדכונים")
         self._upd_btn.setCursor(Qt.PointingHandCursor)
         self._upd_btn.clicked.connect(self._on_check_update)
@@ -729,6 +784,9 @@ class MainWindow(FramelessWindow):
             QMessageBox.warning(self, "MyWhisper",
                                 "לא ניתן היה להפעיל כמנהל — ייתכן שאין לך הרשאות מנהל "
                                 "במחשב, או שהפעולה בוטלה. נסה לשנות את הקיצור במקום.")
+
+    def _show_changelog(self):
+        ChangelogDialog(self, self.p).exec()
 
     # ---------------- updates ----------------
     def _on_check_update(self):
