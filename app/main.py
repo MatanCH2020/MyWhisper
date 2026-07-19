@@ -5,6 +5,7 @@ transcribed locally with faster-whisper (Hebrew, with punctuation) and pasted
 into whatever field has focus.
 """
 import ctypes
+import subprocess
 import sys
 import threading
 from pathlib import Path
@@ -103,6 +104,8 @@ class Mywishper:
         self.ui.mic_test_start = self._mic_test_start
         self.ui.mic_test_stop = self.mic_monitor.stop
         self.ui.mic_level = self.mic_monitor.level
+        self.ui.check_update = self._check_update
+        self.ui.do_update = self._do_update
 
         self._lock = threading.Lock()
         self._busy = False  # True while transcribing (ignore toggles)
@@ -155,6 +158,35 @@ class Mywishper:
         except Exception:
             log.exception("Mic test failed to open device %r", name)
             return False
+
+    def _check_update(self):
+        """Return the latest published version string (e.g. '1.8.1'), or None on
+        failure. Called from a worker thread by the settings UI."""
+        try:
+            import json
+            import urllib.request
+            url = "https://api.github.com/repos/MatanCH2020/MyWhisper/releases/latest"
+            req = urllib.request.Request(url, headers={"User-Agent": "MyWhisper"})
+            with urllib.request.urlopen(req, timeout=8) as r:
+                return (json.load(r).get("tag_name") or "").lstrip("v") or None
+        except Exception:
+            log.exception("Update check failed")
+            return None
+
+    def _do_update(self):
+        """Launch the in-place updater in a visible window, then quit so it can
+        replace the running process. Returns False if it couldn't be launched."""
+        updater = Path(__file__).resolve().parent.parent / "update.ps1"
+        try:
+            subprocess.Popen(
+                ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass",
+                 "-File", str(updater)],
+                cwd=str(updater.parent))
+        except Exception:
+            log.exception("Failed to launch updater")
+            return False
+        QTimer.singleShot(800, self.quit)
+        return True
 
     def _relaunch_as_admin(self):
         """Relaunch the app elevated (UAC). Returns False if elevation was

@@ -3,6 +3,15 @@
 כל שינוי מתועד כאן. הפורמט מבוסס על [Keep a Changelog](https://keepachangelog.com/he/),
 וניהול הגרסאות לפי [Semantic Versioning](https://semver.org/lang/he/) (MAJOR.MINOR.PATCH).
 
+## [1.8.0] — 2026-07-19
+
+### נוסף (Added)
+- **כרטיס "עדכונים" בהגדרות**: מציג את **הגרסה הנוכחית** (`app/version.py`), כפתור
+  **"בדוק עדכונים"** שמשווה מול הגרסה האחרונה שפורסמה ב-GitHub (בלי לחסום את הממשק),
+  וכפתור **"עדכן עכשיו"** שמופיע כשיש עדכון.
+- **עדכון-במקום** (`update.ps1`): סוגר את המופע הרץ, מושך את הקוד האחרון (עם fallback
+  ל-`reset --hard` אם צריך), מתקין תלויות חדשות, ופותח מחדש — הכול מתוך האפליקציה.
+
 ## [1.7.1] — 2026-07-19
 
 ### תוקן (Fixed)
@@ -172,6 +181,7 @@
 - טעינת היסטוריה איטית (מטמון ל-`wordfreq` ולקבצי ה-JSON, הגבלת כרטיסים מוצגים).
 - כפילות תהליכים בהפעלה.
 
+[1.8.0]: https://github.com/MatanCH2020/MyWhisper/releases/tag/v1.8.0
 [1.7.1]: https://github.com/MatanCH2020/MyWhisper/releases/tag/v1.7.1
 [1.7.0]: https://github.com/MatanCH2020/MyWhisper/releases/tag/v1.7.0
 [1.6.0]: https://github.com/MatanCH2020/MyWhisper/releases/tag/v1.6.0

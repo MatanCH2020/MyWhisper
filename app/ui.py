@@ -7,6 +7,9 @@ UI only through AppUI's thread-safe signals.
 """
 import html
 import math
+import threading
+
+from version import __version__ as APP_VERSION
 
 from PySide6.QtCore import QObject, Qt, QTimer, Signal
 from PySide6.QtGui import QColor, QFont, QPainter
@@ -141,6 +144,16 @@ class CorrectionDialog(QDialog):
     def _approve(self):
         self._on_approve(self._word)
         self.accept()
+
+
+def _version_gt(a, b):
+    """True if version string a is newer than b (numeric dotted compare)."""
+    def parts(v):
+        return [int(x) for x in str(v).split(".") if x.isdigit()]
+    try:
+        return parts(a) > parts(b)
+    except Exception:
+        return False
 
 
 def _primary_btn_qss(p):
@@ -296,11 +309,14 @@ class HistoryCard(QFrame):
 class MainWindow(FramelessWindow):
     """The branded shell: title bar + nav rail + stacked pages."""
 
+    _update_result = Signal(object)  # latest version string (or None), off-thread
+
     def __init__(self, ui, palette):
         super().__init__()
         self.ui = ui
         self.p = palette
         self._force_close = False  # set by AppUI._rebuild for a real close
+        self._update_result.connect(self._on_update_result)
         self.setWindowTitle("MyWhisper — Matan Digital")
         self.setMinimumSize(720, 560)
         self.resize(900, 680)
@@ -640,6 +656,29 @@ class MainWindow(FramelessWindow):
         pc.vbox.addWidget(adm_hint)
         v.addWidget(pc)
 
+        # updates / version
+        upc = Card()
+        upc.vbox.addWidget(self._section("עדכונים"))
+        urow = QHBoxLayout()
+        urow.addWidget(self._plain(f"גרסה נוכחית: v{APP_VERSION}"))
+        urow.addStretch(1)
+        self._upd_btn = QPushButton("בדוק עדכונים")
+        self._upd_btn.setCursor(Qt.PointingHandCursor)
+        self._upd_btn.clicked.connect(self._on_check_update)
+        urow.addWidget(self._upd_btn)
+        upc.vbox.addLayout(urow)
+        self._upd_status = QLabel("")
+        self._upd_status.setWordWrap(True)
+        self._upd_status.setStyleSheet(f"color:{self.p['text_muted']}; font-size:11px;")
+        upc.vbox.addWidget(self._upd_status)
+        self._upd_now_btn = QPushButton("עדכן עכשיו")
+        self._upd_now_btn.setStyleSheet(_primary_btn_qss(self.p))
+        self._upd_now_btn.setCursor(Qt.PointingHandCursor)
+        self._upd_now_btn.clicked.connect(self._on_update_now)
+        self._upd_now_btn.setVisible(False)
+        upc.vbox.addWidget(self._upd_now_btn)
+        v.addWidget(upc)
+
         v.addStretch(1)
         # Wrap in a scroll area so a small window scrolls instead of squeezing
         # all the cards into an unreadable, overlapping stack.
@@ -675,6 +714,40 @@ class MainWindow(FramelessWindow):
             QMessageBox.warning(self, "MyWhisper",
                                 "לא ניתן היה להפעיל כמנהל — ייתכן שאין לך הרשאות מנהל "
                                 "במחשב, או שהפעולה בוטלה. נסה לשנות את הקיצור במקום.")
+
+    # ---------------- updates ----------------
+    def _on_check_update(self):
+        self._upd_btn.setEnabled(False)
+        self._upd_status.setStyleSheet(f"color:{self.p['text_muted']}; font-size:11px;")
+        self._upd_status.setText("בודק עדכונים…")
+        threading.Thread(
+            target=lambda: self._update_result.emit(self.ui.check_update()),
+            daemon=True).start()
+
+    def _on_update_result(self, latest):
+        self._upd_btn.setEnabled(True)
+        if not latest:
+            self._upd_status.setText("בדיקת העדכונים נכשלה — בדוק את החיבור לאינטרנט.")
+            self._upd_now_btn.setVisible(False)
+            return
+        if _version_gt(latest, APP_VERSION):
+            self._upd_status.setText(f"עדכון זמין: v{latest} (מותקן: v{APP_VERSION})")
+            self._upd_now_btn.setVisible(True)
+        else:
+            self._upd_status.setStyleSheet("color:#2ea043; font-size:11px; font-weight:bold;")
+            self._upd_status.setText("✓ מותקנת הגרסה האחרונה")
+            self._upd_now_btn.setVisible(False)
+
+    def _on_update_now(self):
+        if self.ui.do_update():
+            QMessageBox.information(
+                self, "MyWhisper",
+                "העדכון החל בחלון נפרד. האפליקציה תיסגר ותיפתח מחדש אוטומטית "
+                "בסיום. אל תסגור את חלון העדכון.")
+        else:
+            QMessageBox.warning(
+                self, "MyWhisper",
+                "לא ניתן להפעיל את העדכון. עדכן ידנית בעזרת פקודת ההתקנה מה-README.")
 
     def _populate_mics(self):
         self._mic_combo.blockSignals(True)
@@ -843,6 +916,8 @@ class AppUI(QObject):
         self.mic_test_start = lambda n: False       # wired by main
         self.mic_test_stop = lambda: None
         self.mic_level = lambda: 0.0
+        self.check_update = lambda: None            # wired by main
+        self.do_update = lambda: False
         self._minimize_hint_shown = False
 
         self.p = theme.palette(config.get("theme", "dark"))
