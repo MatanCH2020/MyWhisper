@@ -136,6 +136,35 @@ QLineEdit {{
 }}
 QLineEdit:focus {{ border: 1px solid {p['accent']}; }}
 
+QComboBox {{
+    background: {p['surface_alt']};
+    color: {p['text']};
+    border: 1px solid {p['border']};
+    border-radius: {RADIUS_SM}px;
+    padding: 5px 10px;
+    font-size: 13px;
+}}
+QComboBox:hover {{ border: 1px solid {p['accent']}; }}
+QComboBox::drop-down {{ border: none; width: 22px; }}
+QComboBox::down-arrow {{
+    width: 0; height: 0;
+    border-left: 4px solid transparent;
+    border-right: 4px solid transparent;
+    border-top: 5px solid {p['text_muted']};
+    margin-right: 8px;
+}}
+/* the popup list — without this it falls back to a black menu in light theme */
+QComboBox QAbstractItemView {{
+    background: {p['surface']};
+    color: {p['text']};
+    border: 1px solid {p['border']};
+    border-radius: {RADIUS_SM}px;
+    padding: 4px;
+    outline: none;
+    selection-background-color: {p['accent']};
+    selection-color: {p['on_accent']};
+}}
+
 QSlider::groove:horizontal {{
     height: 5px; border-radius: 3px; background: {p['border']};
 }}

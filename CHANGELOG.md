@@ -3,6 +3,13 @@
 כל שינוי מתועד כאן. הפורמט מבוסס על [Keep a Changelog](https://keepachangelog.com/he/),
 וניהול הגרסאות לפי [Semantic Versioning](https://semver.org/lang/he/) (MAJOR.MINOR.PATCH).
 
+## [1.8.1] — 2026-07-19
+
+### תוקן (Fixed)
+- **הרשימה הנפתחת של המיקרופון נפתחה שחורה במצב בהיר** (הרקע והטקסט לא עוצבו לפי
+  ה-theme). נוסף עיצוב ל-`QComboBox` ולרשימה הנפתחת (גם ב-QSS הגלובלי וגם inline על
+  התיבה, כי הסלקטור הגלובלי לא תמיד נתפס ב-build הזה) — הרשימה עכשיו תואמת בהיר/כהה.
+
 ## [1.8.0] — 2026-07-19
 
 ### נוסף (Added)
@@ -181,6 +188,7 @@
 - טעינת היסטוריה איטית (מטמון ל-`wordfreq` ולקבצי ה-JSON, הגבלת כרטיסים מוצגים).
 - כפילות תהליכים בהפעלה.
 
+[1.8.1]: https://github.com/MatanCH2020/MyWhisper/releases/tag/v1.8.1
 [1.8.0]: https://github.com/MatanCH2020/MyWhisper/releases/tag/v1.8.0
 [1.7.1]: https://github.com/MatanCH2020/MyWhisper/releases/tag/v1.7.1
 [1.7.0]: https://github.com/MatanCH2020/MyWhisper/releases/tag/v1.7.0

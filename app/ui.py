@@ -156,6 +156,20 @@ def _version_gt(a, b):
         return False
 
 
+def _combo_qss(p):
+    """Inline style for a QComboBox incl. its popup list — set on the widget so
+    the drop-down never falls back to a black menu in light theme (the global
+    QComboBox QAbstractItemView selector isn't reliably applied on this build)."""
+    return (
+        f"QComboBox{{background:{p['surface_alt']};color:{p['text']};"
+        f"border:1px solid {p['border']};border-radius:8px;padding:5px 10px;font-size:13px;}}"
+        f"QComboBox:hover{{border:1px solid {p['accent']};}}"
+        f"QComboBox::drop-down{{border:none;width:22px;}}"
+        f"QComboBox QAbstractItemView{{background:{p['surface']};color:{p['text']};"
+        f"border:1px solid {p['border']};outline:none;padding:4px;"
+        f"selection-background-color:{p['accent']};selection-color:{p['on_accent']};}}")
+
+
 def _primary_btn_qss(p):
     """Inline primary-button style. Set directly on the widget so it never
     depends on the global [variant="primary"] property selector being matched."""
@@ -543,6 +557,7 @@ class MainWindow(FramelessWindow):
         mrow.addStretch(1)
         self._mic_combo = QComboBox()
         self._mic_combo.setMinimumWidth(240)
+        self._mic_combo.setStyleSheet(_combo_qss(self.p))
         self._mic_combo.currentIndexChanged.connect(self._on_mic_changed)
         mrow.addWidget(self._mic_combo)
         mrow.addWidget(self._tool_btn("refresh", "רענן", self._populate_mics))
