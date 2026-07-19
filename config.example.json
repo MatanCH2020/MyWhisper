@@ -5,6 +5,8 @@
   "device": "cuda",
   "compute_type": "float16",
   "beam_size": 5,
+  "beam_size_cpu": 1,
+  "cpu_threads": 0,
   "vad_filter": true,
   "input_device": "",
   "restore_clipboard": true,

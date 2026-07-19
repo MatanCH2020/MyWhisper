@@ -14,7 +14,9 @@ DEFAULTS = {
     "language": "he",
     "device": "cuda",
     "compute_type": "float16",
-    "beam_size": 5,
+    "beam_size": 5,          # GPU: higher = more accurate
+    "beam_size_cpu": 1,      # CPU: greedy decoding, ~2-3x faster
+    "cpu_threads": 0,        # 0 = auto-detect
     "vad_filter": True,
     "input_device": "",  # microphone name; "" = system default
     "restore_clipboard": True,

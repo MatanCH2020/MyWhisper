@@ -3,6 +3,14 @@
 כל שינוי מתועד כאן. הפורמט מבוסס על [Keep a Changelog](https://keepachangelog.com/he/),
 וניהול הגרסאות לפי [Semantic Versioning](https://semver.org/lang/he/) (MAJOR.MINOR.PATCH).
 
+## [1.8.2] — 2026-07-19
+
+### שונה (Changed)
+- **תמלול מהיר יותר במצב CPU**: על מעבד, ברירת המחדל היא עכשיו greedy decoding
+  (`beam_size_cpu: 1`) במקום beam של 5 — מקצר את זמן התמלול בעלות דיוק זניחה. על GPU
+  נשמר `beam_size: 5` המלא. נוסף גם `cpu_threads` (0 = אוטומטי) לכוונון ידני.
+  שני המפתחות ניתנים לשינוי ב-`config.json`.
+
 ## [1.8.1] — 2026-07-19
 
 ### תוקן (Fixed)
@@ -188,6 +196,7 @@
 - טעינת היסטוריה איטית (מטמון ל-`wordfreq` ולקבצי ה-JSON, הגבלת כרטיסים מוצגים).
 - כפילות תהליכים בהפעלה.
 
+[1.8.2]: https://github.com/MatanCH2020/MyWhisper/releases/tag/v1.8.2
 [1.8.1]: https://github.com/MatanCH2020/MyWhisper/releases/tag/v1.8.1
 [1.8.0]: https://github.com/MatanCH2020/MyWhisper/releases/tag/v1.8.0
 [1.7.1]: https://github.com/MatanCH2020/MyWhisper/releases/tag/v1.7.1

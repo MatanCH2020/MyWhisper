@@ -51,6 +51,10 @@ class Transcriber:
         self.config = config
         self.language = config.get("language", "he")
         self.beam_size = config.get("beam_size", 5)
+        # On CPU, beam search is expensive; greedy (beam 1) is 2-3x faster for a
+        # small accuracy cost. Applied automatically whenever we run on the CPU.
+        self.beam_size_cpu = config.get("beam_size_cpu", 1)
+        self.cpu_threads = config.get("cpu_threads", 0)  # 0 = CTranslate2 auto-detect
         self.vad_filter = config.get("vad_filter", True)
         self.initial_prompt = config.get("initial_prompt") or None
         self.device = None            # actual device in use after load
@@ -65,18 +69,24 @@ class Transcriber:
             compute_type = "int8"  # float16 is a GPU type; int8 is the CPU choice
         log.info("Loading model '%s' on %s (%s)...", model_name, device, compute_type)
         try:
-            model = WhisperModel(model_name, device=device, compute_type=compute_type)
+            model = WhisperModel(model_name, device=device, compute_type=compute_type,
+                                 cpu_threads=self.cpu_threads)
             self.device = device
         except Exception as e:
             # Graceful fallback to CPU if CUDA is unavailable / misconfigured.
             # The caller can check device/fallback_reason to warn the user —
             # otherwise the only symptom is 10x slower transcription.
             log.warning("GPU load failed (%s). Falling back to CPU int8.", e)
-            model = WhisperModel(model_name, device="cpu", compute_type="int8")
+            model = WhisperModel(model_name, device="cpu", compute_type="int8",
+                                 cpu_threads=self.cpu_threads)
             self.device = "cpu"
             self.fallback_reason = str(e)
-        log.info("Model loaded on %s.", self.device)
+        log.info("Model loaded on %s (beam=%d).", self.device, self._effective_beam())
         return model
+
+    def _effective_beam(self):
+        """Fewer beams on CPU for speed; full beam on GPU for accuracy."""
+        return self.beam_size_cpu if self.device == "cpu" else self.beam_size
 
     def transcribe(self, audio: np.ndarray, hotwords: str = None) -> str:
         """Transcribe a mono float32 numpy array (16 kHz) and return the text.
@@ -90,7 +100,7 @@ class Transcriber:
         segments, _info = self.model.transcribe(
             audio,
             language=self.language,
-            beam_size=self.beam_size,
+            beam_size=self._effective_beam(),
             vad_filter=self.vad_filter,
             initial_prompt=self.initial_prompt,
             hotwords=hotwords or None,

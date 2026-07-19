@@ -125,7 +125,9 @@ irm https://raw.githubusercontent.com/MatanCH2020/MyWhisper/main/install.ps1 | i
 | `language` | שפת התמלול (`he`) |
 | `device` | `cuda` ל-GPU או `cpu` |
 | `compute_type` | `float16` ל-GPU, `int8` ל-CPU |
-| `beam_size` | איכות מול מהירות (5 = איכותי) |
+| `beam_size` | איכות מול מהירות ב-GPU (5 = איכותי) |
+| `beam_size_cpu` | beam במצב CPU (1 = greedy, מהיר; מיושם אוטומטית כשרצים על מעבד) |
+| `cpu_threads` | מספר ה-threads לתמלול CPU (0 = אוטומטי) |
 | `vad_filter` | סינון שקט אוטומטי |
 | `input_device` | שם המיקרופון להקלטה (`""` = ברירת מחדל של המערכת). ניתן לבחור מ**הגדרות ← מיקרופון** |
 | `restore_clipboard` | שחזור ה-clipboard המקורי אחרי ההדבקה |
