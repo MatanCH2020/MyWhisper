@@ -8,6 +8,7 @@ import ctypes
 import subprocess
 import sys
 import threading
+import time
 from pathlib import Path
 
 # Allow running as `python app/main.py` from the project root.
@@ -55,6 +56,7 @@ import sounds
 from config import load_config, save_config
 from recorder import Recorder, has_input_device, list_input_devices, MicMonitor
 from transcriber import Transcriber
+from fullscreen import foreground_is_fullscreen
 from hotkey import HotkeyManager, TempHotkey
 from ui import AppUI
 from paste import paste_text
@@ -67,10 +69,10 @@ class Mywishper:
         self._apply_sound_config()
 
         self.recorder = Recorder(self.config.get("input_device") or None)
-        # Loaded in the background by start(): on first run the model is a
-        # ~2GB download, and blocking here would leave the user with no tray,
-        # no window and a dead hotkey for minutes.
-        self.transcriber = None
+        # The transcriber object exists immediately, but its model is loaded in
+        # the background by start() (on first run it's a ~2GB download) and may
+        # be released later to free the GPU/CPU when idle or a game is running.
+        self.transcriber = Transcriber(self.config)
         self.ui = AppUI(
             self.config,
             level_provider=self.recorder.get_level,
@@ -111,6 +113,10 @@ class Mywishper:
         self._busy = False  # True while transcribing (ignore toggles)
         self._esc_hook = None   # Esc-to-cancel, registered only while recording
         self._max_timer = None  # auto-stop for a forgotten recording
+        self._loading = False           # model load in progress
+        self._model_ever_ready = False  # first successful load happened
+        self._last_used = time.monotonic()
+        self._resource_timer = None     # idle / fullscreen release poll
 
     def _apply_sound_config(self):
         sounds.configure(
@@ -211,11 +217,17 @@ class Mywishper:
 
     def toggle(self):
         log.info("Hotkey toggle triggered.")
+        self._mark_used()
         with self._lock:
-            if self.transcriber is None:
-                self.tray.notify("MyWhisper",
-                                 "מודל התמלול עדיין נטען — נסה שוב בעוד רגע.")
-                return
+            if not self.transcriber.is_loaded():
+                if not self._model_ever_ready:
+                    # First-ever load may still be downloading — don't record yet.
+                    self.tray.notify("MyWhisper",
+                                     "מודל התמלול עדיין נטען — נסה שוב בעוד רגע.")
+                    return
+                # Released to save resources: warm it up now; the transcription
+                # worker waits for it. Recording itself needs no model.
+                self._start_load_async()
             if self._busy:
                 return  # mid-transcription, ignore extra presses
             try:
@@ -347,16 +359,27 @@ class Mywishper:
                 "MyWhisper — לא נמצא מיקרופון",
                 "לא זוהה התקן הקלטה. חבר מיקרופון והגדר אותו כברירת מחדל ב-Windows "
                 "(הגדרות ← מערכת ← קול), אחרת ההקלטה לא תעבוד.", "warning"))
-        self.tray.set_state("loading", "MyWhisper — טוען מודל...")
-        threading.Thread(target=self._load_model, daemon=True).start()
+        self._start_load_async()
         # If loading is still going after a few seconds (first-run download),
         # tell the user what's happening instead of looking dead.
         hint = threading.Timer(4.0, self._loading_hint)
         hint.daemon = True
         hint.start()
+        # Poll for idle / fullscreen to release the model (runs on the GUI thread).
+        self._resource_timer = QTimer()
+        self._resource_timer.timeout.connect(self._resource_poll)
+        self._resource_timer.start(5000)
+
+    def _start_load_async(self):
+        """Load (or reload) the model in the background if not already loading."""
+        if self._loading or self.transcriber.is_loaded():
+            return
+        self._loading = True
+        self.tray.set_state("loading", "MyWhisper — טוען מודל...")
+        threading.Thread(target=self._load_model, daemon=True).start()
 
     def _loading_hint(self):
-        if self.transcriber is None:
+        if not self.transcriber.is_loaded():
             self.tray.notify(
                 "MyWhisper — טוען מודל",
                 "מודל התמלול נטען ברקע. בהפעלה הראשונה זו הורדה חד-פעמית "
@@ -364,30 +387,61 @@ class Mywishper:
 
     def _load_model(self):
         try:
-            transcriber = Transcriber(self.config)
+            self.transcriber.load()
         except Exception:
             log.exception("Model load failed")
+            self._loading = False
             self.tray.set_state("idle", "MyWhisper — שגיאה בטעינת המודל")
             self.tray.notify("MyWhisper — שגיאה",
                              "טעינת מודל התמלול נכשלה. בדוק את mywhisper.log.",
                              "warning")
             return
-        self.transcriber = transcriber
-        self.tray.set_state("idle", "MyWhisper — מוכן")
-        log.info("Ready. Press the hotkey to dictate. (Quit from the tray icon.)")
+        self._loading = False
+        first_ready = not self._model_ever_ready
+        self._model_ever_ready = True
+        self._mark_used()  # start the idle countdown now that it's loaded
+        # Don't clobber an active recording/transcribing state if this was a
+        # background reload triggered mid-use.
+        if not self.recorder.recording and not self._busy:
+            self.tray.set_state("idle", "MyWhisper — מוכן")
+        log.info("Model ready. Press the hotkey to dictate. (Quit from the tray icon.)")
         # A silent GPU->CPU fallback would otherwise only show as 10x slower
-        # transcription; surface it.
-        if transcriber.fallback_reason:
+        # transcription; surface it once (on the first load).
+        if first_ready and self.transcriber.fallback_reason:
             self.tray.notify(
                 "MyWhisper — מצב CPU",
                 "טעינת ה-GPU נכשלה, התמלול ירוץ על המעבד (איטי יותר). "
                 "בדוק דרייבר NVIDIA וספריות CUDA (setup.ps1).", "warning")
+
+    # ---- resource management: release the model when idle / gaming ----
+    def _mark_used(self):
+        self._last_used = time.monotonic()
+
+    def _resource_poll(self):
+        """On the GUI thread every few seconds: free the model when the app has
+        been idle or a fullscreen game/video is in the foreground."""
+        if (self._busy or self._loading or self.recorder.recording
+                or not self.transcriber.is_loaded()):
+            return
+        mins = self.config.get("idle_release_minutes", 10)
+        if mins and (time.monotonic() - self._last_used) >= mins * 60:
+            self._release_model("idle")
+            return
+        if self.config.get("release_on_fullscreen", True) and foreground_is_fullscreen():
+            self._release_model("fullscreen app")
+
+    def _release_model(self, reason):
+        self.transcriber.unload()
+        self.tray.set_state("idle", "MyWhisper — במצב חיסכון (לחץ קיצור להעיר)")
+        log.info("Model released to free resources (%s).", reason)
 
     def quit(self):
         try:
             self.hotkeys.stop()
         except Exception:
             pass
+        if self._resource_timer is not None:
+            self._resource_timer.stop()
         self._end_recording_hooks()
         self.tray.stop()  # hide now, or the icon ghosts in the tray until hover
         self.ui.request_quit()  # ask the Qt event loop to quit

@@ -128,6 +128,8 @@ irm https://raw.githubusercontent.com/MatanCH2020/MyWhisper/main/install.ps1 | i
 | `beam_size` | איכות מול מהירות ב-GPU (5 = איכותי) |
 | `beam_size_cpu` | beam במצב CPU (1 = greedy, מהיר; מיושם אוטומטית כשרצים על מעבד) |
 | `cpu_threads` | מספר ה-threads לתמלול CPU (0 = אוטומטי) |
+| `idle_release_minutes` | שחרור המודל מהזיכרון אחרי N דקות ללא שימוש (0 = אף פעם) |
+| `release_on_fullscreen` | שחרור המודל כשאפליקציית מסך-מלא (משחק) בחזית — למקסום ביצועים |
 | `vad_filter` | סינון שקט אוטומטי |
 | `input_device` | שם המיקרופון להקלטה (`""` = ברירת מחדל של המערכת). ניתן לבחור מ**הגדרות ← מיקרופון** |
 | `restore_clipboard` | שחזור ה-clipboard המקורי אחרי ההדבקה |

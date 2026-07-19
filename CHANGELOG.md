@@ -3,6 +3,22 @@
 כל שינוי מתועד כאן. הפורמט מבוסס על [Keep a Changelog](https://keepachangelog.com/he/),
 וניהול הגרסאות לפי [Semantic Versioning](https://semver.org/lang/he/) (MAJOR.MINOR.PATCH).
 
+## [1.9.0] — 2026-07-19
+
+### נוסף (Added)
+- **שחרור משאבים אוטומטי**: המודל משוחרר מהזיכרון (GPU/CPU) כדי לפנות משאבים, ונטען
+  מחדש אוטומטית בשימוש הבא (בלחיצת הקיצור). שני טריגרים:
+  - **חוסר-שימוש**: אחרי `idle_release_minutes` דקות (ברירת מחדל 10; 0 = כבוי).
+  - **מסך מלא**: כשאפליקציית מסך-מלא (בעיקר משחקים/וידאו) בחזית — `release_on_fullscreen`
+    (ברירת מחדל פועל). אידיאלי למקסום ביצועים בזמן משחק.
+  - האייקון במגש עובר ל"מצב חיסכון"; הטעינה מחדש שקופה (ההקלטה מתחילה מיד, התמלול ממתין
+    לטעינה). `app/transcriber.py` תומך עכשיו ב-load/unload/ensure_loaded; זיהוי מסך-מלא
+    ב-`app/fullscreen.py`.
+
+### שונה (Changed)
+- **התאמה אוטומטית לחומרה** (הובהר ותועד): GPU → `cuda` + beam 5; ללא GPU → `cpu` +
+  beam 1, כולל נפילה חלקה אם טעינת ה-GPU נכשלת.
+
 ## [1.8.2] — 2026-07-19
 
 ### שונה (Changed)
@@ -196,6 +212,7 @@
 - טעינת היסטוריה איטית (מטמון ל-`wordfreq` ולקבצי ה-JSON, הגבלת כרטיסים מוצגים).
 - כפילות תהליכים בהפעלה.
 
+[1.9.0]: https://github.com/MatanCH2020/MyWhisper/releases/tag/v1.9.0
 [1.8.2]: https://github.com/MatanCH2020/MyWhisper/releases/tag/v1.8.2
 [1.8.1]: https://github.com/MatanCH2020/MyWhisper/releases/tag/v1.8.1
 [1.8.0]: https://github.com/MatanCH2020/MyWhisper/releases/tag/v1.8.0

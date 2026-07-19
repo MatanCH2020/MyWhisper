@@ -1,8 +1,14 @@
-"""faster-whisper wrapper — loads the model once and transcribes audio buffers."""
+"""faster-whisper wrapper — loads the model on demand and transcribes audio.
+
+The model can be unloaded (`unload()`) to free GPU/CPU memory when the app is
+idle or a fullscreen game is running, and is transparently reloaded on the next
+transcription (`ensure_loaded()`)."""
+import gc
 import glob
 import logging
 import os
 import sys
+import threading
 
 log = logging.getLogger("transcriber")
 
@@ -59,7 +65,30 @@ class Transcriber:
         self.initial_prompt = config.get("initial_prompt") or None
         self.device = None            # actual device in use after load
         self.fallback_reason = None   # set when GPU load failed and CPU took over
-        self.model = self._load_model(config)
+        self.model = None             # loaded lazily via load()/ensure_loaded()
+        self._lock = threading.Lock()
+
+    def load(self):
+        """Load the model into memory (no-op if already loaded)."""
+        with self._lock:
+            if self.model is None:
+                self.model = self._load_model(self.config)
+
+    def ensure_loaded(self):
+        """Load the model if it was released; safe to call before every use."""
+        self.load()
+
+    def is_loaded(self) -> bool:
+        return self.model is not None
+
+    def unload(self):
+        """Release the model, freeing GPU/CPU memory (reloads on next use)."""
+        with self._lock:
+            if self.model is None:
+                return
+            self.model = None
+            gc.collect()  # drops CTranslate2's GPU/CPU allocation
+            log.info("Model unloaded — %s memory freed.", self.device or "device")
 
     def _load_model(self, config):
         model_name = config["model"]
@@ -97,6 +126,7 @@ class Transcriber:
         """
         if audio is None or len(audio) == 0:
             return ""
+        self.ensure_loaded()  # reload transparently if it was released
         segments, _info = self.model.transcribe(
             audio,
             language=self.language,

@@ -12,6 +12,8 @@
   "restore_clipboard": true,
   "clipboard_restore_delay": 0.5,
   "max_record_seconds": 600,
+  "idle_release_minutes": 10,
+  "release_on_fullscreen": true,
   "sounds": true,
   "sound_volume": 0.25,
   "initial_prompt": "שלום, מה שלומך? היום יום יפה.",

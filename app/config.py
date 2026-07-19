@@ -22,6 +22,8 @@ DEFAULTS = {
     "restore_clipboard": True,
     "clipboard_restore_delay": 0.5,  # seconds; raise for apps slow to consume paste
     "max_record_seconds": 600,       # auto-stop cap for a forgotten recording; 0 = off
+    "idle_release_minutes": 10,      # free the model after N idle minutes; 0 = never
+    "release_on_fullscreen": True,   # free the model while a fullscreen app (game) runs
     "sounds": True,
     "sound_volume": 0.25,
     "initial_prompt": "",
