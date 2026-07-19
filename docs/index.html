@@ -46,11 +46,12 @@ svg{display:block}
 /* ---------- nav ---------- */
 nav{position:sticky;top:0;z-index:50;backdrop-filter:blur(16px);
   background:rgba(10,13,19,.72);border-bottom:1px solid var(--border)}
-.nav-in{display:flex;align-items:center;justify-content:space-between;height:66px}
-.brand{display:flex;align-items:center;gap:11px;font-weight:800;font-size:1.16rem;color:var(--text)}
+.nav-in{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;height:66px}
+.brand{display:flex;align-items:center;gap:11px;font-weight:800;font-size:1.16rem;color:var(--text);justify-self:start}
 .brand img{width:34px;height:34px;border-radius:9px;box-shadow:0 4px 14px rgba(76,130,247,.4)}
 .brand small{color:var(--faint);font-weight:500;font-size:.72rem;letter-spacing:.04em}
-.nav-links{display:flex;align-items:center;gap:26px;font-size:.95rem}
+.nav-links{display:flex;align-items:center;gap:28px;font-size:.95rem;justify-self:center}
+.nav-in>.gh{justify-self:end}
 .nav-links a{color:var(--muted);font-weight:500;transition:color .18s}
 .nav-links a:hover{color:var(--text)}
 .gh{display:inline-flex;align-items:center;gap:8px;color:var(--text)!important;
@@ -71,6 +72,11 @@ nav{position:sticky;top:0;z-index:50;backdrop-filter:blur(16px);
 
 /* ---------- hero ---------- */
 .hero{padding:78px 0 30px;text-align:center;position:relative}
+.hero::before{content:"";position:absolute;inset:0;z-index:-1;pointer-events:none;
+  background-image:radial-gradient(circle at center, rgba(255,255,255,.04) 1px, transparent 1.4px);
+  background-size:30px 30px;
+  -webkit-mask-image:radial-gradient(120% 80% at 50% 0%, #000 30%, transparent 72%);
+  mask-image:radial-gradient(120% 80% at 50% 0%, #000 30%, transparent 72%)}
 .chip{display:inline-flex;align-items:center;gap:9px;font-size:.86rem;font-weight:600;
   color:var(--accent-2);background:rgba(76,130,247,.1);border:1px solid rgba(76,130,247,.28);
   padding:7px 15px;border-radius:999px;margin-bottom:26px}
@@ -94,10 +100,28 @@ nav{position:sticky;top:0;z-index:50;backdrop-filter:blur(16px);
 .counter b{color:var(--green);font-size:1.08rem}
 .counter svg{width:16px;height:16px;color:var(--green)}
 
+/* install section */
+.install-grid{display:grid;grid-template-columns:1fr 1fr;gap:22px;max-width:940px;margin:0 auto}
+.inst{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);
+  padding:28px 26px;display:flex;flex-direction:column}
+.inst-head{display:flex;align-items:center;gap:12px;margin-bottom:16px;flex-wrap:wrap}
+.inst-head h3{font-size:1.25rem;font-weight:800}
+.badge{font-size:.74rem;font-weight:700;color:var(--green);background:rgba(53,210,154,.12);
+  border:1px solid rgba(53,210,154,.3);padding:4px 11px;border-radius:999px}
+.badge.alt{color:var(--muted);background:var(--surface-2);border-color:var(--border-hi)}
+.inst ol{list-style:none;counter-reset:s;margin-bottom:18px;padding:0}
+.inst ol li{counter-increment:s;position:relative;padding-inline-start:34px;margin-bottom:11px;color:var(--muted)}
+.inst ol li b{color:var(--text)}
+.inst ol li::before{content:counter(s);position:absolute;inset-inline-start:0;top:1px;
+  width:23px;height:23px;border-radius:7px;display:flex;align-items:center;justify-content:center;
+  font-family:'JetBrains Mono',monospace;font-size:.78rem;font-weight:600;color:var(--accent-2);
+  background:rgba(76,130,247,.12);border:1px solid rgba(76,130,247,.25)}
+.inst .btn{width:100%;padding:14px 20px;font-size:1.02rem;margin-top:auto}
+.inst .note{color:var(--faint);font-size:.83rem;margin-top:14px;line-height:1.6}
 /* command box */
-.cmd{direction:ltr;display:flex;align-items:center;gap:10px;max-width:640px;margin:26px auto 0;
+.cmd{direction:ltr;display:flex;align-items:center;gap:10px;margin-top:auto;
   background:#05070c;border:1px solid var(--border);border-radius:13px;padding:12px 14px;
-  font-family:'JetBrains Mono',monospace;font-size:.83rem;color:#9fd0ff;overflow-x:auto;white-space:nowrap}
+  font-family:'JetBrains Mono',monospace;font-size:.8rem;color:#9fd0ff;overflow-x:auto;white-space:nowrap}
 .cmd .pr{color:var(--green)}
 .cmd button{flex-shrink:0;margin-inline-start:auto;font-family:'Heebo';background:var(--surface-2);
   color:var(--text);border:1px solid var(--border-hi);border-radius:9px;padding:6px 14px;cursor:pointer;
@@ -115,8 +139,8 @@ nav{position:sticky;top:0;z-index:50;backdrop-filter:blur(16px);
 .winbar .d.r{background:#ff5f57}.winbar .d.y{background:#febc2e}.winbar .d.g{background:#28c840}
 .winbar span{margin-inline-start:12px;color:var(--faint);font-size:.78rem;font-family:'JetBrains Mono',monospace}
 .window img.shot{display:block;width:100%}
-.overlay-float{position:absolute;z-index:2;top:-26px;left:5%;width:158px;height:auto;
-  filter:drop-shadow(0 16px 30px rgba(0,0,0,.6));animation:bob 3.4s ease-in-out infinite}
+.overlay-float{position:absolute;z-index:3;top:-32px;left:calc(50% - 82px);width:164px;height:auto;
+  filter:drop-shadow(0 18px 34px rgba(0,0,0,.65));animation:bob 3.4s ease-in-out infinite}
 @keyframes bob{0%,100%{transform:translateY(0)}50%{transform:translateY(-10px)}}
 
 /* ---------- sections ---------- */
@@ -145,7 +169,8 @@ section{padding:80px 0;position:relative}
 .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:20px}
 .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);
   padding:28px 26px;transition:border-color .2s,transform .2s,box-shadow .2s}
-.card:hover{border-color:var(--border-hi);transform:translateY(-3px);box-shadow:0 16px 40px rgba(0,0,0,.35)}
+.card:hover{border-color:var(--accent);transform:translateY(-4px);
+  box-shadow:0 0 0 1px rgba(76,130,247,.35),0 22px 50px rgba(76,130,247,.15)}
 .card .ic{width:46px;height:46px;border-radius:13px;display:flex;align-items:center;justify-content:center;
   background:linear-gradient(135deg,rgba(76,130,247,.16),rgba(76,130,247,.05));
   border:1px solid rgba(76,130,247,.2);margin-bottom:16px}
@@ -195,11 +220,12 @@ footer .brand{justify-content:center;margin-bottom:10px}
 footer a{color:var(--muted)}footer a:hover{color:var(--text)}
 
 @media (max-width:860px){
-  .steps,.grid{grid-template-columns:1fr}
+  .steps,.grid,.install-grid{grid-template-columns:1fr}
   .split{grid-template-columns:1fr;gap:32px}
   .split .media{order:-1}
-  .nav-links a:not(.gh){display:none}
-  .overlay-float{width:120px;top:-18px}
+  .nav-links{display:none}
+  .nav-in{grid-template-columns:1fr auto}
+  .overlay-float{width:124px;top:-20px;left:calc(50% - 62px)}
   section{padding:60px 0}
 }
 @media (prefers-reduced-motion:reduce){
@@ -217,11 +243,12 @@ footer a{color:var(--muted)}footer a:hover{color:var(--text)}
       <a href="#features">יכולות</a>
       <a href="#learn">למידה</a>
       <a href="#faq">שאלות</a>
-      <a class="gh" href="https://github.com/MatanCH2020/MyWhisper" target="_blank" rel="noopener" aria-label="GitHub repository">
-        <svg width="17" height="17" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg>
-        GitHub
-      </a>
+      <a href="#install">התקנה</a>
     </div>
+    <a class="gh" href="https://github.com/MatanCH2020/MyWhisper" target="_blank" rel="noopener" aria-label="GitHub repository">
+      <svg width="17" height="17" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg>
+      GitHub
+    </a>
   </div>
 </nav>
 
@@ -233,9 +260,9 @@ footer a{color:var(--muted)}footer a:hover{color:var(--text)}
     והטקסט מודבק איפה שהסמן. כולל פיסוק. <b>חינם, פרטי, ורץ על המחשב שלך.</b></p>
 
     <div class="cta-row">
-      <a class="btn btn-lg btn-primary" href="https://github.com/MatanCH2020/MyWhisper/releases/latest/download/MyWhisper-Setup.cmd">
+      <a class="btn btn-lg btn-primary" href="#install">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12m0 0l-4-4m4 4l4-4M4 21h16"/></svg>
-        הורד והתקן — חינם
+        התקנה — חינם
       </a>
       <a class="btn btn-lg btn-ghost" href="#how">איך זה עובד</a>
     </div>
@@ -251,12 +278,6 @@ footer a{color:var(--muted)}footer a:hover{color:var(--text)}
       <span><b id="count" class="mono">—</b> הורדות עד עכשיו</span>
     </div>
 
-    <div class="cmd">
-      <span class="pr">PS&gt;</span>
-      <span id="cmd-text">irm https://raw.githubusercontent.com/MatanCH2020/MyWhisper/main/install.ps1 | iex</span>
-      <button id="copy-btn" type="button">העתק</button>
-    </div>
-
     <div class="stage">
       <div class="halo" aria-hidden="true"></div>
       <img class="overlay-float" src="app-overlay.png" alt="מחוון ההקלטה הצף">
@@ -267,6 +288,39 @@ footer a{color:var(--muted)}footer a:hover{color:var(--text)}
     </div>
   </div>
 </header>
+
+<section id="install">
+  <div class="wrap">
+    <span class="eyebrow">התקנה</span>
+    <h2 class="h2">שתי דרכים להתקין — בחר אחת</h2>
+    <p class="sub">בשתיהן ההתקנה מסדרת לבד את הכול. בהרצה הראשונה יורד מודל התמלול (חד-פעמי).</p>
+    <div class="install-grid">
+      <div class="inst">
+        <div class="inst-head"><span class="badge">מומלץ · הכי פשוט</span><h3>התקנה בקליק</h3></div>
+        <ol>
+          <li>הורד את קובץ ההתקנה.</li>
+          <li>לחץ עליו <b>פעמיים</b>.</li>
+          <li>אם Windows מזהיר (SmartScreen) — <b>"מידע נוסף"</b> ← <b>"הפעל בכל זאת"</b> (הקוד פתוח ובטוח).</li>
+        </ol>
+        <a class="btn btn-primary" href="https://github.com/MatanCH2020/MyWhisper/releases/latest/download/MyWhisper-Setup.cmd">
+          <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12m0 0l-4-4m4 4l4-4M4 21h16"/></svg>
+          הורד את קובץ ההתקנה
+        </a>
+        <p class="note">קובץ קטן (MyWhisper-Setup.cmd) שמריץ את ההתקנה. כלי שורת-פקודה — לכן ייתכן שהדפדפן או Windows יבקשו אישור.</p>
+      </div>
+      <div class="inst">
+        <div class="inst-head"><span class="badge alt">למתקדמים</span><h3>התקנה בפקודה</h3></div>
+        <ol><li>פתח <b>PowerShell</b>.</li><li>הדבק את הפקודה והקש Enter.</li></ol>
+        <div class="cmd">
+          <span class="pr">PS&gt;</span>
+          <span id="cmd-text">irm https://raw.githubusercontent.com/MatanCH2020/MyWhisper/main/install.ps1 | iex</span>
+          <button id="copy-btn" type="button">העתק</button>
+        </div>
+        <p class="note">אותה התקנה בדיוק, בלי הורדת קובץ. הרצה חוזרת = עדכון לגרסה האחרונה.</p>
+      </div>
+    </div>
+  </div>
+</section>
 
 <section id="how">
   <div class="wrap">
