@@ -238,6 +238,22 @@ footer a{color:var(--muted)}footer a:hover{color:var(--text)}
   .overlay-float{width:124px;top:-20px;left:calc(50% - 62px)}
   section{padding:60px 0}
 }
+/* mobile: center everything, no clipped text */
+@media (max-width:640px){
+  .wrap{padding:0 18px}
+  .split>div, .split .eyebrow{text-align:center!important}
+  .pt{justify-content:center}
+  .step, .card{text-align:center}
+  .step .ic, .card .ic{margin-inline:auto}
+  .step .n{position:static;display:block;margin-bottom:6px}
+  .inst{text-align:center}
+  .inst-head{justify-content:center}
+  .inst ol{display:inline-block;text-align:right}
+  .inst .btn{white-space:normal}
+  .cta-sub{gap:8px 16px}
+  .final .box{padding:44px 22px}
+  h1, .h2, .hero .lead{overflow-wrap:anywhere}
+}
 @media (prefers-reduced-motion:reduce){
   *{animation:none!important;scroll-behavior:auto!important;transition:none!important}
 }
