@@ -3,6 +3,11 @@
 כל שינוי מתועד כאן. הפורמט מבוסס על [Keep a Changelog](https://keepachangelog.com/he/),
 וניהול הגרסאות לפי [Semantic Versioning](https://semver.org/lang/he/) (MAJOR.MINOR.PATCH).
 
+## [1.10.0] — 2026-07-19
+
+### נוסף (Added)
+- **כפתור "מה חדש?" במסך ההגדרות**: ניתן כעת לקרוא את היסטוריית הגרסאות המלאה של MyWhisper (כולל העדכון הנוכחי) ישירות מתוך האפליקציה, בחלונית נוחה לקריאה.
+
 ## [1.9.0] — 2026-07-19
 
 ### נוסף (Added)
@@ -212,6 +217,7 @@
 - טעינת היסטוריה איטית (מטמון ל-`wordfreq` ולקבצי ה-JSON, הגבלת כרטיסים מוצגים).
 - כפילות תהליכים בהפעלה.
 
+[1.10.0]: https://github.com/MatanCH2020/MyWhisper/releases/tag/v1.10.0
 [1.9.0]: https://github.com/MatanCH2020/MyWhisper/releases/tag/v1.9.0
 [1.8.2]: https://github.com/MatanCH2020/MyWhisper/releases/tag/v1.8.2
 [1.8.1]: https://github.com/MatanCH2020/MyWhisper/releases/tag/v1.8.1
