@@ -58,6 +58,15 @@ irm https://raw.githubusercontent.com/MatanCH2020/MyWhisper/main/install.ps1 | i
 
 > בהרצה הראשונה יורד מודל התמלול (‎~1.5–3GB) — פעם אחת בלבד.
 
+### 🗑️ הסרה מלאה
+
+רוצה להסיר את התוכנה? פתח PowerShell והדבק:
+
+```powershell
+irm https://raw.githubusercontent.com/MatanCH2020/MyWhisper/main/uninstall.ps1 | iex
+```
+הפקודה סוגרת את התוכנה, מוחקת את קיצורי הדרך ואת כל תיקיית ההתקנה מהמחשב.
+
 ## 🎬 איך משתמשים
 
 | מקש | פעולה |
