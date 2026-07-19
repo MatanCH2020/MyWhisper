@@ -101,9 +101,10 @@ nav{position:sticky;top:0;z-index:50;backdrop-filter:blur(16px);
 .counter svg{width:16px;height:16px;color:var(--green)}
 
 /* install section */
-.install-grid{display:grid;grid-template-columns:1fr 1fr;gap:22px;max-width:940px;margin:0 auto}
+.install-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:22px;
+  max-width:900px;margin:0 auto;align-items:start}
 .inst{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);
-  padding:28px 26px;display:flex;flex-direction:column}
+  padding:26px 24px;display:flex;flex-direction:column;min-width:0}
 .inst-head{display:flex;align-items:center;gap:12px;margin-bottom:16px;flex-wrap:wrap}
 .inst-head h3{font-size:1.25rem;font-weight:800}
 .badge{font-size:.74rem;font-weight:700;color:var(--green);background:rgba(53,210,154,.12);
@@ -116,12 +117,13 @@ nav{position:sticky;top:0;z-index:50;backdrop-filter:blur(16px);
   width:23px;height:23px;border-radius:7px;display:flex;align-items:center;justify-content:center;
   font-family:'JetBrains Mono',monospace;font-size:.78rem;font-weight:600;color:var(--accent-2);
   background:rgba(76,130,247,.12);border:1px solid rgba(76,130,247,.25)}
-.inst .btn{width:100%;padding:14px 20px;font-size:1.02rem;margin-top:auto}
-.inst .note{color:var(--faint);font-size:.83rem;margin-top:14px;line-height:1.6}
+.inst .btn{width:100%;padding:13px 20px;font-size:1rem;white-space:nowrap;margin-top:6px}
+.inst .note{color:var(--faint);font-size:.83rem;margin-top:12px;line-height:1.6}
 /* command box */
-.cmd{direction:ltr;display:flex;align-items:center;gap:10px;margin-top:auto;
+.cmd{direction:ltr;display:flex;align-items:center;gap:10px;margin-top:6px;min-width:0;
   background:#05070c;border:1px solid var(--border);border-radius:13px;padding:12px 14px;
   font-family:'JetBrains Mono',monospace;font-size:.8rem;color:#9fd0ff;overflow-x:auto;white-space:nowrap}
+.cmd #cmd-text{overflow-x:auto}
 .cmd .pr{color:var(--green)}
 .cmd button{flex-shrink:0;margin-inline-start:auto;font-family:'Heebo';background:var(--surface-2);
   color:var(--text);border:1px solid var(--border-hi);border-radius:9px;padding:6px 14px;cursor:pointer;
@@ -298,15 +300,14 @@ footer a{color:var(--muted)}footer a:hover{color:var(--text)}
       <div class="inst">
         <div class="inst-head"><span class="badge">מומלץ · הכי פשוט</span><h3>התקנה בקליק</h3></div>
         <ol>
-          <li>הורד את קובץ ההתקנה.</li>
-          <li>לחץ עליו <b>פעמיים</b>.</li>
-          <li>אם Windows מזהיר (SmartScreen) — <b>"מידע נוסף"</b> ← <b>"הפעל בכל זאת"</b> (הקוד פתוח ובטוח).</li>
+          <li>הורד את קובץ ההתקנה ולחץ עליו <b>פעמיים</b>.</li>
+          <li>אם Windows מזהיר: <b>"מידע נוסף"</b> ← <b>"הפעל בכל זאת"</b>.</li>
         </ol>
         <a class="btn btn-primary" href="https://github.com/MatanCH2020/MyWhisper/releases/latest/download/MyWhisper-Setup.cmd">
           <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12m0 0l-4-4m4 4l4-4M4 21h16"/></svg>
           הורד את קובץ ההתקנה
         </a>
-        <p class="note">קובץ קטן (MyWhisper-Setup.cmd) שמריץ את ההתקנה. כלי שורת-פקודה — לכן ייתכן שהדפדפן או Windows יבקשו אישור.</p>
+        <p class="note">קובץ קטן (MyWhisper-Setup.cmd) שמריץ את ההתקנה. האזהרה תקינה — הקוד פתוח ובטוח.</p>
       </div>
       <div class="inst">
         <div class="inst-head"><span class="badge alt">למתקדמים</span><h3>התקנה בפקודה</h3></div>
