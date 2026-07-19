@@ -55,7 +55,7 @@ def main():
     p.setPen(QColor("#aeb8c6"))
     p.setFont(_font(38, QFont.Medium))
     p.drawText(QRectF(0, 412, W, 56), Qt.AlignHCenter | Qt.AlignVCenter,
-               "תמלול עברית מקומי לווינדוז")
+               "תמלול עברית מקומי ל-Windows")
 
     # accent sub-line
     p.setPen(QColor("#7aa5ff"))
