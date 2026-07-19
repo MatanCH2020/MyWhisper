@@ -1,6 +1,6 @@
 # MyWhisper one-line installer.
 # From any PowerShell window:
-#   irm https://raw.githubusercontent.com/MatanCH2020/MyWhisper/main/install.ps1 | iex
+#   irm https://raw.githubusercontent.com/MatanCH2020/MyWhisper/main/scripts/install.ps1 | iex
 #
 # What it does: installs Git if missing, clones (or updates) the repo into
 # %USERPROFILE%\MyWhisper, runs setup.ps1 (Python 3.12 venv + all deps incl.
