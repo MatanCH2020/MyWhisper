@@ -182,7 +182,7 @@ class Mywishper:
     def _do_update(self):
         """Launch the in-place updater in a visible window, then quit so it can
         replace the running process. Returns False if it couldn't be launched."""
-        updater = Path(__file__).resolve().parent.parent / "update.ps1"
+        updater = Path(__file__).resolve().parent.parent / "scripts" / "update.ps1"
         try:
             subprocess.Popen(
                 ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass",

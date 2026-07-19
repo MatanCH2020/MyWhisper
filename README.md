@@ -48,7 +48,7 @@
 פתח PowerShell והדבק:
 
 ```powershell
-irm https://raw.githubusercontent.com/MatanCH2020/MyWhisper/main/install.ps1 | iex
+irm https://raw.githubusercontent.com/MatanCH2020/MyWhisper/main/scripts/install.ps1 | iex
 ```
 
 הפקודה מתקינה Git ו-Python 3.12 אם חסרים, מורידה את הפרויקט ל-`%USERPROFILE%\MyWhisper`,
@@ -63,7 +63,7 @@ irm https://raw.githubusercontent.com/MatanCH2020/MyWhisper/main/install.ps1 | i
 רוצה להסיר את התוכנה? פתח PowerShell והדבק:
 
 ```powershell
-irm https://raw.githubusercontent.com/MatanCH2020/MyWhisper/main/uninstall.ps1 | iex
+irm https://raw.githubusercontent.com/MatanCH2020/MyWhisper/main/scripts/uninstall.ps1 | iex
 ```
 הפקודה סוגרת את התוכנה, מוחקת את קיצורי הדרך ואת כל תיקיית ההתקנה מהמחשב.
 
@@ -160,7 +160,7 @@ irm https://raw.githubusercontent.com/MatanCH2020/MyWhisper/main/uninstall.ps1 |
 
 ```powershell
 # התקנה ידנית (מתוך תיקיית הפרויקט)
-powershell -ExecutionPolicy Bypass -File setup.ps1
+powershell -ExecutionPolicy Bypass -File scripts\setup.ps1
 
 # בדיקת GPU + עברית (מקליט 4 שניות ומתמלל)
 .\.venv\Scripts\python app\check_gpu.py
@@ -169,10 +169,10 @@ powershell -ExecutionPolicy Bypass -File setup.ps1
 .\.venv\Scripts\python app\main.py
 
 # הרצה שקטה לרקע (בלי חלון קונסולה)
-wscript run_mywishper.vbs
+wscript scripts\run_mywishper.vbs
 
 # הפעלה אוטומטית עם ווינדוז
-powershell -ExecutionPolicy Bypass -File install_autostart.ps1
+powershell -ExecutionPolicy Bypass -File scripts\install_autostart.ps1
 
 # בדיקות יחידה
 .\.venv\Scripts\python -m unittest discover tests
