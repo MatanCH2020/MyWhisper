@@ -403,6 +403,61 @@ nav{
   box-shadow:0 0 10px rgba(59, 130, 246, 0.4);
 }
 
+/* single install flow */
+.install-single{max-width:720px;margin:0 auto}
+.install-single .cmd{font-size:.92rem}
+.install-single .note{text-align:center;margin-top:14px;color:var(--faint);font-size:.86rem;line-height:1.6}
+.install-single .note b{color:var(--muted)}
+
+.flow-title{
+  text-align:center;
+  font-family:'Outfit','Heebo',sans-serif;
+  font-size:clamp(1.3rem,3vw,1.6rem);
+  font-weight:800;
+  margin:70px 0 36px;
+}
+.flow{max-width:760px;margin:0 auto;list-style:none;padding:0;counter-reset:flow}
+.flow li{
+  counter-increment:flow;
+  position:relative;
+  padding-inline-start:64px;
+  padding-bottom:30px;
+}
+.flow li:last-child{padding-bottom:0}
+.flow li::before{
+  content:counter(flow);
+  position:absolute;
+  inset-inline-start:0;
+  top:0;
+  width:44px;height:44px;
+  border-radius:14px;
+  display:flex;align-items:center;justify-content:center;
+  font-family:'JetBrains Mono',monospace;
+  font-weight:700;font-size:1.02rem;
+  color:var(--accent-2);
+  background:rgba(59, 130, 246, 0.1);
+  border:1px solid rgba(59, 130, 246, 0.25);
+  z-index:1;
+}
+.flow li:not(:last-child)::after{
+  content:"";
+  position:absolute;
+  inset-inline-start:21px;
+  top:48px;
+  bottom:2px;
+  width:2px;
+  background:linear-gradient(var(--accent), rgba(59, 130, 246, 0.08));
+}
+.flow h4{font-size:1.06rem;font-weight:700;color:var(--text);margin-bottom:5px;padding-top:9px}
+.flow p{color:var(--muted);font-size:.97rem;line-height:1.7}
+.flow code{font-family:'JetBrains Mono',monospace;direction:ltr;unicode-bidi:embed;
+  background:#02040a;padding:2px 7px;border-radius:6px;font-size:.86em;color:#60a5fa;border:1px solid var(--border)}
+.flow kbd{font-family:'JetBrains Mono',monospace;font-size:.85em;background:rgba(255, 255, 255, 0.06);
+  border:1px solid var(--border-hi);border-bottom:3px solid var(--border-hi);border-radius:7px;
+  padding:2px 8px;color:#60a5fa;direction:ltr;display:inline-block}
+.flow .shot-inline{display:block;width:100%;margin-top:14px;border-radius:12px;
+  border:1px solid var(--border-hi);box-shadow:var(--shadow)}
+
 /* hero mockup */
 .stage{position:relative;margin:64px auto 0;max-width:940px}
 .stage .halo{
@@ -737,32 +792,46 @@ footer a{color:var(--muted);transition:color 0.2s}footer a:hover{color:var(--tex
 <section id="install">
   <div class="wrap">
     <span class="eyebrow">התקנה</span>
-    <h2 class="h2">שתי דרכים להתקין — בחר אחת</h2>
-    <p class="sub">בשתיהן ההתקנה מסדרת לבד את הכול. בהרצה הראשונה יורד מודל התמלול (חד-פעמי).</p>
-    <div class="install-grid">
-      <div class="inst">
-        <div class="inst-head"><span class="badge">מומלץ · הכי פשוט</span><h3>התקנה בקליק</h3></div>
-        <ol>
-          <li>הורד את קובץ ההתקנה ולחץ עליו <b>פעמיים</b>.</li>
-          <li>אם Windows מזהיר: <b>"מידע נוסף"</b> ← <b>"הפעל בכל זאת"</b>.</li>
-        </ol>
-        <a class="btn btn-primary" href="https://github.com/MatanCH2020/MyWhisper/releases/latest/download/MyWhisper-Setup.cmd">
-          <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12m0 0l-4-4m4 4l4-4M4 21h16"/></svg>
-          הורד את קובץ ההתקנה
-        </a>
-        <p class="note">קובץ קטן (MyWhisper-Setup.cmd) שמריץ את ההתקנה. האזהרה תקינה — הקוד פתוח ובטוח.</p>
+    <h2 class="h2">התקנה בפקודה אחת</h2>
+    <p class="sub">פותחים PowerShell, מדביקים את הפקודה, מקישים Enter — וזה מסדר לבד את כל השאר.</p>
+
+    <div class="install-single">
+      <div class="cmd">
+        <span class="pr">PS&gt;</span>
+        <span id="cmd-text">irm https://raw.githubusercontent.com/MatanCH2020/MyWhisper/main/scripts/install.ps1 | iex</span>
+        <button id="copy-btn" type="button">העתק</button>
       </div>
-      <div class="inst">
-        <div class="inst-head"><span class="badge alt">למתקדמים</span><h3>התקנה בפקודה</h3></div>
-        <ol><li>פתח <b>PowerShell</b>.</li><li>הדבק את הפקודה והקש Enter.</li></ol>
-        <div class="cmd">
-          <span class="pr">PS&gt;</span>
-          <span id="cmd-text">irm https://raw.githubusercontent.com/MatanCH2020/MyWhisper/main/scripts/install.ps1 | iex</span>
-          <button id="copy-btn" type="button">העתק</button>
-        </div>
-        <p class="note">אותה התקנה בדיוק, בלי הורדת קובץ. הרצה חוזרת = עדכון לגרסה האחרונה.</p>
-      </div>
+      <p class="note">💡 לפתיחת PowerShell: קליק-ימני על כפתור <b>Start</b> ← <b>Terminal</b> (או <b>Windows PowerShell</b>).</p>
+      <p class="note">הרצה חוזרת של אותה פקודה = עדכון לגרסה האחרונה · הקוד פתוח וניתן לקריאה ב-GitHub.</p>
     </div>
+
+    <h3 class="flow-title">מה קורה אחרי שמריצים?</h3>
+    <ol class="flow">
+      <li>
+        <h4>הכנה אוטומטית</h4>
+        <p>אם Git חסר במחשב — הוא מותקן לבד. אין מה לעשות, רק להמתין.</p>
+      </li>
+      <li>
+        <h4>הפרויקט יורד</h4>
+        <p>הקבצים נשמרים אצלך תחת <code>%USERPROFILE%\MyWhisper</code>.</p>
+      </li>
+      <li>
+        <h4>המנוע מותקן</h4>
+        <p>Python וכל הספריות (כולל CUDA לכרטיס NVIDIA) מותקנים בסביבה מבודדת. זה השלב הארוך — כמה דקות, תלוי במהירות האינטרנט.</p>
+      </li>
+      <li>
+        <h4>קיצור דרך נוצר</h4>
+        <p>אייקון MyWhisper מופיע על שולחן העבודה — כך פותחים את התוכנה בפעם הבאה.</p>
+      </li>
+      <li>
+        <h4>האפליקציה עולה</h4>
+        <p>החלון נפתח, והתוכנה יושבת במגש המערכת (ליד השעון) ומחכה לקיצור.</p>
+      </li>
+      <li>
+        <h4>הרצה ראשונה — הורדת המודל</h4>
+        <p>מודל התמלול יורד פעם אחת (~1.5–3GB). האייקון במגש כחול בזמן הטעינה והופך אפור כשמוכן. מכאן — <kbd>Ctrl + Space</kbd>, מדברים, וזה עובד.</p>
+      </li>
+    </ol>
   </div>
 </section>
 
@@ -844,9 +913,9 @@ footer a{color:var(--muted);transition:color 0.2s}footer a:hover{color:var(--tex
       <h2>מוכן להפסיק להקליד?</h2>
       <p>התקנה בפקודה אחת. הקיצור פעיל תוך דקות.</p>
       <div class="cta-row">
-        <a class="btn btn-lg btn-primary" href="https://github.com/MatanCH2020/MyWhisper/releases/latest/download/MyWhisper-Setup.cmd">
+        <a class="btn btn-lg btn-primary" href="#install">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12m0 0l-4-4m4 4l4-4M4 21h16"/></svg>
-          הורד והתקן — חינם
+          התקן עכשיו — חינם
         </a>
         <a class="btn btn-lg btn-ghost" href="https://github.com/MatanCH2020/MyWhisper" target="_blank" rel="noopener">קוד המקור ב-GitHub</a>
       </div>
