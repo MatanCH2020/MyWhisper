@@ -63,6 +63,12 @@ class Transcriber:
         self.cpu_threads = config.get("cpu_threads", 0)  # 0 = CTranslate2 auto-detect
         self.vad_filter = config.get("vad_filter", True)
         self.initial_prompt = config.get("initial_prompt") or None
+        # Fold the English glossary into initial_prompt to nudge Latin output for
+        # mixed dictation. Disable if the term list ever bleeds into transcripts.
+        self.glossary_prompt = config.get("glossary_prompt", True)
+        # Cap glossary terms folded into the prompt (faster-whisper's prompt token
+        # budget is ~224); hotwords carries the full list unbounded-by-this.
+        self._glossary_prompt_max = 30
         self.device = None            # actual device in use after load
         self.fallback_reason = None   # set when GPU load failed and CPU took over
         self.model = None             # loaded lazily via load()/ensure_loaded()
@@ -117,12 +123,28 @@ class Transcriber:
         """Fewer beams on CPU for speed; full beam on GPU for accuracy."""
         return self.beam_size_cpu if self.device == "cpu" else self.beam_size
 
-    def transcribe(self, audio: np.ndarray, hotwords: str = None) -> str:
+    def _effective_prompt(self, glossary=None) -> str:
+        """Combine the configured initial_prompt with a short Hebrew priming
+        sentence that lists English glossary terms (in Latin), nudging the model
+        to keep them in English. Returns None if there is nothing to prompt with.
+        """
+        prompt = self.initial_prompt or ""
+        if self.glossary_prompt and glossary:
+            terms = [t for t in glossary if t][:self._glossary_prompt_max]
+            if terms:
+                priming = "מונחים באנגלית: " + ", ".join(terms) + "."
+                prompt = f"{prompt} {priming}".strip() if prompt else priming
+        return prompt or None
+
+    def transcribe(self, audio: np.ndarray, hotwords: str = None,
+                   glossary=None) -> str:
         """Transcribe a mono float32 numpy array (16 kHz) and return the text.
 
         hotwords: optional space-joined vocabulary (learned corrections / approved
-        words) that biases the model toward producing those words. faster-whisper
-        folds it into the prompt alongside initial_prompt.
+        words / English glossary) that biases the model toward those words.
+        glossary: optional list of English terms folded into initial_prompt (when
+        config glossary_prompt is on) so mixed dictation stays in Latin.
+        faster-whisper folds hotwords into the prompt alongside initial_prompt.
         """
         if audio is None or len(audio) == 0:
             return ""
@@ -132,7 +154,7 @@ class Transcriber:
             language=self.language,
             beam_size=self._effective_beam(),
             vad_filter=self.vad_filter,
-            initial_prompt=self.initial_prompt,
+            initial_prompt=self._effective_prompt(glossary),
             hotwords=hotwords or None,
         )
         text = "".join(segment.text for segment in segments)

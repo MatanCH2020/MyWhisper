@@ -19,16 +19,21 @@ class CorrectionsTestCase(unittest.TestCase):
         # test starts from empty state.
         self._tmp = tempfile.TemporaryDirectory()
         tmp = Path(self._tmp.name)
-        self._orig_paths = (corrections.CORRECTIONS_PATH, corrections.DICTIONARY_PATH)
+        self._orig_paths = (corrections.CORRECTIONS_PATH, corrections.DICTIONARY_PATH,
+                            corrections.ENGLISH_TERMS_PATH)
         corrections.CORRECTIONS_PATH = tmp / "corrections.json"
         corrections.DICTIONARY_PATH = tmp / "dictionary.json"
+        corrections.ENGLISH_TERMS_PATH = tmp / "english_terms.json"
         corrections._corr_cache.update(mtime=-1.0, data={})
         corrections._dict_cache.update(mtime=-1.0, list=[], set=set())
+        corrections._eng_cache.update(mtime=-1.0, list=[])
 
     def tearDown(self):
-        corrections.CORRECTIONS_PATH, corrections.DICTIONARY_PATH = self._orig_paths
+        (corrections.CORRECTIONS_PATH, corrections.DICTIONARY_PATH,
+         corrections.ENGLISH_TERMS_PATH) = self._orig_paths
         corrections._corr_cache.update(mtime=-1.0, data={})
         corrections._dict_cache.update(mtime=-1.0, list=[], set=set())
+        corrections._eng_cache.update(mtime=-1.0, list=[])
         self._tmp.cleanup()
 
     # ---- apply ----
@@ -74,14 +79,15 @@ class CorrectionsTestCase(unittest.TestCase):
         self.assertEqual(corrections._load_dictionary(), ["צצצא", "אאאצ", "בבבצ"])
 
     def test_bias_terms_prioritizes_corrections(self):
-        # Overflow the cap with dictionary words; corrections must survive.
+        # Overflow the cap with dictionary words; corrections must survive, and
+        # the English glossary leads the bias string.
         for i in range(corrections._MAX_BIAS_TERMS + 20):
             corrections.approve_word("מלה" + "א" * (i + 1))
         corrections.add_correction("שגוי", "נכון")
         terms = corrections.bias_terms().split()
-        self.assertIn("נכון", terms)
+        self.assertIn("נכון", terms)  # correction target survives the cap
         self.assertLessEqual(len(terms), corrections._MAX_BIAS_TERMS)
-        self.assertEqual(terms[0], "נכון")  # corrections come first
+        self.assertIn(terms[0], corrections.english_terms())  # English first
 
     def test_remove_correction(self):
         corrections.add_correction("אבג", "דהו")
@@ -144,6 +150,56 @@ class CorrectionsTestCase(unittest.TestCase):
         result = corrections.suggest_similar("זזזזזזזזזזא")
         # The approved word should be close enough to appear.
         self.assertIn("זזזזזזזזזזז", result)
+
+    # ---- English glossary ----
+
+    def test_english_terms_seeded_on_first_load(self):
+        # File does not exist yet -> defaults are written and returned.
+        terms = corrections.english_terms()
+        self.assertIn("PowerShell", terms)
+        self.assertIn("GitHub", terms)
+        self.assertTrue(corrections.ENGLISH_TERMS_PATH.exists())
+
+    def test_add_english_term(self):
+        corrections.english_terms()  # seed first
+        corrections.add_english_term("Kubernetes")
+        self.assertIn("Kubernetes", corrections.english_terms())
+
+    def test_add_english_term_dedupes_case_insensitive(self):
+        corrections.add_english_term("GitHub")
+        corrections.add_english_term("github")
+        terms = corrections.english_terms()
+        self.assertEqual(sum(1 for t in terms if t.lower() == "github"), 1)
+
+    def test_remove_english_term(self):
+        corrections.english_terms()
+        corrections.remove_english_term("PowerShell")
+        self.assertNotIn("PowerShell", corrections.english_terms())
+
+    def test_bias_terms_includes_english_first(self):
+        corrections.add_correction("פאוורשל", "PowerShell")
+        bias = corrections.bias_terms().split()
+        self.assertIn("GitHub", bias)          # a seeded English term
+        self.assertIn("PowerShell", bias)      # a correction target
+        # English glossary terms lead the bias string.
+        self.assertLess(bias.index("GitHub"), len(bias))
+
+    def test_bias_terms_bounded(self):
+        for i in range(200):
+            corrections.add_english_term(f"Term{i}")
+        self.assertLessEqual(len(corrections.bias_terms().split()),
+                             corrections._MAX_BIAS_TERMS)
+
+    # ---- multi-word / English correction backstop ----
+
+    def test_apply_multiword_phrase_to_english(self):
+        corrections.add_correction("פאוור של", "PowerShell")
+        self.assertEqual(corrections.apply("תעדכן את פאוור של עכשיו"),
+                         "תעדכן את PowerShell עכשיו")
+
+    def test_add_correction_accepts_english_value(self):
+        corrections.add_correction("גיטהאב", "GitHub")
+        self.assertEqual(corrections.apply("פתח גיטהאב"), "פתח GitHub")
 
 
 if __name__ == "__main__":

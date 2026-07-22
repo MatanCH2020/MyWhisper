@@ -91,6 +91,9 @@ class Mywishper:
             update_history=history.update,
             delete_history=history.delete,
             suggest_similar=corrections.suggest_similar,
+            english_terms=corrections.english_terms,
+            add_english_term=corrections.add_english_term,
+            remove_english_term=corrections.remove_english_term,
         )
         self.tray = Tray(
             on_quit=self.quit,
@@ -319,7 +322,9 @@ class Mywishper:
 
     def _worker(self, audio):
         try:
-            text = self.transcriber.transcribe(audio, hotwords=corrections.bias_terms())
+            text = self.transcriber.transcribe(
+                audio, hotwords=corrections.bias_terms(),
+                glossary=corrections.english_terms())
             if text:
                 # Apply learned corrections before delivering / saving.
                 text = corrections.apply(text)

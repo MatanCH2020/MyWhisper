@@ -581,38 +581,131 @@ class MainWindow(FramelessWindow):
         v.setContentsMargins(18, 16, 18, 14)
         v.setSpacing(10)
         bar = QHBoxLayout()
-        bar.addWidget(self._section("תיקונים שנלמדו  ·  שגוי ← נכון"))
+        bar.addWidget(self._section("מילון"))
         bar.addStretch(1)
         bar.addWidget(self._tool_btn("refresh", "רענן", self.refresh_dict))
         v.addLayout(bar)
-        self._dict_box = self._scroll(v)
+        box = self._scroll(v)
+
+        # --- English glossary: terms kept in Latin during transcription ---
+        box.addWidget(self._section("מונחים באנגלית  ·  יישארו באנגלית בתמלול"))
+        erow = QHBoxLayout()
+        self._eng_input = self._line_edit("הוסף מונח באנגלית (למשל GitHub)")
+        self._eng_input.returnPressed.connect(self._add_eng)
+        erow.addWidget(self._eng_input, 1)
+        erow.addWidget(self._accent_btn("הוסף", self._add_eng))
+        box.addLayout(erow)
+        eng_container = QWidget()
+        eng_container.setStyleSheet("background:transparent;")
+        self._eng_box = QVBoxLayout(eng_container)
+        self._eng_box.setContentsMargins(0, 0, 0, 0)
+        self._eng_box.setSpacing(6)
+        box.addWidget(eng_container)
+
+        # --- Learned corrections: "what was heard" -> "how to write it" ---
+        box.addWidget(self._section("תיקונים שנלמדו  ·  שגוי ← נכון"))
+        crow = QHBoxLayout()
+        self._corr_wrong = self._line_edit("מה נשמע (עברית)")
+        self._corr_right = self._line_edit("איך לכתוב")
+        self._corr_right.returnPressed.connect(self._add_corr_manual)
+        crow.addWidget(self._corr_wrong, 1)
+        crow.addWidget(self._corr_right, 1)
+        crow.addWidget(self._accent_btn("הוסף", self._add_corr_manual))
+        box.addLayout(crow)
+        corr_container = QWidget()
+        corr_container.setStyleSheet("background:transparent;")
+        self._dict_box = QVBoxLayout(corr_container)
+        self._dict_box.setContentsMargins(0, 0, 0, 0)
+        self._dict_box.setSpacing(6)
+        box.addWidget(corr_container)
+
+        box.addStretch(1)
         return w
 
+    def _line_edit(self, placeholder):
+        e = QLineEdit()
+        e.setPlaceholderText(placeholder)
+        e.setStyleSheet(
+            f"QLineEdit{{background:{self.p['surface']}; color:{self.p['text']};"
+            f" border:1px solid {self.p['border']}; border-radius:8px;"
+            f" padding:6px 10px; font-size:13px;}}"
+            f"QLineEdit:focus{{border-color:{self.p['accent']};}}"
+        )
+        return e
+
+    def _accent_btn(self, text, cb):
+        b = QPushButton(text)
+        b.setCursor(Qt.PointingHandCursor)
+        b.setStyleSheet(
+            f"QPushButton{{background:{self.p['accent']}; color:{self.p['on_accent']};"
+            f" border:none; border-radius:8px; padding:6px 16px;"
+            f" font-size:13px; font-weight:600;}}"
+            f"QPushButton:hover{{background:{self.p['accent_hover']};}}"
+        )
+        b.clicked.connect(lambda: cb())
+        return b
+
+    def _kv_card(self, text, on_delete):
+        card = QFrame()
+        card.setObjectName("card")
+        h = QHBoxLayout(card)
+        h.setContentsMargins(14, 8, 14, 8)
+        x = QPushButton()
+        x.setProperty("variant", "icon")
+        x.setFixedSize(28, 26)
+        x.setIcon(icons.icon("trash", self.p["danger"], 16))
+        x.setCursor(Qt.PointingHandCursor)
+        x.clicked.connect(lambda _=False: on_delete())
+        h.addWidget(x)
+        h.addStretch(1)
+        lbl = QLabel(text)
+        lbl.setStyleSheet(f"color:{self.p['text']}; font-size:14px;")
+        h.addWidget(lbl)
+        return card
+
     def refresh_dict(self):
+        # English glossary
+        self._clear(self._eng_box)
+        terms = self.ui.english_terms()
+        if not terms:
+            self._eng_box.addWidget(self._muted("אין מונחים באנגלית"))
+        else:
+            for term in terms:
+                self._eng_box.addWidget(
+                    self._kv_card(term, lambda t=term: self._del_eng(t)))
+        # Learned corrections
         self._clear(self._dict_box)
         corr = self.ui.list_corrections()
         if not corr:
             self._dict_box.addWidget(self._muted("עדיין אין תיקונים שנלמדו"))
-            self._dict_box.addStretch(1)
+        else:
+            for wrong, right in corr.items():
+                self._dict_box.addWidget(
+                    self._kv_card(f"{wrong}　←　{right}",
+                                  lambda k=wrong: self._del_corr(k)))
+
+    def _add_eng(self):
+        term = self._eng_input.text().strip()
+        if not term:
             return
-        for wrong, right in corr.items():
-            card = QFrame()
-            card.setObjectName("card")
-            h = QHBoxLayout(card)
-            h.setContentsMargins(14, 8, 14, 8)
-            x = QPushButton()
-            x.setProperty("variant", "icon")
-            x.setFixedSize(28, 26)
-            x.setIcon(icons.icon("trash", self.p["danger"], 16))
-            x.setCursor(Qt.PointingHandCursor)
-            x.clicked.connect(lambda _=False, k=wrong: self._del_corr(k))
-            h.addWidget(x)
-            h.addStretch(1)
-            lbl = QLabel(f"{wrong}　←　{right}")
-            lbl.setStyleSheet(f"color:{self.p['text']}; font-size:14px;")
-            h.addWidget(lbl)
-            self._dict_box.addWidget(card)
-        self._dict_box.addStretch(1)
+        self.ui.add_english_term(term)
+        self._eng_input.clear()
+        self.refresh_dict()
+
+    def _del_eng(self, term):
+        self.ui.remove_english_term(term)
+        self.refresh_dict()
+
+    def _add_corr_manual(self):
+        wrong = self._corr_wrong.text().strip()
+        right = self._corr_right.text().strip()
+        if not wrong or not right:
+            return
+        self.ui.add_correction(wrong, right)
+        self._corr_wrong.clear()
+        self._corr_right.clear()
+        self.refresh_dict()
+        self.refresh_history()
 
     def _del_corr(self, wrong):
         self.ui.remove_correction(wrong)
@@ -1003,7 +1096,9 @@ class AppUI(QObject):
                  flag_tokens=None, add_correction=None, approve_word=None,
                  list_corrections=None, remove_correction=None,
                  apply_corrections=None, format_bidi=None, update_history=None,
-                 delete_history=None, suggest_similar=None):
+                 delete_history=None, suggest_similar=None,
+                 english_terms=None, add_english_term=None,
+                 remove_english_term=None):
         super().__init__()
         self.config = config
         self.level_provider = level_provider
@@ -1022,6 +1117,9 @@ class AppUI(QObject):
         self.update_history = update_history or (lambda i, t: None)
         self.delete_history = delete_history or (lambda i: None)
         self.suggest_similar = suggest_similar or (lambda w: [])
+        self.english_terms = english_terms or (lambda: [])
+        self.add_english_term = add_english_term or (lambda t: None)
+        self.remove_english_term = remove_english_term or (lambda t: None)
         self.notify = lambda *a, **k: None  # wired to Tray.notify by main
         self.set_hotkey = lambda h: True    # wired to Mywishper._set_hotkey by main
         self.relaunch_as_admin = lambda: False

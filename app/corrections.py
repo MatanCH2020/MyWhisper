@@ -23,6 +23,17 @@ log = logging.getLogger("corrections")
 _ROOT = Path(__file__).resolve().parent.parent
 CORRECTIONS_PATH = _ROOT / "corrections.json"
 DICTIONARY_PATH = _ROOT / "dictionary.json"
+ENGLISH_TERMS_PATH = _ROOT / "english_terms.json"
+
+# Shipped default English/tech terms so mixed Hebrew/English dictation works out
+# of the box. The user can add or remove terms from the מילון page; the file is
+# seeded from this list on first load (when english_terms.json does not exist).
+_DEFAULT_ENGLISH_TERMS = [
+    "PowerShell", "GitHub", "Git", "Docker", "Python", "Node", "npm",
+    "API", "JSON", "VSCode", "Linux", "Windows", "Claude", "Cursor",
+    "Anthropic", "Whisper", "CUDA", "GPU", "README", "commit", "terminal",
+    "framework", "prompt", "token", "endpoint",
+]
 
 # Hebrew letters (alef..tav, incl. final forms); points/cantillation are stripped.
 _HEB_LETTER = "א-ת"
@@ -63,6 +74,7 @@ def _zipf():
 # re-parse the JSON files once per word.
 _corr_cache = {"mtime": -1.0, "data": {}}
 _dict_cache = {"mtime": -1.0, "list": [], "set": set()}
+_eng_cache = {"mtime": -1.0, "list": []}
 
 
 def _load_corrections() -> dict:
@@ -123,6 +135,41 @@ def _save_dictionary(words: list):
             json.dump(words, f, ensure_ascii=False, indent=2)
     except OSError as e:
         log.error("Failed to write: %s", e)
+
+
+def _save_english_terms(terms: list):
+    try:
+        with open(ENGLISH_TERMS_PATH, "w", encoding="utf-8") as f:
+            json.dump(terms, f, ensure_ascii=False, indent=2)
+    except OSError as e:
+        log.error("Failed to write: %s", e)
+
+
+def _load_english_terms() -> list:
+    """User's English/tech glossary, seeded with defaults on first load.
+
+    When english_terms.json does not exist yet it is created from
+    _DEFAULT_ENGLISH_TERMS so mixed dictation works out of the box.
+    """
+    if not ENGLISH_TERMS_PATH.exists():
+        _save_english_terms(_DEFAULT_ENGLISH_TERMS)
+        _eng_cache.update(mtime=-1.0, list=list(_DEFAULT_ENGLISH_TERMS))
+    try:
+        mtime = ENGLISH_TERMS_PATH.stat().st_mtime
+    except OSError:
+        _eng_cache.update(mtime=-1.0, list=[])
+        return []
+    if mtime != _eng_cache["mtime"]:
+        try:
+            with open(ENGLISH_TERMS_PATH, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            terms = [t for t in data if isinstance(t, str) and t.strip()] \
+                if isinstance(data, list) else []
+        except (json.JSONDecodeError, OSError):
+            terms = []
+        _eng_cache["list"] = terms
+        _eng_cache["mtime"] = mtime
+    return _eng_cache["list"]
 
 
 # ---------------- helpers ----------------
@@ -246,19 +293,48 @@ def remove_correction(wrong: str):
         _save_corrections(corr)
 
 
-def bias_terms() -> str:
-    """Space-joined string of corrected/approved words to bias Whisper toward.
+# ---------------- English glossary ----------------
 
-    Correction targets come first and are never dropped in favor of plain
-    dictionary words (they are the highest-signal vocabulary); the most
-    recently approved dictionary words fill the remaining slots, so the prompt
-    stays bounded at _MAX_BIAS_TERMS.
+def english_terms() -> list:
+    """The user's English/tech glossary (seeded with defaults on first use)."""
+    return list(_load_english_terms())
+
+
+def add_english_term(term: str):
+    """Add an English term to the glossary (case-insensitive de-dupe, newest last)."""
+    term = (term or "").strip()
+    if not term:
+        return
+    terms = list(_load_english_terms())
+    if any(term.lower() == t.lower() for t in terms):
+        return
+    _save_english_terms(terms + [term])
+
+
+def remove_english_term(term: str):
+    """Remove an English term from the glossary (case-insensitive)."""
+    terms = _load_english_terms()
+    kept = [t for t in terms if t.lower() != (term or "").strip().lower()]
+    if len(kept) != len(terms):
+        _save_english_terms(kept)
+
+
+def bias_terms() -> str:
+    """Space-joined string of glossary/corrected/approved words to bias Whisper toward.
+
+    English glossary terms come first (highest signal for mixed dictation), then
+    correction targets — neither is dropped in favor of plain dictionary words;
+    the most recently approved dictionary words fill the remaining slots, so the
+    prompt stays bounded at _MAX_BIAS_TERMS.
     """
-    corr_terms = list(dict.fromkeys(_load_corrections().values()))[:_MAX_BIAS_TERMS]
-    seen = set(corr_terms)
+    eng_terms = list(dict.fromkeys(_load_english_terms()))[:_MAX_BIAS_TERMS]
+    seen = set(eng_terms)
+    corr_terms = [v for v in dict.fromkeys(_load_corrections().values())
+                  if v not in seen][:max(0, _MAX_BIAS_TERMS - len(eng_terms))]
+    seen.update(corr_terms)
     dict_terms = [w for w in _load_dictionary() if w not in seen]
-    remaining = _MAX_BIAS_TERMS - len(corr_terms)
-    terms = corr_terms + (dict_terms[-remaining:] if remaining > 0 else [])
+    remaining = _MAX_BIAS_TERMS - len(eng_terms) - len(corr_terms)
+    terms = eng_terms + corr_terms + (dict_terms[-remaining:] if remaining > 0 else [])
     return " ".join(terms)
 
 

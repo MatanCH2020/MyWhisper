@@ -17,6 +17,7 @@
   "sounds": true,
   "sound_volume": 0.25,
   "initial_prompt": "שלום, מה שלומך? היום יום יפה.",
+  "glossary_prompt": true,
   "highlight_unknown": true,
   "bidi_isolate": true,
   "theme": "dark"

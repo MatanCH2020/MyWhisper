@@ -27,6 +27,7 @@ DEFAULTS = {
     "sounds": True,
     "sound_volume": 0.25,
     "initial_prompt": "",
+    "glossary_prompt": True,          # fold the English glossary into the prompt
     "highlight_unknown": True,
     "bidi_isolate": True,
     "theme": "dark",
