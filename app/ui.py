@@ -7,6 +7,7 @@ UI only through AppUI's thread-safe signals.
 """
 import html
 import math
+import re
 import threading
 
 from version import __version__ as APP_VERSION
@@ -16,7 +17,7 @@ from PySide6.QtGui import QColor, QFont, QPainter
 from PySide6.QtWidgets import (
     QApplication, QComboBox, QDialog, QFileDialog, QFrame, QHBoxLayout, QLabel,
     QLineEdit, QMessageBox, QProgressBar, QPushButton, QScrollArea, QSlider,
-    QStackedWidget, QVBoxLayout, QWidget, QTextBrowser,
+    QStackedWidget, QVBoxLayout, QWidget,
 )
 
 import icons
@@ -185,54 +186,191 @@ class CorrectionDialog(QDialog):
 
 
 class ChangelogDialog(QDialog):
+    """A styled, card-per-version 'What's new' screen. Parses CHANGELOG.md into
+    version entries and renders each as a themed card, highlighting the version
+    the user currently has installed."""
+
     def __init__(self, parent, palette):
         super().__init__(parent)
+        self.p = palette
         self.setWindowTitle("מה חדש ב-MyWhisper")
         self.setStyleSheet(f"QDialog{{background:{palette['bg']};}}")
-        self.resize(600, 500)
+        self.resize(620, 560)
+
         lay = QVBoxLayout(self)
-        lay.setContentsMargins(20, 20, 20, 16)
-        
-        t = QLabel("מה חדש בגרסאות האחרונות?")
-        t.setFont(QFont(theme.pick_font(), 16, QFont.Bold))
-        lay.addWidget(t)
-        
-        self.browser = QTextBrowser()
-        self.browser.setStyleSheet(f"""
-            QTextBrowser {{
-                background: {palette['surface']};
-                color: {palette['text']};
-                border: 1px solid {palette['border']};
-                border-radius: 8px;
-                padding: 10px;
-                font-size: 14px;
-            }}
-        """)
-        self.browser.setOpenExternalLinks(True)
-        lay.addWidget(self.browser)
-        
-        row = QHBoxLayout()
+        lay.setContentsMargins(0, 0, 0, 0)
+        lay.setSpacing(0)
+
+        # --- header ---
+        header = QWidget()
+        header.setStyleSheet("background:transparent;")
+        hl = QVBoxLayout(header)
+        hl.setContentsMargins(24, 22, 24, 14)
+        hl.setSpacing(5)
+        title = QLabel("מה חדש ב-MyWhisper")
+        title.setFont(QFont(theme.pick_font(), 18, QFont.Bold))
+        title.setStyleSheet(f"color:{palette['text']};background:transparent;")
+        hl.addWidget(title)
+        intro = self._read_intro()
+        if intro:
+            sub = QLabel(intro)
+            sub.setWordWrap(True)
+            sub.setStyleSheet(
+                f"color:{palette['text_muted']};font-size:13px;background:transparent;")
+            hl.addWidget(sub)
+        lay.addWidget(header)
+
+        # --- divider ---
+        divider = QFrame()
+        divider.setFixedHeight(1)
+        divider.setStyleSheet(f"background:{palette['border']};border:none;")
+        lay.addWidget(divider)
+
+        # --- scrollable list of version cards ---
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.NoFrame)
+        scroll.setStyleSheet("QScrollArea{background:transparent;border:none;}")
+        inner = QWidget()
+        inner.setStyleSheet("background:transparent;")
+        self.vbox = QVBoxLayout(inner)
+        self.vbox.setContentsMargins(24, 18, 18, 6)
+        self.vbox.setSpacing(14)
+        scroll.setWidget(inner)
+        lay.addWidget(scroll, 1)
+
+        # --- footer ---
+        footer = QWidget()
+        footer.setStyleSheet("background:transparent;")
+        row = QHBoxLayout(footer)
+        row.setContentsMargins(24, 12, 24, 16)
         row.addStretch(1)
         close_btn = QPushButton("סגור")
         close_btn.setProperty("variant", "primary")
+        close_btn.setStyleSheet(_primary_btn_qss(palette))
+        close_btn.setCursor(Qt.PointingHandCursor)
         close_btn.clicked.connect(self.accept)
         row.addWidget(close_btn)
-        lay.addLayout(row)
-        
-        self._load_changelog()
+        lay.addWidget(footer)
 
-    def _load_changelog(self):
+        self._build_cards()
+
+    # ---- CHANGELOG.md parsing ----
+    def _read_lines(self):
         try:
             from pathlib import Path
-            root = Path(__file__).resolve().parent.parent
-            cl_path = root / "CHANGELOG.md"
-            if cl_path.exists():
-                text = cl_path.read_text(encoding="utf-8")
-                self.browser.setMarkdown(text)
+            p = Path(__file__).resolve().parent.parent / "CHANGELOG.md"
+            if p.exists():
+                return p.read_text(encoding="utf-8").splitlines()
+        except Exception:
+            pass
+        return []
+
+    def _read_intro(self):
+        intro = []
+        for ln in self._read_lines():
+            s = ln.strip()
+            if s.startswith("## "):
+                break
+            if s.startswith("#") or not s:
+                continue
+            intro.append(s)
+        return " ".join(intro)
+
+    def _parse_versions(self):
+        versions, cur = [], None
+        for ln in self._read_lines():
+            s = ln.strip()
+            if s.startswith("## "):
+                head = s[3:].strip()
+                m = re.search(r"(\d+\.\d+\.\d+)", head)
+                cur = {"head": head, "ver": m.group(1) if m else None, "items": []}
+                versions.append(cur)
+            elif s.startswith("- ") and cur is not None:
+                body = s[2:].strip()
+                bm = re.match(r"\*\*(.+?)\*\*\s*:?\s*(.*)", body)
+                if bm:
+                    cur["items"].append((bm.group(1).strip(), bm.group(2).strip()))
+                else:
+                    cur["items"].append(("", body))
+        return versions
+
+    # ---- rendering ----
+    def _build_cards(self):
+        p = self.p
+        green = "#35C46A" if p.get("name") == "dark" else "#2E9E54"
+        current = str(APP_VERSION)
+        for v in self._parse_versions():
+            is_current = v["ver"] == current
+
+            card = QFrame()
+            card.setObjectName("clcard")
+            if is_current:
+                bg = _blend(p["accent"], p["surface"], 0.10)
+                card.setStyleSheet(
+                    f"#clcard{{background:{bg};border:2px solid {p['accent']};"
+                    f"border-radius:14px;}}")
             else:
-                self.browser.setPlainText("לא נמצא קובץ יומן שינויים (CHANGELOG.md).")
-        except Exception as e:
-            self.browser.setPlainText(f"שגיאה בטעינת הקובץ:\\n{e}")
+                card.setStyleSheet(
+                    f"#clcard{{background:{p['surface']};"
+                    f"border:1px solid {p['border']};border-radius:14px;}}")
+            cl = QVBoxLayout(card)
+            cl.setContentsMargins(18, 15, 18, 16)
+            cl.setSpacing(11)
+
+            hr = QHBoxLayout()
+            hr.setSpacing(8)
+            badge = QLabel(("v" + v["ver"]) if v["ver"] else v["head"])
+            badge.setStyleSheet(
+                f"background:{p['accent'] if is_current else p['surface_alt']};"
+                f"color:{p['on_accent'] if is_current else p['text']};"
+                f"border-radius:8px;padding:3px 11px;font-weight:800;font-size:13px;")
+            hr.addWidget(badge)
+            if is_current:
+                pill = QLabel("✓ הגרסה שלך")
+                pill.setStyleSheet(
+                    f"background:{green};color:#06210F;border-radius:9px;"
+                    f"padding:3px 11px;font-weight:700;font-size:12px;")
+                hr.addWidget(pill)
+            hr.addStretch(1)
+            cl.addLayout(hr)
+
+            for title, body in v["items"]:
+                cl.addWidget(self._item_label(title, body))
+
+            self.vbox.addWidget(card)
+        self.vbox.addStretch(1)
+
+    def _item_label(self, title, body):
+        """One changelog bullet as a single wrapped rich-text label with an
+        inline accent dot — no separate dot widget, so nothing drifts or picks
+        up stray borders from the global stylesheet."""
+        p = self.p
+        lbl = QLabel()
+        lbl.setWordWrap(True)
+        lbl.setTextFormat(Qt.RichText)
+        lbl.setStyleSheet("background:transparent;border:none;font-size:13px;")
+        bullet = f"<span style='color:{p['accent']};font-weight:700;'>●</span>&nbsp;&nbsp;"
+        if title:
+            lbl.setText(
+                f"{bullet}<span style='font-weight:700;color:{p['text']};'>"
+                f"{html.escape(title)}</span>"
+                f"<span style='color:{p['text_muted']};'> — {html.escape(body)}</span>")
+        else:
+            lbl.setText(
+                f"{bullet}<span style='color:{p['text_muted']};'>"
+                f"{html.escape(body)}</span>")
+        return lbl
+
+
+def _blend(fg, bg, t):
+    """Blend hex color *fg* over *bg* by factor t in [0,1]; returns '#rrggbb'.
+    Used for a subtle accent tint behind the current-version card."""
+    def rgb(c):
+        c = c.lstrip("#")
+        return [int(c[i:i + 2], 16) for i in (0, 2, 4)]
+    f, b = rgb(fg), rgb(bg)
+    return "#%02x%02x%02x" % tuple(round(b[i] + (f[i] - b[i]) * t) for i in range(3))
 
 
 def _version_gt(a, b):
