@@ -28,6 +28,11 @@ DEFAULTS = {
     "sound_volume": 0.25,
     "initial_prompt": "",
     "glossary_prompt": True,          # fold the English glossary into the prompt
+    # Optional local-LLM polish via Ollama (off by default; opt-in, needs Ollama)
+    "llm_polish": False,
+    "llm_model": "",                  # Ollama model name, e.g. "qwen3:14b"
+    "llm_url": "http://localhost:11434",
+    "llm_timeout": 20,                # seconds; falls back to raw text on timeout
     "highlight_unknown": True,
     "bidi_isolate": True,
     "theme": "dark",

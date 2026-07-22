@@ -946,6 +946,40 @@ class MainWindow(FramelessWindow):
         sc.vbox.addLayout(r3)
         v.addWidget(sc)
 
+        # smart processing — optional local LLM polish via Ollama (opt-in)
+        lc = Card()
+        lc.vbox.addWidget(self._section("עיבוד חכם — LLM מקומי (ניסיוני)"))
+        lrow = QHBoxLayout()
+        lrow.addWidget(self._plain("שיפור לשוני עם Ollama"))
+        lrow.addStretch(1)
+        self._llm_sw = ToggleSwitch(self.p, checked=self.ui.config.get("llm_polish", False))
+        self._llm_sw.toggled.connect(self._on_llm_toggle)
+        lrow.addWidget(self._llm_sw)
+        lc.vbox.addLayout(lrow)
+        lmrow = QHBoxLayout()
+        lmrow.addWidget(self._plain("מודל"))
+        lmrow.addStretch(1)
+        self._llm_combo = QComboBox()
+        self._llm_combo.setMinimumWidth(240)
+        self._llm_combo.setStyleSheet(_combo_qss(self.p))
+        self._llm_combo.currentIndexChanged.connect(self._on_llm_model_changed)
+        lmrow.addWidget(self._llm_combo)
+        lmrow.addWidget(self._tool_btn("refresh", "רענן", self._populate_llm_models))
+        lc.vbox.addLayout(lmrow)
+        self._llm_status = QLabel("")
+        self._llm_status.setStyleSheet(f"color:{self.p['text_muted']}; font-size:11px;")
+        lc.vbox.addWidget(self._llm_status)
+        llm_hint = QLabel(
+            "מריץ מודל שפה מקומי (Ollama) לתיקון כתיב ופיסוק אחרי התמלול — הכול נשאר "
+            "במחשב. ⚠️ ניסיוני: המודל עלול לשנות ניסוח או משמעות, ומוסיף כמה שניות "
+            "לכל תמלול (בעיקר בפעם הראשונה). עדיף מודל שמרן. אם משהו משתבש — התמלול "
+            "המקורי נשמר. דורש GPU חזק.")
+        llm_hint.setWordWrap(True)
+        llm_hint.setStyleSheet(f"color:{self.p['text_muted']}; font-size:11px;")
+        lc.vbox.addWidget(llm_hint)
+        v.addWidget(lc)
+        self._populate_llm_models()
+
         # hotkey
         hc = Card()
         hc.vbox.addWidget(self._section("קיצור מקלדת"))
@@ -1147,6 +1181,36 @@ class MainWindow(FramelessWindow):
         self.ui.config["sounds"] = bool(on)
         self.ui.on_change(self.ui.config)
 
+    def _populate_llm_models(self):
+        self._llm_combo.blockSignals(True)
+        self._llm_combo.clear()
+        models = self.ui.llm_list_models()
+        if models:
+            for m in models:
+                self._llm_combo.addItem(m, m)
+            idx = self._llm_combo.findData(self.ui.config.get("llm_model", ""))
+            self._llm_combo.setCurrentIndex(idx if idx >= 0 else 0)
+            self._llm_combo.setEnabled(True)
+            self._llm_status.setText(f"Ollama זוהה · {len(models)} מודלים מותקנים")
+        else:
+            self._llm_combo.addItem("— לא זוהה Ollama —", "")
+            self._llm_combo.setEnabled(False)
+            self._llm_status.setText(
+                "Ollama לא זוהה. התקן והפעל אותו (ollama.com), הורד מודל, ולחץ רענן.")
+        self._llm_combo.blockSignals(False)
+
+    def _on_llm_toggle(self, on):
+        self.ui.config["llm_polish"] = bool(on)
+        # Adopt the currently shown model if none is saved yet, so enabling it
+        # actually does something without a second click.
+        if on and not self.ui.config.get("llm_model") and self._llm_combo.currentData():
+            self.ui.config["llm_model"] = self._llm_combo.currentData()
+        self.ui.on_change(self.ui.config)
+
+    def _on_llm_model_changed(self, _idx):
+        self.ui.config["llm_model"] = self._llm_combo.currentData() or ""
+        self.ui.on_change(self.ui.config)
+
     def _on_volume(self, val):
         self._vol_lbl.setText(f"{val}%")
         self.ui.config["sound_volume"] = round(val / 100.0, 3)
@@ -1236,7 +1300,7 @@ class AppUI(QObject):
                  apply_corrections=None, format_bidi=None, update_history=None,
                  delete_history=None, suggest_similar=None,
                  english_terms=None, add_english_term=None,
-                 remove_english_term=None):
+                 remove_english_term=None, llm_list_models=None):
         super().__init__()
         self.config = config
         self.level_provider = level_provider
@@ -1258,6 +1322,7 @@ class AppUI(QObject):
         self.english_terms = english_terms or (lambda: [])
         self.add_english_term = add_english_term or (lambda t: None)
         self.remove_english_term = remove_english_term or (lambda t: None)
+        self.llm_list_models = llm_list_models or (lambda: [])
         self.notify = lambda *a, **k: None  # wired to Tray.notify by main
         self.set_hotkey = lambda h: True    # wired to Mywishper._set_hotkey by main
         self.relaunch_as_admin = lambda: False

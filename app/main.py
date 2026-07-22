@@ -52,6 +52,7 @@ from PySide6.QtWidgets import QApplication
 
 import corrections
 import history
+import llm
 import sounds
 from config import load_config, save_config
 from recorder import Recorder, has_input_device, list_input_devices, MicMonitor
@@ -94,6 +95,7 @@ class Mywishper:
             english_terms=corrections.english_terms,
             add_english_term=corrections.add_english_term,
             remove_english_term=corrections.remove_english_term,
+            llm_list_models=llm.list_models,
         )
         self.tray = Tray(
             on_quit=self.quit,
@@ -326,7 +328,13 @@ class Mywishper:
                 audio, hotwords=corrections.bias_terms(),
                 glossary=corrections.english_terms())
             if text:
-                # Apply learned corrections before delivering / saving.
+                # Optional local-LLM polish (opt-in; fails open to raw text).
+                if self.config.get("llm_polish") and self.config.get("llm_model"):
+                    text = llm.polish(
+                        text, self.config.get("llm_model"),
+                        self.config.get("llm_url", llm.DEFAULT_URL),
+                        self.config.get("llm_timeout", 20))
+                # Apply learned corrections (user's explicit fixes win last).
                 text = corrections.apply(text)
                 history.add(text)  # store clean logical text
                 out = text
