@@ -12,6 +12,7 @@ capable hardware who opt in explicitly.
 import json
 import logging
 import re
+import time
 import urllib.request
 
 log = logging.getLogger("llm")
@@ -76,6 +77,7 @@ def polish(text, model, url=DEFAULT_URL, timeout=20):
     """
     if not text or not text.strip() or not model:
         return text
+    t0 = time.perf_counter()
     try:
         out = _post(url, "/api/generate", {
             "model": model,
@@ -89,12 +91,17 @@ def polish(text, model, url=DEFAULT_URL, timeout=20):
         # Drop an echoed label / surrounding quotes some models add.
         resp = re.sub(r"^\s*(?:הטקסט המתוקן|טקסט מתוקן|הטקסט לתיקון)\s*:?\s*", "", resp)
         resp = resp.strip().strip('"').strip("'").strip()
+        dt = time.perf_counter() - t0
         # Reject output that is empty, much longer than the input (the model
         # explained/rambled), or multi-line (likely commentary) — fall back to
         # the untouched text so a bad pass never corrupts the paste.
         if not resp or len(resp) > len(text) * 2 + 40 or "\n" in resp:
+            log.info("LLM %s: output rejected (%.1fs) — kept original", model, dt)
             return text
+        log.info("LLM %s: %s (%.1fs)", model,
+                 "changed text" if resp != text else "no change", dt)
         return resp
     except Exception as e:
-        log.warning("LLM polish skipped (model=%s): %s", model, e)
+        log.warning("LLM polish skipped (model=%s, %.1fs): %s",
+                    model, time.perf_counter() - t0, e)
         return text
