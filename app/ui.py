@@ -130,7 +130,7 @@ class CorrectionDialog(QDialog):
                 chip.setCursor(Qt.PointingHandCursor)
                 chip.setStyleSheet(
                     f"QPushButton{{"
-                    f"  background:{p['card_bg']};"
+                    f"  background:{p['surface']};"
                     f"  color:{p['accent']};"
                     f"  border:1px solid {p['accent']};"
                     f"  border-radius:12px;"
@@ -139,7 +139,7 @@ class CorrectionDialog(QDialog):
                     f"}}"
                     f"QPushButton:hover{{"
                     f"  background:{p['accent']};"
-                    f"  color:{p['card_bg']};"
+                    f"  color:{p['on_accent']};"
                     f"}}"
                 )
                 chip.clicked.connect(lambda _, s=sug: self._use_suggestion(s))
