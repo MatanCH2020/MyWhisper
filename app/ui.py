@@ -966,6 +966,14 @@ class MainWindow(FramelessWindow):
         lmrow.addWidget(self._llm_combo)
         lmrow.addWidget(self._tool_btn("refresh", "רענן", self._populate_llm_models))
         lc.vbox.addLayout(lmrow)
+        cmprow = QHBoxLayout()
+        cmprow_lbl = self._plain("מצב השוואה (הדבק את שתי הגרסאות)")
+        cmprow.addWidget(cmprow_lbl)
+        cmprow.addStretch(1)
+        self._llm_cmp_sw = ToggleSwitch(self.p, checked=self.ui.config.get("llm_compare", False))
+        self._llm_cmp_sw.toggled.connect(self._on_llm_compare_toggle)
+        cmprow.addWidget(self._llm_cmp_sw)
+        lc.vbox.addLayout(cmprow)
         self._llm_status = QLabel("")
         self._llm_status.setStyleSheet(f"color:{self.p['text_muted']}; font-size:11px;")
         lc.vbox.addWidget(self._llm_status)
@@ -1209,6 +1217,13 @@ class MainWindow(FramelessWindow):
 
     def _on_llm_model_changed(self, _idx):
         self.ui.config["llm_model"] = self._llm_combo.currentData() or ""
+        self.ui.on_change(self.ui.config)
+
+    def _on_llm_compare_toggle(self, on):
+        self.ui.config["llm_compare"] = bool(on)
+        # Comparison needs a model; adopt the shown one if none saved yet.
+        if on and not self.ui.config.get("llm_model") and self._llm_combo.currentData():
+            self.ui.config["llm_model"] = self._llm_combo.currentData()
         self.ui.on_change(self.ui.config)
 
     def _on_volume(self, val):

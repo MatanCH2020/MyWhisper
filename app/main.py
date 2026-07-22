@@ -322,27 +322,45 @@ class Mywishper:
         # Run the heavy work off the hotkey thread so the UI stays responsive.
         threading.Thread(target=self._worker, args=(audio,), daemon=True).start()
 
+    @staticmethod
+    def _compare_text(polished, raw):
+        """Two labeled blocks for A/B compare mode. If the LLM changed nothing,
+        say so instead of pasting the identical text twice."""
+        if polished.strip() == raw.strip():
+            return f"[עם LLM — ללא שינוי]\n{raw}"
+        return f"[עם LLM]\n{polished}\n\n[מקורי]\n{raw}"
+
     def _worker(self, audio):
         try:
             text = self.transcriber.transcribe(
                 audio, hotwords=corrections.bias_terms(),
                 glossary=corrections.english_terms())
             if text:
-                # Optional local-LLM polish (opt-in; fails open to raw text).
-                if self.config.get("llm_polish") and self.config.get("llm_model"):
-                    text = llm.polish(
-                        text, self.config.get("llm_model"),
-                        self.config.get("llm_url", llm.DEFAULT_URL),
-                        self.config.get("llm_timeout", 20))
-                # Apply learned corrections (user's explicit fixes win last).
-                text = corrections.apply(text)
-                history.add(text)  # store clean logical text
-                out = text
+                model = self.config.get("llm_model")
+                have_llm = bool(model)
+                # The deterministic "raw" version (Hebrew model + learned fixes).
+                raw = corrections.apply(text)
+
+                def _polished():
+                    return corrections.apply(llm.polish(
+                        text, model, self.config.get("llm_url", llm.DEFAULT_URL),
+                        self.config.get("llm_timeout", 20)))
+
+                if self.config.get("llm_compare") and have_llm:
+                    # A/B mode: paste both versions labeled for live comparison.
+                    logical = self._compare_text(_polished(), raw)
+                elif self.config.get("llm_polish") and have_llm:
+                    logical = _polished()
+                else:
+                    logical = raw
+
+                history.add(logical)  # store what was actually delivered
+                out = logical
                 if self.config.get("bidi_isolate", True):
-                    out = corrections.format_bidi(text)  # keep English LTR in RTL
+                    out = corrections.format_bidi(logical)  # keep English LTR in RTL
                 paste_text(out, self.config.get("restore_clipboard", True),
                            self.config.get("clipboard_restore_delay", 0.5))
-                log.info("-> %s", text)
+                log.info("-> %s", logical)
             else:
                 log.info("(empty transcription)")
                 sounds.error()

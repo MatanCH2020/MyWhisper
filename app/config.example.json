@@ -19,6 +19,7 @@
   "initial_prompt": "שלום, מה שלומך? היום יום יפה.",
   "glossary_prompt": true,
   "llm_polish": false,
+  "llm_compare": false,
   "llm_model": "",
   "llm_url": "http://localhost:11434",
   "llm_timeout": 20,
