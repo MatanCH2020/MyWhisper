@@ -96,11 +96,12 @@ class Overlay(QWidget):
 
 
 class CorrectionDialog(QDialog):
-    def __init__(self, parent, palette, word, on_save, on_approve):
+    def __init__(self, parent, palette, word, on_save, on_approve,
+                 suggestions=None):
         super().__init__(parent)
         self.setWindowTitle("תיקון מילה")
         self.setStyleSheet(f"QDialog{{background:{palette['bg']};}}")
-        self.resize(380, 220)
+        self.resize(380, 260)
         self._word, self._on_save, self._on_approve = word, on_save, on_approve
         p = palette
         lay = QVBoxLayout(self)
@@ -114,6 +115,37 @@ class CorrectionDialog(QDialog):
         hint = QLabel("מילה לועזית? כתוב אותה באנגלית (thumbnail, render).")
         hint.setStyleSheet(f"color:{p['text_muted']}; font-size:11px;")
         lay.addWidget(hint)
+        # --- Suggestion chips from Hebrew dictionary ---
+        if suggestions:
+            sug_label = QLabel("הצעות מהמילון:")
+            sug_label.setStyleSheet(
+                f"color:{p['text_muted']}; font-size:12px; margin-top:4px;"
+            )
+            lay.addWidget(sug_label)
+            chips_row = QHBoxLayout()
+            chips_row.setContentsMargins(0, 0, 0, 0)
+            chips_row.setSpacing(6)
+            for sug in suggestions:
+                chip = QPushButton(sug)
+                chip.setCursor(Qt.PointingHandCursor)
+                chip.setStyleSheet(
+                    f"QPushButton{{"
+                    f"  background:{p['card_bg']};"
+                    f"  color:{p['accent']};"
+                    f"  border:1px solid {p['accent']};"
+                    f"  border-radius:12px;"
+                    f"  padding:3px 12px;"
+                    f"  font-size:13px;"
+                    f"}}"
+                    f"QPushButton:hover{{"
+                    f"  background:{p['accent']};"
+                    f"  color:{p['card_bg']};"
+                    f"}}"
+                )
+                chip.clicked.connect(lambda _, s=sug: self._use_suggestion(s))
+                chips_row.addWidget(chip)
+            chips_row.addStretch(1)
+            lay.addLayout(chips_row)
         self.edit = QLineEdit(word)
         self.edit.selectAll()
         self.edit.returnPressed.connect(self._save)
@@ -144,6 +176,12 @@ class CorrectionDialog(QDialog):
     def _approve(self):
         self._on_approve(self._word)
         self.accept()
+
+    def _use_suggestion(self, text):
+        """Fill the correction field with a dictionary suggestion."""
+        self.edit.setText(text)
+        self.edit.selectAll()
+        self.edit.setFocus()
 
 
 class ChangelogDialog(QDialog):
@@ -518,7 +556,9 @@ class MainWindow(FramelessWindow):
             self.ui.approve_word(w)
             self.refresh_history()
 
-        CorrectionDialog(self, self.p, word, on_save, on_approve).exec()
+        suggestions = self.ui.suggest_similar(word)
+        CorrectionDialog(self, self.p, word, on_save, on_approve,
+                         suggestions=suggestions).exec()
 
     def copy_text(self, text):
         if not text:
@@ -963,7 +1003,7 @@ class AppUI(QObject):
                  flag_tokens=None, add_correction=None, approve_word=None,
                  list_corrections=None, remove_correction=None,
                  apply_corrections=None, format_bidi=None, update_history=None,
-                 delete_history=None):
+                 delete_history=None, suggest_similar=None):
         super().__init__()
         self.config = config
         self.level_provider = level_provider
@@ -981,6 +1021,7 @@ class AppUI(QObject):
         self.format_bidi = format_bidi or (lambda t: t)
         self.update_history = update_history or (lambda i, t: None)
         self.delete_history = delete_history or (lambda i: None)
+        self.suggest_similar = suggest_similar or (lambda w: [])
         self.notify = lambda *a, **k: None  # wired to Tray.notify by main
         self.set_hotkey = lambda h: True    # wired to Mywishper._set_hotkey by main
         self.relaunch_as_admin = lambda: False

@@ -11,6 +11,7 @@ Whisper as bias terms via bias_terms() so the model is nudged to produce it corr
 Unknown-word detection uses the wordfreq Hebrew lexicon (offline). If wordfreq is
 not installed the feature degrades gracefully: nothing is flagged.
 """
+import difflib
 import json
 import logging
 import re
@@ -41,6 +42,7 @@ _PREFIXES = set("ובכלמהש")
 _MAX_BIAS_TERMS = 100
 
 _wordfreq_fn = False  # False = not yet probed; None = unavailable; else callable
+_wordlist_cache = None  # lazily built Hebrew word list for suggestions
 
 
 def _zipf():
@@ -258,6 +260,48 @@ def bias_terms() -> str:
     remaining = _MAX_BIAS_TERMS - len(corr_terms)
     terms = corr_terms + (dict_terms[-remaining:] if remaining > 0 else [])
     return " ".join(terms)
+
+
+def _hebrew_wordlist() -> list:
+    """Return a large Hebrew word list for fuzzy suggestion matching.
+
+    Lazily loads wordfreq's top 50,000 Hebrew words and merges in the user's
+    approved dictionary and correction targets. Cached at module level so the
+    list is built only once per session.
+    """
+    global _wordlist_cache
+    if _wordlist_cache is not None:
+        return _wordlist_cache
+    words = set()
+    try:
+        from wordfreq import top_n_list
+        words.update(top_n_list("he", 50000))
+    except Exception:
+        pass  # wordfreq unavailable — fall back to user vocabulary only
+    words.update(_dictionary_set())
+    words.update(_load_corrections().values())
+    _wordlist_cache = list(words)
+    return _wordlist_cache
+
+
+def suggest_similar(word: str, n: int = 5) -> list:
+    """Suggest Hebrew words similar to *word* from the dictionary.
+
+    Uses difflib.get_close_matches against a cached 50K-word Hebrew list
+    (from wordfreq) plus the user's approved vocabulary and correction targets.
+    Returns up to *n* suggestions, excluding the word itself and known-bad
+    words (keys in corrections.json).
+    """
+    w = _normalize(word)
+    if len(w) < 2:
+        return []
+    wordlist = _hebrew_wordlist()
+    if not wordlist:
+        return []
+    matches = difflib.get_close_matches(w, wordlist, n=n + 5, cutoff=0.6)
+    # Filter out the word itself and words that are known-wrong correction keys.
+    bad_keys = set(_load_corrections().keys())
+    return [m for m in matches if m != w and m not in bad_keys][:n]
 
 
 def format_bidi(text: str) -> str:

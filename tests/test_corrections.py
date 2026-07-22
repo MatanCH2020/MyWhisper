@@ -108,6 +108,43 @@ class CorrectionsTestCase(unittest.TestCase):
         once = corrections.format_bidi("קובץ mp4 חדש")
         self.assertEqual(corrections.format_bidi(once), once)
 
+    # ---- suggest_similar ----
+
+    def test_suggest_similar_returns_list(self):
+        result = corrections.suggest_similar("שלומ")
+        self.assertIsInstance(result, list)
+
+    def test_suggest_similar_excludes_self(self):
+        # If the exact word exists in the wordlist, it must not appear as its
+        # own suggestion.
+        result = corrections.suggest_similar("שלום")
+        self.assertNotIn("שלום", result)
+
+    def test_suggest_similar_excludes_bad_keys(self):
+        corrections.add_correction("שגוי", "נכון")
+        result = corrections.suggest_similar("שגוי")
+        # "שגוי" is a known-bad correction key and must not be suggested.
+        self.assertNotIn("שגוי", result)
+
+    def test_suggest_similar_short_word(self):
+        self.assertEqual(corrections.suggest_similar("א"), [])
+
+    def test_suggest_similar_empty(self):
+        self.assertEqual(corrections.suggest_similar(""), [])
+
+    def test_suggest_similar_max_results(self):
+        result = corrections.suggest_similar("שלומ", n=3)
+        self.assertLessEqual(len(result), 3)
+
+    def test_suggest_similar_includes_user_vocabulary(self):
+        # Approve a custom word and invalidate the wordlist cache so it picks
+        # up the new vocabulary.
+        corrections.approve_word("זזזזזזזזזזז")
+        corrections._wordlist_cache = None  # force rebuild
+        result = corrections.suggest_similar("זזזזזזזזזזא")
+        # The approved word should be close enough to appear.
+        self.assertIn("זזזזזזזזזזז", result)
+
 
 if __name__ == "__main__":
     unittest.main()

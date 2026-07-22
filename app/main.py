@@ -90,6 +90,7 @@ class Mywishper:
             format_bidi=corrections.format_bidi,
             update_history=history.update,
             delete_history=history.delete,
+            suggest_similar=corrections.suggest_similar,
         )
         self.tray = Tray(
             on_quit=self.quit,
