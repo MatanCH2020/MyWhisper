@@ -90,12 +90,36 @@ def update(entry_id: str, new_text: str):
 
 
 def delete(entry_id: str):
-    """Remove the entry with the given stable id."""
+    """Remove the entry with the given stable id.
+
+    Returns (entry, index) so the caller can offer an undo, or None if the id
+    was not present.
+    """
     with _lock:
         entries = _read()
-        kept = [e for e in entries if e.get("id") != entry_id]
-        if len(kept) != len(entries):
-            _write(kept)
+        for i, e in enumerate(entries):
+            if e.get("id") == entry_id:
+                removed = entries.pop(i)
+                _write(entries)
+                return removed, i
+        return None
+
+
+def restore(entry: dict, index: int):
+    """Re-insert a deleted entry at its original position (undo of delete()).
+
+    A no-op if an entry with the same id is already back, so a double undo
+    cannot duplicate it.
+    """
+    if not isinstance(entry, dict) or not entry.get("id"):
+        return
+    with _lock:
+        entries = _read()
+        if any(e.get("id") == entry["id"] for e in entries):
+            return
+        entries.insert(max(0, min(index, len(entries))), entry)
+        del entries[MAX_ENTRIES:]
+        _write(entries)
 
 
 def clear():

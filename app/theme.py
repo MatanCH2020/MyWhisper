@@ -55,6 +55,18 @@ SP = {"xs": 4, "sm": 8, "md": 12, "lg": 16, "xl": 24}
 RADIUS = 12
 RADIUS_SM = 8
 
+# Type scale. Sizes used to be written inline at ~35 call sites (13px and 11px
+# alone accounted for 29 of them), so a change meant a find-and-replace and the
+# odd one always got missed. Name the roles instead.
+FS = {
+    "hint": 11,     # secondary explanation under a control
+    "small": 12,    # section titles, chips
+    "body": 13,     # default control / label text
+    "read": 14,     # transcription text — the thing users actually read
+    "title": 15,    # dialog + panel headings
+    "hero": 18,     # the largest heading in a dialog
+}
+
 
 def palette(name: str) -> dict:
     return DARK if str(name).lower() == "dark" else LIGHT
@@ -169,6 +181,8 @@ QSlider::groove:horizontal {{
     height: 5px; border-radius: 3px; background: {p['border']};
 }}
 QSlider::sub-page:horizontal {{ background: {p['accent']}; border-radius: 3px; }}
+/* explicit, so the unfilled side is never left painted by an inherited rule */
+QSlider::add-page:horizontal {{ background: {p['border']}; border-radius: 3px; }}
 QSlider::handle:horizontal {{
     background: {p['accent']}; width: 16px; height: 16px;
     margin: -6px 0; border-radius: 8px;
@@ -201,6 +215,23 @@ QScrollBar:horizontal {{ height: 0; }}
 #navitem:hover {{ background: {p['hover']}; color: {p['text']}; }}
 #navitem:checked {{ background: {p['nav_sel']}; color: {p['accent']}; font-weight: 600; }}
 
-#sectiontitle {{ color: {p['text_muted']}; font-size: 12px; font-weight: 600; }}
+#sectiontitle {{ color: {p['text_muted']}; font-size: {FS['small']}px; font-weight: 600; }}
 #muted {{ color: {p['text_muted']}; }}
+
+/* Named roles, so a label's look lives here instead of in an inline
+   setStyleSheet at each call site. Set with setObjectName(). */
+#hint {{ color: {p['text_muted']}; font-size: {FS['hint']}px; }}
+#fieldlabel {{ color: {p['text']}; font-size: {FS['body']}px; }}
+#cardtext {{ color: {p['text']}; font-size: {FS['read']}px; }}
+#statusok {{ color: #2ea043; font-size: {FS['hint']}px; font-weight: bold; }}
+#toast {{ background: {p['surface_alt']}; border: 1px solid {p['border']};
+    border-radius: {RADIUS_SM}px; }}
+#toast #toastlabel {{ color: {p['text']}; font-size: {FS['body']}px; border: none; }}
+#toastaction {{ background: transparent; color: {p['accent']}; border: none;
+    font-size: {FS['body']}px; font-weight: 700; padding: 2px 6px; }}
+#toastaction:hover {{ text-decoration: underline; }}
+#morebtn {{ background: {p['surface']}; color: {p['accent']};
+    border: 1px solid {p['border']}; border-radius: {RADIUS_SM}px;
+    padding: 9px 18px; font-size: {FS['body']}px; font-weight: 600; }}
+#morebtn:hover {{ border-color: {p['accent']}; background: {p['hover']}; }}
 """

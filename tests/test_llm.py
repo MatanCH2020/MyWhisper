@@ -38,6 +38,17 @@ class LlmFailOpenTestCase(unittest.TestCase):
     def test_available_unreachable_is_false(self):
         self.assertFalse(llm.available(url=_DEAD, timeout=2))
 
+    def test_rewrite_style_fails_open(self):
+        # The new "rewrite" style still returns the original when unreachable.
+        self.assertEqual(
+            llm.polish("טקסט לבדיקה", "m", url=_DEAD, timeout=2, style="rewrite"),
+            "טקסט לבדיקה")
+
+    def test_unknown_style_is_accepted(self):
+        # An unrecognized style must not raise (falls back to "correct").
+        self.assertEqual(
+            llm.polish("שלום", "m", url=_DEAD, timeout=2, style="bogus"), "שלום")
+
 
 if __name__ == "__main__":
     unittest.main()

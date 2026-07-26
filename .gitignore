@@ -12,6 +12,9 @@ corrections.json
 dictionary.json
 english_terms.json
 config.json
+# Clipboard history: literally everything the user has copied. Never commit.
+clips.json
+clip_images/
 
 # Logs and diagnostics
 *.log

@@ -47,9 +47,10 @@ import logging
 log = logging.getLogger("main")
 
 from PySide6.QtCore import QTimer
-from PySide6.QtGui import QIcon
+from PySide6.QtGui import QIcon, QImage
 from PySide6.QtWidgets import QApplication
 
+import clips
 import corrections
 import history
 import llm
@@ -91,6 +92,7 @@ class Mywishper:
             format_bidi=corrections.format_bidi,
             update_history=history.update,
             delete_history=history.delete,
+            restore_history=history.restore,
             suggest_similar=corrections.suggest_similar,
             english_terms=corrections.english_terms,
             add_english_term=corrections.add_english_term,
@@ -104,14 +106,28 @@ class Mywishper:
         )
         self.ui.notify = self.tray.notify  # balloon hints (minimize-to-tray etc.)
         self.hotkeys = HotkeyManager(self.config.get("hotkey"), self.toggle)
+        # Clipboard history: a watcher on the Qt clipboard plus its own hotkey.
+        self.clipwatch = None
+        self.clip_hotkeys = None
+        self._clip_picker = None
+        if self.config.get("clipboard_history", True):
+            from clipwatch import ClipboardWatcher
+            self.clipwatch = ClipboardWatcher()
+            self.clipwatch.set_paused(bool(self.config.get("clipboard_paused")))
+            self.clip_hotkeys = HotkeyManager(
+                self.config.get("clipboard_hotkey", "ctrl+`"), self.show_clips)
+        self.ui.clip_paused = lambda: bool(self.clipwatch and self.clipwatch.is_paused())
+        self.ui.set_clip_paused = self._set_clip_paused
+        self.ui.clear_clips = clips.clear
+        self.ui.clip_count = lambda: len(clips.load())
         self.ui.set_hotkey = self._set_hotkey            # live hotkey editor
-        self.ui.relaunch_as_admin = self._relaunch_as_admin
         self.ui.list_input_devices = lambda: [n for _, n in list_input_devices()]
         self.ui.set_input_device = self._set_input_device
         self.mic_monitor = MicMonitor()          # live level meter for the mic test
         self.ui.mic_test_start = self._mic_test_start
         self.ui.mic_test_stop = self.mic_monitor.stop
         self.ui.mic_level = self.mic_monitor.level
+        self.ui.model_status = self._model_status
         self.ui.check_update = self._check_update
         self.ui.do_update = self._do_update
 
@@ -171,6 +187,64 @@ class Mywishper:
             log.exception("Mic test failed to open device %r", name)
             return False
 
+    # ---- clipboard history ----
+    def show_clips(self):
+        """Open the clip picker (clipboard hotkey). Built on first use."""
+        if self._clip_picker is None:
+            from clipui import ClipPicker
+            self._clip_picker = ClipPicker(
+                self.ui.p, on_pick=self._use_clip,
+                on_delete=lambda cid: clips.delete(cid),
+                on_clear=clips.clear)
+        if self._clip_picker.isVisible():
+            self._clip_picker.hide()   # same key closes it again
+            return
+        self._clip_picker.show_for(clips.load())
+
+    def _use_clip(self, entry):
+        """Put a chosen clip back on the clipboard for the user to paste."""
+        cb = QApplication.clipboard()
+        # Our own write — don't let the watcher re-record it as a fresh copy.
+        if self.clipwatch:
+            self.clipwatch.suppress(2.0)
+        try:
+            if entry.get("kind") == "image":
+                img = QImage(entry.get("path", ""))
+                if img.isNull():
+                    log.warning("Clip image missing: %s", entry.get("path"))
+                    return
+                cb.setImage(img)
+            else:
+                cb.setText(entry.get("text", ""))
+        except Exception:
+            log.exception("Failed to put a clip on the clipboard")
+
+    def _set_clip_paused(self, paused):
+        if self.clipwatch:
+            self.clipwatch.set_paused(paused)
+        self.config["clipboard_paused"] = bool(paused)
+        save_config(self.config)
+
+    def _model_status(self):
+        """Snapshot of the transcription engine for the settings UI.
+
+        state: 'loading' while a load is in flight, 'ready' once the model sits
+        in memory, 'released' after _resource_poll freed it (idle / fullscreen).
+        A released model is normal, not an error — it reloads on the next press.
+        """
+        if self._loading:
+            state = "loading"
+        elif self.transcriber.is_loaded():
+            state = "ready"
+        else:
+            state = "released"
+        return {
+            "state": state,
+            "device": self.transcriber.device or "",
+            "model": self.config.get("model", ""),
+            "fallback": self.transcriber.fallback_reason,
+        }
+
     def _check_update(self):
         """Return the latest published version string (e.g. '1.8.1'), or None on
         failure. Called from a worker thread by the settings UI."""
@@ -198,27 +272,6 @@ class Mywishper:
             log.exception("Failed to launch updater")
             return False
         QTimer.singleShot(800, self.quit)
-        return True
-
-    def _relaunch_as_admin(self):
-        """Relaunch the app elevated (UAC). Returns False if elevation was
-        cancelled or unavailable (e.g. no admin rights on this machine)."""
-        import ctypes
-        root = Path(__file__).resolve().parent.parent
-        vbs = str(root / "run_mywishper.vbs")
-        try:
-            shell32 = ctypes.windll.shell32
-            shell32.ShellExecuteW.restype = ctypes.c_void_p
-            r = shell32.ShellExecuteW(None, "runas", "wscript.exe",
-                                      f'"{vbs}"', str(root), 1)
-        except Exception:
-            log.exception("Elevation failed")
-            return False
-        if int(r) <= 32:  # ShellExecute error / user declined UAC
-            return False
-        # The elevated instance will take over; quit this one after the UAC
-        # dialog clears (by then this process has released the single mutex).
-        QTimer.singleShot(600, self.quit)
         return True
 
     def toggle(self):
@@ -342,9 +395,12 @@ class Mywishper:
                 raw = corrections.apply(text)
 
                 def _polished():
-                    return corrections.apply(llm.polish(
+                    # The LLM phrases on its own — the manual dictionary is NOT
+                    # applied here, so its output is independent of learned fixes.
+                    return llm.polish(
                         text, model, self.config.get("llm_url", llm.DEFAULT_URL),
-                        self.config.get("llm_timeout", 20)))
+                        self.config.get("llm_timeout", 20),
+                        style=self.config.get("llm_style", "correct"))
 
                 if self.config.get("llm_compare") and have_llm:
                     # A/B mode: paste both versions labeled for live comparison.
@@ -355,9 +411,18 @@ class Mywishper:
                     logical = raw
 
                 history.add(logical)  # store what was actually delivered
+                # Refresh an open history page so the new card appears on its
+                # own (no-op when the window is closed / hidden).
+                self.ui.notify_transcription()
                 out = logical
                 if self.config.get("bidi_isolate", True):
                     out = corrections.format_bidi(logical)  # keep English LTR in RTL
+                # paste_text writes to the clipboard (and restores it after), so
+                # mute the watcher — otherwise every dictation would also land in
+                # the clipboard history as if the user had copied it.
+                if self.clipwatch:
+                    self.clipwatch.suppress(
+                        2.0 + float(self.config.get("clipboard_restore_delay", 0.5)))
                 paste_text(out, self.config.get("restore_clipboard", True),
                            self.config.get("clipboard_restore_delay", 0.5))
                 log.info("-> %s", logical)
@@ -386,6 +451,17 @@ class Mywishper:
                 "MyWhisper — הקיצור תפוס",
                 f"לא ניתן לרשום את הקיצור '{hk}' — כנראה תפוס בתוכנה אחרת. "
                 "פתח הגדרות ← קיצור מקלדת ובחר צירוף אחר.", "warning"))
+        if self.clip_hotkeys is not None:
+            # Non-fatal: dictation must still work if only this combo is taken.
+            try:
+                self.clip_hotkeys.start()
+            except Exception:
+                log.exception("Clipboard hotkey registration failed")
+                ck = self.config.get("clipboard_hotkey")
+                QTimer.singleShot(2000, lambda: self.tray.notify(
+                    "MyWhisper — קיצור הלוח תפוס",
+                    f"לא ניתן לרשום את '{ck}' להיסטוריית ההעתקות — תפוס בתוכנה "
+                    "אחרת. אפשר לבחור צירוף אחר בהגדרות.", "warning"))
         if not has_input_device():
             QTimer.singleShot(2500, lambda: self.tray.notify(
                 "MyWhisper — לא נמצא מיקרופון",

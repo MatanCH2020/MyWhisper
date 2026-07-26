@@ -28,9 +28,14 @@ DEFAULTS = {
     "sound_volume": 0.25,
     "initial_prompt": "",
     "glossary_prompt": True,          # fold the English glossary into the prompt
+    # Clipboard history — everything you copy, independent of transcription.
+    "clipboard_history": True,
+    "clipboard_hotkey": "ctrl+`",     # opens the picker
+    "clipboard_paused": False,        # user-toggled pause (survives a restart)
     # Optional local-LLM polish via Ollama (off by default; opt-in, needs Ollama)
     "llm_polish": False,
     "llm_compare": False,             # paste BOTH the LLM and raw versions (A/B)
+    "llm_style": "correct",           # "correct" = fix errors only; "rewrite" = professional rephrase close to original
     "llm_model": "",                  # Ollama model name, e.g. "qwen3:14b"
     "llm_url": "http://localhost:11434",
     "llm_timeout": 20,                # seconds; falls back to raw text on timeout

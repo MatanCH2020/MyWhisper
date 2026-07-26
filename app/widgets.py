@@ -181,6 +181,11 @@ class NavRail(QWidget):
         if 0 <= i < len(self._btns):
             self._btns[i].setChecked(True)
 
+    def set_tooltips(self, tips):
+        """Attach a hint per item (used to surface the Ctrl+N shortcuts)."""
+        for b, tip in zip(self._btns, tips):
+            b.setToolTip(tip)
+
 
 class ToggleSwitch(QCheckBox):
     """iOS-style toggle, custom-painted from the active palette."""
@@ -191,6 +196,17 @@ class ToggleSwitch(QCheckBox):
         self.setChecked(checked)
         self.setCursor(Qt.PointingHandCursor)
         self.setFixedSize(46, 26)
+
+    def hitButton(self, pos):
+        """Accept a click anywhere on the switch.
+
+        QCheckBox only treats its indicator (and label) as clickable. This
+        widget paints its own 46x26 track and carries no text, so Qt's default
+        hit area was a ~14x14 corner square — roughly a sixth of what the user
+        sees. Clicks on the rest of the switch were silently dropped, which read
+        as a toggle that only works "sometimes".
+        """
+        return self.rect().contains(pos)
 
     def paintEvent(self, _e):
         p = QPainter(self)
