@@ -18,8 +18,10 @@ Three things it deliberately does NOT record:
 """
 import logging
 import time
+import threading
+from concurrent.futures import ThreadPoolExecutor
 
-from PySide6.QtCore import QObject
+from PySide6.QtCore import QObject, Signal
 from PySide6.QtWidgets import QApplication
 
 import clips
@@ -40,8 +42,15 @@ _SECRET_FORMATS = (
 class ClipboardWatcher(QObject):
     """Records clipboard changes into clips.py. Create after QApplication."""
 
-    def __init__(self, on_change=None):
+    _stored = Signal(object, bool)
+
+    def __init__(self, on_change=None, persist_async=True):
         super().__init__()
+        self._executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="clipboard") if persist_async else None
+        self._stored.connect(self._after_store)
+        self._closed = False
+        self._store_lock = threading.Lock()
+        self._generation = 0
         self._on_change = on_change or (lambda: None)
         self._paused = False
         self._suppress_until = 0.0
@@ -54,6 +63,49 @@ class ClipboardWatcher(QObject):
             self._last_text = self._clip.text() or None
         except Exception:
             self._last_text = None
+
+    def close(self):
+        if self._closed:
+            return
+        self._closed = True
+        try:
+            self._clip.dataChanged.disconnect(self._on_data_changed)
+        except (AttributeError, RuntimeError, TypeError):
+            pass
+        if self._executor:
+            self._executor.shutdown(wait=True)
+
+    def _after_store(self, text, saved):
+        if saved:
+            self._on_change()
+        elif text == self._last_text:
+            self._last_text = None
+
+    def _persist(self, operation, text=None):
+        generation = self._generation
+        def run():
+            try:
+                with self._store_lock:
+                    saved = generation == self._generation and bool(operation())
+            except Exception:
+                log.exception("Clipboard persistence failed")
+                saved = False
+            if self._executor:
+                self._stored.emit(text, saved)
+            else:
+                self._after_store(text, saved)
+        if self._executor:
+            self._executor.submit(run)
+        else:
+            run()
+
+    def clear_history(self):
+        # Discard older queued copies, then clear after any current write finishes.
+        # New clipboard events after this user action belong to the next generation.
+        with self._store_lock:
+            self._generation += 1
+            self._last_text = None
+            return clips.clear()
 
     # ---- control ----
     def set_paused(self, paused: bool):
@@ -74,7 +126,7 @@ class ClipboardWatcher(QObject):
 
     # ---- capture ----
     def _on_data_changed(self):
-        if self._paused or time.monotonic() < self._suppress_until:
+        if self._closed or self._paused or time.monotonic() < self._suppress_until:
             return
         try:
             md = self._clip.mimeData()
@@ -92,11 +144,13 @@ class ClipboardWatcher(QObject):
                 if text == self._last_text:
                     return  # same value re-announced; not a new copy
                 self._last_text = text
-                if clips.add_text(text):
-                    self._on_change()
+                self._persist(lambda: clips.add_text(text), text)
             elif md.hasImage():
-                if clips.add_image(lambda p: self._save_image(p)):
-                    self._on_change()
+                # Detach on the GUI thread; workers never access QClipboard.
+                img = self._clip.image()
+                if img is not None and not img.isNull():
+                    snapshot = img.copy()
+                    self._persist(lambda: clips.add_image(lambda p: snapshot.save(str(p), "PNG")))
         except Exception:
             log.exception("Failed to record a clipboard change")
 
@@ -105,7 +159,7 @@ class ClipboardWatcher(QObject):
         try:
             formats = [f.lower() for f in md.formats()]
         except Exception:
-            return False
+            return True  # unknown sensitivity: do not capture
         return any(any(marker in f for f in formats) for marker in _SECRET_FORMATS)
 
     def _save_image(self, path) -> bool:

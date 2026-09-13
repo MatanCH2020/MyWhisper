@@ -109,19 +109,27 @@ class MicMonitor:
         self._stream = sd.InputStream(
             samplerate=SAMPLE_RATE, channels=CHANNELS, dtype="float32",
             device=resolve_device(device_name), callback=self._callback)
-        self._stream.start()
+        try:
+            self._stream.start()
+        except Exception:
+            self.stop()
+            raise
 
     def level(self):
         return self._level if self._stream is not None else 0.0
 
     def stop(self):
         if self._stream is not None:
+            stream, self._stream = self._stream, None
             try:
-                self._stream.stop()
-                self._stream.close()
+                stream.stop()
             except Exception:
                 pass
-            self._stream = None
+            finally:
+                try:
+                    stream.close()
+                except Exception:
+                    log.warning("Could not close microphone monitor")
         self._level = 0.0
 
 
@@ -177,17 +185,31 @@ class Recorder:
             device=self._resolve_device(),
             callback=self._callback,
         )
-        self._stream.start()
+        try:
+            self._stream.start()
+        except Exception:
+            try:
+                self._stream.close()
+            finally:
+                self._stream = None
+                self.recording = False
+            raise
         self.recording = True
 
     def stop(self) -> np.ndarray:
         """Stop recording and return the captured mono float32 audio (may be empty)."""
-        if not self.recording:
+        if self._stream is None:
+            self.recording = False
             return np.array([], dtype=np.float32)
-        self._stream.stop()
-        self._stream.close()
-        self._stream = None
-        self.recording = False
+        stream, self._stream = self._stream, None
+        try:
+            try:
+                stream.stop()
+            finally:
+                stream.close()
+        finally:
+            self.recording = False
+            self._level = 0.0
         # Drain the queue into a single contiguous array.
         while not self._q.empty():
             self._chunks.append(self._q.get())

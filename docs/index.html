@@ -408,6 +408,10 @@ nav{
 .install-single .cmd{font-size:.92rem}
 .install-single .note{text-align:center;margin-top:14px;color:var(--faint);font-size:.86rem;line-height:1.6}
 .install-single .note b{color:var(--muted)}
+.release-notes{max-width:820px;margin:0 auto 28px;color:var(--muted);line-height:1.8}
+.release-notes ul{padding-inline-start:24px}
+.release-notes li{margin-block:12px}
+.release-notes strong{color:var(--text)}
 
 .flow-title{
   text-align:center;
@@ -462,7 +466,7 @@ nav{
 .stage{position:relative;margin:64px auto 0;max-width:940px}
 .stage .halo{
   position:absolute;
-  inset:-10% -10% auto;
+  inset:-10% 0 auto;
   height:90%;
   z-index:0;
   background:radial-gradient(circle, rgba(59, 130, 246, 0.25), rgba(168, 85, 247, 0.15) 40%, transparent 70%);
@@ -492,12 +496,12 @@ nav{
 .winbar span{margin-inline-start:12px;color:var(--faint);font-size:.78rem;font-family:'JetBrains Mono',monospace;letter-spacing: 0.5px}
 .window img.shot{display:block;width:100%;opacity: 0.95;transition: opacity 0.3s ease}
 .window:hover img.shot{opacity: 1}
-.overlay-float{position:absolute;z-index:3;top:-32px;left:calc(50% - 82px);width:164px;height:auto;
+.overlay-float{position:absolute;z-index:3;top:-56px;left:calc(50% - 140px);width:280px;height:auto;
   filter:drop-shadow(0 18px 34px rgba(0,0,0,.65));animation:bob 3.4s ease-in-out infinite}
 @keyframes bob{0%,100%{transform:translateY(0)}50%{transform:translateY(-10px)}}
 
 /* ---------- sections ---------- */
-section{padding:90px 0;position:relative}
+section{padding:90px 0;position:relative;scroll-margin-top:90px}
 .eyebrow{display:block;text-align:center;color:var(--accent-2);font-weight:700;
   font-size:.82rem;letter-spacing:.14em;text-transform:uppercase;margin-bottom:12px}
 .h2{text-align:center;font-size:clamp(1.8rem,4vw,2.5rem);font-weight:900;letter-spacing:-.02em;margin-bottom:14px;font-family:'Outfit','Heebo',sans-serif}
@@ -667,7 +671,7 @@ details p{
   font-size:1rem;
   line-height:1.75;
 }
-details code{font-family:'JetBrains Mono',monospace;direction:ltr;unicode-bidi:embed;
+details code{font-family:'JetBrains Mono',monospace;direction:ltr;unicode-bidi:embed;overflow-wrap:anywhere;
   background:#02040a;padding:3px 8px;border-radius:6px;font-size:.88em;color:#60a5fa;border: 1px solid var(--border)}
 
 /* final cta */
@@ -709,7 +713,7 @@ footer a{color:var(--muted);transition:color 0.2s}footer a:hover{color:var(--tex
   .split .media{order:-1}
   .nav-links{display:none}
   .nav-in{grid-template-columns:1fr auto}
-  .overlay-float{width:124px;top:-20px;left:calc(50% - 62px)}
+  .overlay-float{width:200px;top:-36px;left:calc(50% - 100px)}
   section{padding:70px 0}
 }
 /* mobile: center everything, no clipped text */
@@ -780,10 +784,10 @@ footer a{color:var(--muted);transition:color 0.2s}footer a:hover{color:var(--tex
 
     <div class="stage">
       <div class="halo" aria-hidden="true"></div>
-      <img class="overlay-float" src="app-overlay.png" alt="מחוון ההקלטה הצף">
+      <img class="overlay-float" src="app-overlay.png?v=1.11.1" alt="מחוון ההקלטה הצף">
       <div class="window">
         <div class="winbar"><span class="d r"></span><span class="d y"></span><span class="d g"></span><span>MyWhisper — Matan Digital</span></div>
-        <img class="shot" src="app-history-dark.png" alt="חלון ההיסטוריה של MyWhisper עם תמלולים בעברית">
+        <img class="shot" src="app-history-dark.png?v=1.11.1" alt="חלון ההיסטוריה של MyWhisper עם תמלולים בעברית">
       </div>
     </div>
   </div>
@@ -802,7 +806,8 @@ footer a{color:var(--muted);transition:color 0.2s}footer a:hover{color:var(--tex
         <button id="copy-btn" type="button">העתק</button>
       </div>
       <p class="note">💡 לפתיחת PowerShell: קליק-ימני על כפתור <b>Start</b> ← <b>Terminal</b> (או <b>Windows PowerShell</b>).</p>
-      <p class="note">הרצה חוזרת של אותה פקודה = עדכון לגרסה האחרונה · הקוד פתוח וניתן לקריאה ב-GitHub.</p>
+      <p class="note">לעדכון התקנה קיימת: סוגרים את MyWhisper דרך סמל המגש ומריצים שוב את הפקודה, או משתמשים בעדכון מתוך ההגדרות. מותקנת רק גרסה שפורסמה, עם גיבוי ושחזור במקרה של כשל.</p>
+      <p class="note"><a href="https://github.com/MatanCH2020/MyWhisper/releases/latest/download/MyWhisper-Setup.cmd">אפשר גם להוריד מתקין בלחיצה</a> · <a href="https://github.com/MatanCH2020/MyWhisper#readme">מדריך התקנה מלא</a> · <a href="#updates">מה חדש בגרסה העדכנית</a></p>
     </div>
 
     <h3 class="flow-title">מה קורה אחרי שמריצים?</h3>
@@ -843,7 +848,7 @@ footer a{color:var(--muted);transition:color 0.2s}footer a:hover{color:var(--tex
     <div class="steps">
       <div class="step"><span class="n">01</span>
         <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10a7 7 0 0 0 14 0M12 17v4M8 21h8"/></svg></div>
-        <h3>לוחצים</h3><p><kbd>Ctrl + Space</kbd> — ביפ קצר, מחוון אדום, מקליט.</p></div>
+        <h3>לוחצים</h3><p><kbd>Ctrl + Space</kbd> — חיווי הקלטה עם טיימר וגלי קול מופיע במסך שבו נמצא העכבר.</p></div>
       <div class="step"><span class="n">02</span>
         <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h3l3-8 4 16 3-8h5"/></svg></div>
         <h3>מדברים</h3><p>בעברית, בקצב שלכם. אפשר לשלב אנגלית — הכיווניות נשמרת.</p></div>
@@ -887,9 +892,33 @@ footer a{color:var(--muted);transition:color 0.2s}footer a:hover{color:var(--tex
       <div class="pt"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg><span>המודל מקבל את המילה כרמז ומפיק אותה נכון מראש</span></div>
       <div class="pt"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg><span>מילים באנגלית נשארות LTR בתוך העברית — בלי בלגן כיווניות</span></div>
     </div>
-    <div class="media"><img class="shot" src="app-dictionary-dark.png" alt="מילון התיקונים הנלמדים של MyWhisper"></div>
+    <div class="media"><img class="shot" src="app-dictionary-dark.png?v=1.11.1" alt="מילון התיקונים הנלמדים של MyWhisper"></div>
   </div>
 </section>
+
+<!-- release:start -->
+<section id="updates" data-release-version="1.11.1">
+  <div class="wrap">
+    <span class="eyebrow">מה חדש</span>
+    <h2 class="h2">הגרסה העדכנית: <bdi>v1.11.1</bdi></h2>
+    <p class="sub">העדכונים האחרונים מתוך יומן השינויים של התוכנה.</p>
+    <div class="release-notes">
+      <ul>
+        <li><strong>חיווי הקלטה חדש — 13.09.2026</strong>: כרטיס גדול וברור יותר עם אייקון מיקרופון, זמן הקלטה וגלי קול שמגיבים לדיבור. הכניסה למסך מונפשת בעדינות ומכבדת את הגדרת האנימציות של Windows.</li>
+        <li><strong>הקלטה במסך שבו נמצא העכבר</strong>: החיווי מופיע למעלה במרכז המסך של העכבר בתחילת כל הקלטה, נשאר שם גם בזמן התמלול ומתמקם מחדש אם המסך מתנתק. הוא אינו לוקח את הפוקוס משדה ההקלדה.</li>
+        <li><strong>עלייה ברקע עם Windows</strong>: קיצור ההפעלה האוטומטית מפעיל את התוכנה בלי לפתוח את החלון הראשי, עם הודעת מוכנות קצרה לאחר טעינת המודל. פתיחה ידנית עדיין מציגה את החלון. אפשר להפעיל את האפשרות באמצעות סקריפט ההפעלה האוטומטית המתואר במדריך.</li>
+        <li><strong>מסך הגדרות מסודר יותר</strong>: חלוקה ברורה לנושאים, אפשרויות מתקדמות שנפתחות לפי הצורך, והודעות מצב שקל יותר להבין.</li>
+        <li><strong>מילון ברור ונוח יותר</strong>: הצגת התיקונים בעמודות &quot;נשמע&quot; ו&quot;ייכתב&quot;, שיפור הקריאות בעברית וסידור רכיבי המילון.</li>
+        <li><strong>ליטוש הממשק הבהיר והכהה</strong>: כפתורים נוחים יותר ללחיצה, סימון ברור של הרכיב הפעיל בניווט מקלדת, הסברים לכפתורים והודעות הצלחה שאינן מפריעות לעבודה.</li>
+      </ul>
+    </div>
+    <div class="cta-row">
+      <a class="btn btn-lg btn-primary" href="https://github.com/MatanCH2020/MyWhisper/releases/download/v1.11.1/MyWhisper-Setup.cmd">הורדת המתקין</a>
+      <a class="btn btn-lg btn-ghost" href="https://github.com/MatanCH2020/MyWhisper/releases/tag/v1.11.1">כל פרטי הגרסה</a>
+    </div>
+  </div>
+</section>
+<!-- release:end -->
 
 <section id="faq" style="background:linear-gradient(180deg,transparent,rgba(20,25,36,.5),transparent)">
   <div class="wrap">
@@ -903,6 +932,8 @@ footer a{color:var(--muted);transition:color 0.2s}footer a:hover{color:var(--tex
       <details><summary>איך משנים את קיצור המקלדת?<span class="plus"></span></summary><p>ישירות מתוך <b>הגדרות ← קיצור מקלדת</b> — לוחצים ומקישים צירוף חדש (למשל <code>Ctrl+Alt+Space</code>), והוא מתעדכן מיד. יש גם כפתורי צירוף-מהיר.</p></details>
       <details><summary>Windows מציג אזהרה על קובץ ההתקנה?<span class="plus"></span></summary><p>זה SmartScreen על קבצים חדשים ללא מוניטין. הקוד פתוח וניתן לקריאה ב-GitHub; אפשר גם להתקין בפקודת ה-PowerShell שלמעלה.</p></details>
       <details><summary>בטעות התחלתי הקלטה / שכחתי מיקרופון פתוח?<span class="plus"></span></summary><p><code>Esc</code> באמצע הקלטה מבטל בלי לתמלל, והקלטה שנשכחה נעצרת אוטומטית אחרי 10 דקות.</p></details>
+      <details><summary>איך מפעילים את התוכנה עם Windows?<span class="plus"></span></summary><p>לאחר ההתקנה פותחים PowerShell ומריצים <code dir="ltr">powershell -ExecutionPolicy Bypass -File "$env:USERPROFILE\MyWhisper\scripts\install_autostart.ps1"</code>. התוכנה תעלה ברקע לאחר הכניסה לחשבון, בלי לפתוח את החלון הראשי. לביטול אפשר להשבית את MyWhisper באפליקציות האתחול של Windows.</p></details>
+      <details><summary>יש לי שני מסכים — איפה יופיע החיווי?<span class="plus"></span></summary><p>למעלה במרכז המסך שבו נמצא העכבר בתחילת ההקלטה. החיווי נשאר שם לאורך ההקלטה והתמלול, בלי לקחת את הפוקוס משדה הטקסט.</p></details>
     </div>
   </div>
 </section>

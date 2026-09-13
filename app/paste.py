@@ -6,7 +6,10 @@ library's input hooks are blocked by security software.
 """
 import ctypes
 import time
-import pyperclip
+import logging
+from winclipboard import WindowsClipboard
+
+log = logging.getLogger("paste")
 
 _user32 = ctypes.windll.user32
 
@@ -32,26 +35,22 @@ def paste_text(text: str, restore_clipboard: bool = True, restore_delay: float =
     if not text:
         return
 
-    previous = None
-    if restore_clipboard:
+    with WindowsClipboard() as clipboard:
+        previous, sequence = clipboard.write_text(text, preserve=restore_clipboard)
         try:
-            previous = pyperclip.paste()
-        except Exception:
-            previous = None
-
-    pyperclip.copy(text)
-    time.sleep(0.05)  # let the clipboard write settle before pasting
-
-    for vk in _STRAY_MODS:
-        _key(vk, up=True)
-    _key(_VK_CONTROL)            # Ctrl down
-    _key(_VK_V)                  # V down
-    _key(_VK_V, up=True)         # V up
-    _key(_VK_CONTROL, up=True)   # Ctrl up
-
-    if restore_clipboard and previous is not None:
-        time.sleep(max(0.1, float(restore_delay)))
-        try:
-            pyperclip.copy(previous)
-        except Exception:
-            pass
+            time.sleep(0.05)
+            for vk in _STRAY_MODS:
+                _key(vk, up=True)
+            try:
+                _key(_VK_CONTROL)
+                _key(_VK_V)
+            finally:
+                _key(_VK_V, up=True)
+                _key(_VK_CONTROL, up=True)
+        finally:
+            if restore_clipboard and previous is not None:
+                time.sleep(max(0.1, float(restore_delay)))
+                try:
+                    clipboard.restore(previous, sequence)
+                except OSError:
+                    log.warning("Clipboard restore failed; dictation remains available in history")

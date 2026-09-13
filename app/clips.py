@@ -20,6 +20,8 @@ import uuid
 from datetime import datetime
 from pathlib import Path
 
+from safe_json import atomic_save, read_json, report_error
+
 log = logging.getLogger("clips")
 
 _ROOT = Path(__file__).resolve().parent.parent
@@ -38,22 +40,16 @@ _lock = threading.Lock()
 
 
 def _read():
-    if not CLIPS_PATH.exists():
-        return []
-    try:
-        with open(CLIPS_PATH, "r", encoding="utf-8") as f:
-            entries = json.load(f)
-    except (json.JSONDecodeError, OSError):
-        return []
-    return entries if isinstance(entries, list) else []
+    return read_json(CLIPS_PATH, [], lambda items: isinstance(items, list) and all(
+        isinstance(e, dict) and isinstance(e.get("id"), str)
+        and isinstance(e.get("time", ""), str)
+        and e.get("kind") in ("text", "image")
+        and isinstance(e.get("text" if e.get("kind") == "text" else "path"), str)
+        for e in items))
 
 
 def _write(entries):
-    try:
-        with open(CLIPS_PATH, "w", encoding="utf-8") as f:
-            json.dump(entries, f, ensure_ascii=False, indent=2)
-    except OSError as e:
-        log.error("Failed to write clips: %s", e)
+    return atomic_save(CLIPS_PATH, entries)
 
 
 def _new_id() -> str:
@@ -89,13 +85,11 @@ def add_text(text: str):
                 entry = entries.pop(i)
                 entry["time"] = _now()
                 entries.insert(0, entry)
-                _write(entries)
-                return entry
+                return entry if _write(entries) else None
         entry = {"id": _new_id(), "time": _now(), "kind": "text", "text": text}
         entries.insert(0, entry)
         del entries[MAX_ENTRIES:]
-        _write(entries)
-        return entry
+        return entry if _write(entries) else None
 
 
 def add_image(save_png) -> dict:
@@ -114,8 +108,10 @@ def add_image(save_png) -> dict:
     path = IMAGE_DIR / f"{cid}.png"
     try:
         if not save_png(path):
+            _remove_file(path)
             return None
     except Exception:
+        _remove_file(path)
         log.exception("Failed to save a clipboard image")
         return None
     with _lock:
@@ -124,28 +120,36 @@ def add_image(save_png) -> dict:
         entries.insert(0, entry)
         # Trim surplus images (and their files); text entries are untouched.
         seen = 0
-        keep = []
+        keep, evicted = [], []
         for e in entries:
             if e.get("kind") == "image":
                 seen += 1
                 if seen > MAX_IMAGES:
-                    _remove_file(e.get("path"))
+                    evicted.append(e.get("path"))
                     continue
             keep.append(e)
         del keep[MAX_ENTRIES:]
-        _write(keep)
+        if not _write(keep):
+            _remove_file(path)
+            return None
+        for old_path in evicted:
+            _remove_file(old_path)
         return entry
 
 
 def _remove_file(path):
     if not path:
-        return
+        return True
     try:
-        p = Path(path)
-        if p.exists():
-            p.unlink()
+        p = Path(path).resolve()
+        if p.parent != IMAGE_DIR.resolve() or p.suffix.lower() != ".png":
+            report_error(CLIPS_PATH, "נחסמה מחיקה של קובץ מחוץ לתיקיית התמונות")
+            return False
+        p.unlink(missing_ok=True)
+        return True
     except OSError:
-        pass
+        report_error(path, "לא ניתן למחוק תמונה שמורה")
+        return False
 
 
 def delete(clip_id: str):
@@ -159,8 +163,7 @@ def delete(clip_id: str):
         for i, e in enumerate(entries):
             if e.get("id") == clip_id:
                 removed = entries.pop(i)
-                _write(entries)
-                return removed, i
+                return (removed, i) if _write(entries) else None
         return None
 
 
@@ -173,20 +176,23 @@ def restore(entry: dict, index: int):
         if any(e.get("id") == entry["id"] for e in entries):
             return
         entries.insert(max(0, min(index, len(entries))), entry)
-        _write(entries)
+        return _write(entries)
 
 
 def clear():
-    """Drop every clip and delete the stored image files."""
+    """Clear the index before removing every managed PNG, including undo orphans."""
     with _lock:
-        for e in _read():
-            if e.get("kind") == "image":
-                _remove_file(e.get("path"))
+        _read()
+        if not _write([]):
+            return False
+        ok = True
         try:
-            if CLIPS_PATH.exists():
-                CLIPS_PATH.unlink()
+            for path in IMAGE_DIR.glob("*.png"):
+                ok = _remove_file(path) and ok
         except OSError:
-            pass
+            report_error(IMAGE_DIR)
+            return False
+        return ok
 
 
 def search(query: str, entries=None):

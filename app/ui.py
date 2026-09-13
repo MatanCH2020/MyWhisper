@@ -6,23 +6,17 @@ RTL rendering. Everything runs on the Qt main thread; worker threads talk to the
 UI only through AppUI's thread-safe signals.
 """
 import html
-import math
 import re
-import threading
 
 from version import __version__ as APP_VERSION
 
 from PySide6.QtCore import QObject, Qt, QTimer, Signal
 from PySide6.QtGui import QColor, QFont, QKeySequence, QPainter, QShortcut
-from PySide6.QtWidgets import (
-    QApplication, QComboBox, QDialog, QFileDialog, QFrame, QHBoxLayout, QLabel,
-    QLineEdit, QMessageBox, QProgressBar, QPushButton, QScrollArea, QSlider,
-    QStackedWidget, QVBoxLayout, QWidget,
-)
+from PySide6.QtWidgets import QApplication, QDialog, QFrame, QHBoxLayout, QLabel, QLineEdit, QPushButton, QScrollArea, QStackedWidget, QVBoxLayout, QWidget
 
 import icons
 import theme
-from widgets import Card, FramelessWindow, NavRail, TitleBar, ToggleSwitch
+from widgets import FramelessWindow, NavRail, TitleBar
 
 # Cards rendered per page. Qt re-lays out the whole scroll area on every insert,
 # so the cost of a refresh grows with the number of cards on screen, not with the
@@ -31,78 +25,7 @@ from widgets import Card, FramelessWindow, NavRail, TitleBar, ToggleSwitch
 HISTORY_PAGE = 25
 MAX_HISTORY_CARDS = HISTORY_PAGE  # first page; grows via _page_limit
 
-# recording-overlay geometry
-NUM_BARS, BAR_W, BAR_GAP = 13, 5, 4
-MAX_H, MIN_H, PAD_X, PAD_Y, LABEL_H = 34, 4, 18, 14, 22
-
-
-class Overlay(QWidget):
-    """Frameless top-center HUD with animated bars while recording/transcribing."""
-
-    def __init__(self, level_provider):
-        super().__init__(None, Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint | Qt.Tool)
-        self.setAttribute(Qt.WA_TranslucentBackground)
-        self.setAttribute(Qt.WA_ShowWithoutActivating)
-        self.level_provider = level_provider
-        self.state = "idle"
-        self.frame = 0
-        self._w = PAD_X * 2 + NUM_BARS * BAR_W + (NUM_BARS - 1) * BAR_GAP
-        self._h = PAD_Y * 2 + MAX_H + LABEL_H
-        self.resize(self._w + 20, self._h + 20)
-        scr = QApplication.primaryScreen().geometry()
-        self.move((scr.width() - self.width()) // 2, 40)
-        # Started only while the HUD is visible — an always-on 30fps timer would
-        # wake the GUI thread ~30x/second for the whole life of the process,
-        # which is idle almost all of the time.
-        self._timer = QTimer(self)
-        self._timer.timeout.connect(self._tick)
-
-    def set_state(self, state):
-        self.state = state
-        if state in ("recording", "transcribing"):
-            self.show()
-            self.raise_()
-            if not self._timer.isActive():
-                self._timer.start(33)
-        else:
-            self._timer.stop()
-            self.hide()
-
-    def _tick(self):
-        self.frame += 1
-        self.update()
-
-    def paintEvent(self, _e):
-        p = QPainter(self)
-        p.setRenderHint(QPainter.Antialiasing)
-        ox, oy = 10, 10
-        p.setBrush(QColor(28, 30, 38, 240))
-        p.setPen(Qt.NoPen)
-        p.drawRoundedRect(ox, oy, self._w, self._h, 16, 16)
-        baseline = oy + PAD_Y + MAX_H
-        if self.state == "recording":
-            color, label = QColor("#ff5b5b"), "מקליט..."
-            level = max(0.0, min(1.0, self.level_provider()))
-            for i in range(NUM_BARS):
-                wave = math.sin(self.frame * 0.3 + i * 0.55) * 0.5 + 0.5
-                amp = (0.08 + 0.06 * wave) + level * (0.35 + 0.65 * wave)
-                self._bar(p, ox, i, baseline, MIN_H + amp * (MAX_H - MIN_H), color)
-        else:
-            color, label = QColor("#f0b429"), "מתמלל..."
-            for i in range(NUM_BARS):
-                wave = math.sin(self.frame * 0.25 - i * 0.5) * 0.5 + 0.5
-                h = MIN_H + (0.2 + 0.8 * wave) * (MAX_H - MIN_H) * 0.7
-                self._bar(p, ox, i, baseline, h, color)
-        p.setPen(QColor("#dddddd"))
-        p.setFont(QFont(theme.pick_font(), 9, QFont.Bold))
-        p.drawText(ox, oy + self._h - LABEL_H, self._w, LABEL_H, Qt.AlignCenter, label)
-        p.end()
-
-    def _bar(self, p, ox, i, baseline, h, color):
-        x = ox + PAD_X + i * (BAR_W + BAR_GAP)
-        p.setBrush(color)
-        p.setPen(Qt.NoPen)
-        p.drawRoundedRect(x, int(baseline - h), BAR_W, int(h), 2, 2)
+from overlay import Overlay  # re-export for existing UI callers
 
 
 class CorrectionDialog(QDialog):
@@ -180,11 +103,13 @@ class CorrectionDialog(QDialog):
     def _save(self):
         new = self.edit.text().strip()
         if new and new != self._word:
-            self._on_save(self._word, new)
+            if self._on_save(self._word, new) is False:
+                return
         self.accept()
 
     def _approve(self):
-        self._on_approve(self._word)
+        if self._on_approve(self._word) is False:
+            return
         self.accept()
 
     def _use_suggestion(self, text):
@@ -413,6 +338,7 @@ def _combo_qss(p):
         f"QComboBox{{background:{p['surface_alt']};color:{p['text']};"
         f"border:1px solid {p['border']};border-radius:8px;padding:5px 10px;font-size:13px;}}"
         f"QComboBox:hover{{border:1px solid {p['accent']};}}"
+        f"QComboBox:focus{{border:1px solid {p['accent']};}}"
         f"QComboBox::drop-down{{border:none;width:22px;}}"
         f"QComboBox QAbstractItemView{{background:{p['surface']};color:{p['text']};"
         f"border:1px solid {p['border']};outline:none;padding:4px;"
@@ -425,7 +351,8 @@ def _primary_btn_qss(p):
     return (
         f"QPushButton{{background:{p['accent']};color:{p['on_accent']};"
         f"border:none;border-radius:9px;padding:7px 18px;font-size:13px;font-weight:600;}}"
-        f"QPushButton:hover{{background:{p['accent_hover']};}}")
+        f"QPushButton:hover{{background:{p['accent_hover']};}}"
+        f"QPushButton:focus{{border:2px solid {p['on_accent']};padding:5px 16px;}}")
 
 
 def _qt_key_name(key):
@@ -546,11 +473,11 @@ class HistoryCard(QFrame):
         self._actions = QWidget()
         ah = QHBoxLayout(self._actions)
         ah.setContentsMargins(0, 0, 0, 0)
-        ah.setSpacing(2)
+        ah.setSpacing(5)
         # Two icon variants per button (dim / full) — swapping a prebuilt QIcon
         # is far cheaper than a QGraphicsOpacityEffect on every card.
-        dim = _blend(p["text_muted"], p["surface"], 0.42)
-        dim_danger = _blend(p["danger"], p["surface"], 0.42)
+        dim = _blend(p["text_muted"], p["surface"], 0.66)
+        dim_danger = _blend(p["danger"], p["surface"], 0.62)
         self._copy = self._icon_btn("copy", dim, p["text_muted"],
                                     lambda: win.copy_text(text), "העתק")
         self._trash = self._icon_btn("trash", dim_danger, p["danger"],
@@ -572,10 +499,10 @@ class HistoryCard(QFrame):
     def _icon_btn(self, name, dim_color, full_color, cb, tip):
         b = QPushButton()
         b.setProperty("variant", "icon")
-        b.setFixedSize(28, 26)
+        b.setFixedSize(34, 32)
         b.setToolTip(tip)
-        b._dim = icons.icon(name, dim_color, 16)
-        b._full = icons.icon(name, full_color, 16)
+        b._dim = icons.icon(name, dim_color, 17)
+        b._full = icons.icon(name, full_color, 17)
         b.setIcon(b._dim)
         b.setCursor(Qt.PointingHandCursor)
         b.clicked.connect(lambda: cb())
@@ -646,9 +573,15 @@ class Toast(QFrame):
         self.move((par.width() - w) // 2, par.height() - self.height() - 22)
 
 
-class MainWindow(FramelessWindow):
+from ui_pages.history_page import HistoryPageMixin
+from ui_pages.dictionary_page import DictionaryPageMixin
+from ui_pages.settings_page import SettingsPageMixin
+
+
+class MainWindow(HistoryPageMixin, DictionaryPageMixin, SettingsPageMixin, FramelessWindow):
     """The branded shell: title bar + nav rail + stacked pages."""
 
+    _llm_result = Signal(object)
     _update_result = Signal(object)  # latest version string (or None), off-thread
 
     def __init__(self, ui, palette):
@@ -657,6 +590,8 @@ class MainWindow(FramelessWindow):
         self.p = palette
         self._force_close = False  # set by AppUI._rebuild for a real close
         self._update_result.connect(self._on_update_result)
+        self._llm_loading = False
+        self._llm_result.connect(self._on_llm_models)
         # Rendering a history card costs a flag_tokens() pass (wordfreq lookups
         # per Hebrew word), so the built HTML is cached per entry. Anything that
         # changes the dictionary must clear it — see _invalidate_cards().
@@ -700,6 +635,7 @@ class MainWindow(FramelessWindow):
         self._install_shortcuts()
         self.refresh_history()
         self.refresh_dict()
+        self.search.setFocus()
 
     def resizeEvent(self, e):
         super().resizeEvent(e)
@@ -763,923 +699,16 @@ class MainWindow(FramelessWindow):
         self.ui.notify_minimized()
 
     # ---------------- history ----------------
-    def _history_page(self):
-        w = QWidget()
-        v = QVBoxLayout(w)
-        v.setContentsMargins(18, 16, 18, 14)
-        v.setSpacing(10)
-        bar = QHBoxLayout()
-        self.search = QLineEdit()
-        self.search.setPlaceholderText("חיפוש בהיסטוריה…   (Ctrl+F)")
-        self.search.addAction(icons.icon("search", self.p["text_muted"], 16),
-                              QLineEdit.LeadingPosition)
-        # Debounced: rebuilding up to MAX_HISTORY_CARDS cards on every keystroke
-        # made typing in the search box stutter.
-        self._search_timer = QTimer(self)
-        self._search_timer.setSingleShot(True)
-        self._search_timer.timeout.connect(self.refresh_history)
-        self.search.textChanged.connect(self._on_search_changed)
-        bar.addWidget(self.search, 1)
-        refresh = self._tool_btn("refresh", "רענן", self.refresh_history)
-        clear = self._tool_btn("trash", "נקה הכל", self._clear_all, danger=True)
-        bar.addWidget(refresh)
-        bar.addWidget(clear)
-        v.addLayout(bar)
-        self._hist_box = self._scroll(v)
-        return w
 
-    def refresh_history(self):
-        # Adding ~100 cards one by one re-lays out the scroll area on every
-        # insert, which costs far more than building the widgets themselves.
-        # Freeze painting/layout for the whole rebuild and thaw once at the end.
-        host = self._hist_box.parentWidget()
-        if host is not None:
-            host.setUpdatesEnabled(False)
-        try:
-            self._clear(self._hist_box)
-            self._more_ref = None  # the old footer was just deleted
-            q = (self.search.text() if hasattr(self, "search") else "").strip().lower()
-            entries = self.ui.get_history()
-            self._entries = entries  # reused by on_word_clicked, no re-read
-            self._top_card_id = entries[0].get("id") if entries else None
-            matches = [e for e in entries
-                       if not q or q in (e.get("text", "") or "").lower()]
-            limit = min(self._page_limit, len(matches))
-            for e in matches[:limit]:
-                self._hist_box.addWidget(
-                    HistoryCard(self, e.get("id", ""),
-                                (e.get("text", "") or "").strip(),
-                                self._fmt_time(e.get("time", ""))))
-            if not matches:
-                self._hist_box.addWidget(
-                    self._muted(f"לא נמצאו תוצאות עבור “{self.search.text().strip()}”")
-                    if q else self._empty_state())
-            elif len(matches) > limit:
-                self._hist_box.addWidget(self._more_btn(len(matches) - limit))
-            self._hist_box.addStretch(1)
-        finally:
-            if host is not None:
-                host.setUpdatesEnabled(True)
-
-    def _on_search_changed(self):
-        # A new query starts from page 1 — otherwise a wide search inherits the
-        # expanded limit from the previous one and rebuilds far more than needed.
-        self._page_limit = HISTORY_PAGE
-        self._search_timer.start(200)
-
-    def _empty_state(self):
-        """First-run panel: a bare 'no transcriptions yet' line told the user
-        nothing about how to make one. Shows the live hotkey and the 3 steps."""
-        p = self.p
-        card = QFrame()
-        card.setObjectName("card")
-        v = QVBoxLayout(card)
-        v.setContentsMargins(28, 30, 28, 30)
-        v.setSpacing(0)
-
-        icon = QLabel()
-        icon.setPixmap(icons.pixmap("mic", p["accent"], 44))
-        icon.setAlignment(Qt.AlignCenter)
-        v.addWidget(icon)
-        v.addSpacing(14)
-
-        title = QLabel("עוד לא הכתבת כלום")
-        title.setAlignment(Qt.AlignCenter)
-        title.setFont(QFont(theme.pick_font(), 15, QFont.Bold))
-        title.setStyleSheet(f"color:{p['text']};")
-        v.addWidget(title)
-        v.addSpacing(6)
-
-        hk = (self.ui.config.get("hotkey", "ctrl+space") or "").upper()
-        sub = QLabel(f"הקיצור שלך: <b style='color:{p['accent']}'>{html.escape(hk)}</b>")
-        sub.setTextFormat(Qt.RichText)
-        sub.setAlignment(Qt.AlignCenter)
-        sub.setStyleSheet(f"color:{p['text_muted']}; font-size:13px;")
-        v.addWidget(sub)
-        v.addSpacing(20)
-
-        for n, step in enumerate((
-                "עמוד עם הסמן בכל שדה טקסט — דפדפן, וורד, ווטסאפ.",
-                f"לחץ {hk} ודבר. מחוון ההקלטה יופיע בראש המסך.",
-                "לחץ שוב — הטקסט יתומלל ויודבק במקום שבו הסמן נמצא."), 1):
-            row = QLabel(
-                f"<span style='color:{p['accent']};font-weight:700;'>{n}.</span>"
-                f"&nbsp;&nbsp;<span style='color:{p['text_muted']};'>"
-                f"{html.escape(step)}</span>")
-            row.setTextFormat(Qt.RichText)
-            row.setWordWrap(True)
-            row.setStyleSheet("font-size:13px;")
-            v.addWidget(row)
-            v.addSpacing(8)
-
-        v.addSpacing(6)
-        tip = QLabel("הכול רץ מקומית על המחשב שלך — בלי אינטרנט ובלי חשבון.")
-        tip.setAlignment(Qt.AlignCenter)
-        tip.setWordWrap(True)
-        tip.setObjectName("hint")
-        v.addWidget(tip)
-        return card
-
-    def _more_btn(self, remaining):
-        """'Show more' footer — renders the next page of cards on click."""
-        b = QPushButton(f"הצג עוד  ({remaining} נוספים)")
-        self._more_ref = b  # so prepend_transcription can keep its count current
-        b.setObjectName("morebtn")  # styled by build_qss
-        b.setCursor(Qt.PointingHandCursor)
-        b.clicked.connect(self._show_more)
-        return b
-
-    def _show_more(self):
-        self._page_limit += HISTORY_PAGE
-        self.refresh_history()
-
-    def prepend_transcription(self):
-        """Show a just-finished transcription without rebuilding the whole list.
-
-        A full refresh_history() costs hundreds of ms for a long history, and
-        this runs right after every dictation. Falls back to a full refresh when
-        a search filter is active (the new entry may not match) or when the list
-        is not in its plain state."""
-        if (self.search.text() or "").strip():
-            self.refresh_history()
-            return
-        entries = self.ui.get_history()
-        self._entries = entries
-        if not entries:
-            return
-        e = entries[0]
-        text = (e.get("text", "") or "").strip()
-        if not text:
-            return
-        # Guard against a double notification adding the same entry twice.
-        if e.get("id") and e.get("id") == self._top_card_id:
-            return
-        self._top_card_id = e.get("id")
-        # The placeholder ("no transcriptions yet") and the trailing stretch both
-        # live in the box — drop the placeholder, keep cards under the cap.
-        if not any(isinstance(self._hist_box.itemAt(i).widget(), HistoryCard)
-                   for i in range(self._hist_box.count())):
-            self._clear(self._hist_box)
-            self._hist_box.addStretch(1)
-        self._hist_box.insertWidget(
-            0, HistoryCard(self, e.get("id", ""), text,
-                           self._fmt_time(e.get("time", ""))))
-        cards = [i for i in range(self._hist_box.count())
-                 if isinstance(self._hist_box.itemAt(i).widget(), HistoryCard)]
-        for i in reversed(cards[self._page_limit:]):
-            w = self._hist_box.takeAt(i).widget()
-            if w is not None:
-                w.deleteLater()
-        # One more entry now sits behind the fold — keep the footer count honest.
-        if self._more_ref is not None:
-            remaining = len(entries) - self._page_limit
-            if remaining > 0:
-                self._more_ref.setText(f"הצג עוד  ({remaining} נוספים)")
-
-    def card_html(self, entry_id, text):
-        highlight = self.ui.config.get("highlight_unknown", True)
-        key = (entry_id, text, highlight)
-        cached = self._html_cache.get(key)
-        if cached is not None:
-            return cached
-        parts = []
-        for i, tok in enumerate(self.ui.flag_tokens(text)):
-            t = html.escape(tok["text"]).replace("\n", "<br>")
-            if not tok.get("word"):
-                parts.append(t)
-                continue
-            if tok.get("unknown") and highlight:
-                style = f"color:{self.p['unknown_fg']};text-decoration:underline;font-weight:bold;"
-            else:
-                style = f"color:{self.p['text']};text-decoration:none;"
-            parts.append(f'<a href="{entry_id}:{i}" style="{style}">{t}</a>')
-        out = f'<div dir="rtl">{"".join(parts)}</div>'
-        self._html_cache[key] = out
-        return out
-
-    def _invalidate_cards(self):
-        """Drop cached card HTML after a dictionary change — approved/corrected
-        words must stop rendering as unknown immediately."""
-        self._html_cache.clear()
-
-    def on_word_clicked(self, href):
-        # href is "<entry_id>:<token_index>" — a stable id, so the link stays
-        # valid even if new transcriptions shifted the list meanwhile.
-        entry_id, _, ti = href.rpartition(":")
-        try:
-            ti = int(ti)
-        except ValueError:
-            return
-        entry = next((e for e in self._entries if e.get("id") == entry_id), None)
-        if entry is None:  # added since the last refresh — fall back to disk
-            entry = next((e for e in self.ui.get_history()
-                          if e.get("id") == entry_id), None)
-        if entry is None:
-            return
-        text = (entry.get("text", "") or "").strip()
-        tokens = self.ui.flag_tokens(text)
-        if not (0 <= ti < len(tokens)):
-            return
-        word = tokens[ti]["text"]
-
-        def on_save(w, new):
-            self.ui.add_correction(w, new)
-            self.ui.update_history(entry_id, self.ui.apply_corrections(text))
-            self._invalidate_cards()
-            self.refresh_history()
-            self.refresh_dict()
-
-        def on_approve(w):
-            self.ui.approve_word(w)
-            self._invalidate_cards()
-            self.refresh_history()
-
-        suggestions = self.ui.suggest_similar(word)
-        CorrectionDialog(self, self.p, word, on_save, on_approve,
-                         suggestions=suggestions).exec()
-
-    def copy_text(self, text):
-        if not text:
-            return
-        out = self.ui.format_bidi(text) if self.ui.config.get("bidi_isolate", True) else text
-        QApplication.clipboard().setText(out)
-        self._toast.show_message("הטקסט הועתק", msec=2500)
-
-    def delete_entry(self, entry_id):
-        # delete_history returns (entry, index) so the toast can put it back.
-        removed = self.ui.delete_history(entry_id)
-        self._invalidate_cards()
-        self.refresh_history()
-        if not removed:
-            return
-        entry, index = removed
-        self._toast.show_message(
-            "התמלול נמחק", action="בטל",
-            on_action=lambda: self._undo_delete(entry, index))
-
-    def _undo_delete(self, entry, index):
-        self.ui.restore_history(entry, index)
-        self._invalidate_cards()
-        self.refresh_history()
-
-    def _clear_all(self):
-        # Deleting the whole history is irreversible (history.clear() unlinks the
-        # file), and the button sits right next to "refresh" — always confirm.
-        n = len(self._entries or self.ui.get_history())
-        if not n:
-            return
-        # Built with explicit buttons rather than QMessageBox.question(), whose
-        # standard buttons render as English "Yes"/"No" inside this all-Hebrew UI.
-        box = QMessageBox(self)
-        box.setIcon(QMessageBox.Warning)
-        box.setWindowTitle("MyWhisper")
-        box.setText(f"למחוק את כל ההיסטוריה? {n} תמלולים יימחקו לצמיתות, "
-                    "ואי אפשר לשחזר אותם.")
-        delete_btn = box.addButton("מחק הכל", QMessageBox.DestructiveRole)
-        cancel_btn = box.addButton("ביטול", QMessageBox.RejectRole)
-        box.setDefaultButton(cancel_btn)      # Enter cancels
-        box.setEscapeButton(cancel_btn)       # Esc cancels
-        box.exec()
-        if box.clickedButton() is not delete_btn:
-            return
-        self.ui.clear_history()
-        self._invalidate_cards()
-        self.refresh_history()
 
     # ---------------- dictionary ----------------
-    def _dict_page(self):
-        w = QWidget()
-        v = QVBoxLayout(w)
-        v.setContentsMargins(18, 16, 18, 14)
-        v.setSpacing(10)
-        bar = QHBoxLayout()
-        bar.addWidget(self._section("מילון"))
-        bar.addStretch(1)
-        bar.addWidget(self._tool_btn("refresh", "רענן", self.refresh_dict))
-        v.addLayout(bar)
-        box = self._scroll(v)
 
-        # --- English glossary: terms kept in Latin during transcription ---
-        box.addWidget(self._section("מונחים באנגלית  ·  יישארו באנגלית בתמלול"))
-        erow = QHBoxLayout()
-        self._eng_input = self._line_edit("הוסף מונח באנגלית (למשל GitHub)")
-        self._eng_input.returnPressed.connect(self._add_eng)
-        erow.addWidget(self._eng_input, 1)
-        erow.addWidget(self._accent_btn("הוסף", self._add_eng))
-        box.addLayout(erow)
-        eng_container = QWidget()
-        eng_container.setStyleSheet("background:transparent;")
-        self._eng_box = QVBoxLayout(eng_container)
-        self._eng_box.setContentsMargins(0, 0, 0, 0)
-        self._eng_box.setSpacing(6)
-        box.addWidget(eng_container)
-
-        # --- Learned corrections: "what was heard" -> "how to write it" ---
-        box.addWidget(self._section("תיקונים שנלמדו  ·  שגוי ← נכון"))
-        crow = QHBoxLayout()
-        self._corr_wrong = self._line_edit("מה נשמע (עברית)")
-        self._corr_right = self._line_edit("איך לכתוב")
-        self._corr_right.returnPressed.connect(self._add_corr_manual)
-        crow.addWidget(self._corr_wrong, 1)
-        crow.addWidget(self._corr_right, 1)
-        crow.addWidget(self._accent_btn("הוסף", self._add_corr_manual))
-        box.addLayout(crow)
-        corr_container = QWidget()
-        corr_container.setStyleSheet("background:transparent;")
-        self._dict_box = QVBoxLayout(corr_container)
-        self._dict_box.setContentsMargins(0, 0, 0, 0)
-        self._dict_box.setSpacing(6)
-        box.addWidget(corr_container)
-
-        box.addStretch(1)
-        return w
-
-    def _line_edit(self, placeholder):
-        e = QLineEdit()
-        e.setPlaceholderText(placeholder)
-        e.setStyleSheet(
-            f"QLineEdit{{background:{self.p['surface']}; color:{self.p['text']};"
-            f" border:1px solid {self.p['border']}; border-radius:8px;"
-            f" padding:6px 10px; font-size:13px;}}"
-            f"QLineEdit:focus{{border-color:{self.p['accent']};}}"
-        )
-        return e
-
-    def _accent_btn(self, text, cb):
-        b = QPushButton(text)
-        b.setCursor(Qt.PointingHandCursor)
-        b.setStyleSheet(
-            f"QPushButton{{background:{self.p['accent']}; color:{self.p['on_accent']};"
-            f" border:none; border-radius:8px; padding:6px 16px;"
-            f" font-size:13px; font-weight:600;}}"
-            f"QPushButton:hover{{background:{self.p['accent_hover']};}}"
-        )
-        b.clicked.connect(lambda: cb())
-        return b
-
-    def _kv_card(self, text, on_delete):
-        card = QFrame()
-        card.setObjectName("card")
-        h = QHBoxLayout(card)
-        h.setContentsMargins(14, 8, 14, 8)
-        x = QPushButton()
-        x.setProperty("variant", "icon")
-        x.setFixedSize(28, 26)
-        x.setIcon(icons.icon("trash", self.p["danger"], 16))
-        x.setCursor(Qt.PointingHandCursor)
-        x.clicked.connect(lambda _=False: on_delete())
-        h.addWidget(x)
-        h.addStretch(1)
-        lbl = QLabel(text)
-        lbl.setStyleSheet(f"color:{self.p['text']}; font-size:14px;")
-        h.addWidget(lbl)
-        return card
-
-    def refresh_dict(self):
-        # English glossary
-        self._clear(self._eng_box)
-        terms = self.ui.english_terms()
-        if not terms:
-            self._eng_box.addWidget(self._muted("אין מונחים באנגלית"))
-        else:
-            for term in terms:
-                self._eng_box.addWidget(
-                    self._kv_card(term, lambda t=term: self._del_eng(t)))
-        # Learned corrections
-        self._clear(self._dict_box)
-        corr = self.ui.list_corrections()
-        if not corr:
-            self._dict_box.addWidget(self._muted("עדיין אין תיקונים שנלמדו"))
-        else:
-            for wrong, right in corr.items():
-                self._dict_box.addWidget(
-                    self._kv_card(f"{wrong}　←　{right}",
-                                  lambda k=wrong: self._del_corr(k)))
-
-    def _add_eng(self):
-        term = self._eng_input.text().strip()
-        if not term:
-            return
-        self.ui.add_english_term(term)
-        self._eng_input.clear()
-        self.refresh_dict()
-
-    def _del_eng(self, term):
-        self.ui.remove_english_term(term)
-        self.refresh_dict()
-
-    def _add_corr_manual(self):
-        wrong = self._corr_wrong.text().strip()
-        right = self._corr_right.text().strip()
-        if not wrong or not right:
-            return
-        self.ui.add_correction(wrong, right)
-        self._corr_wrong.clear()
-        self._corr_right.clear()
-        self._invalidate_cards()
-        self.refresh_dict()
-        self.refresh_history()
-
-    def _del_corr(self, wrong):
-        self.ui.remove_correction(wrong)
-        self._invalidate_cards()
-        self.refresh_dict()
-        self.refresh_history()
 
     # ---------------- settings ----------------
-    def _settings_page(self):
-        w = QWidget()
-        w.setStyleSheet("background:transparent;")
-        v = QVBoxLayout(w)
-        v.setContentsMargins(18, 16, 18, 14)
-        v.setSpacing(14)
 
-        # engine status — the model is released after idle_release_minutes and
-        # reloaded on demand, which was invisible until now.
-        stc = Card()
-        stc.vbox.addWidget(self._section("מנוע התמלול"))
-        srow = QHBoxLayout()
-        self._status_dot = QLabel("●")
-        self._status_dot.setStyleSheet(f"color:{self.p['text_muted']}; font-size:15px;")
-        srow.addWidget(self._status_dot)
-        self._status_lbl = self._plain("בודק…")
-        srow.addWidget(self._status_lbl)
-        srow.addStretch(1)
-        stc.vbox.addLayout(srow)
-        self._status_sub = QLabel("")
-        self._status_sub.setWordWrap(True)
-        self._status_sub.setObjectName("hint")
-        stc.vbox.addWidget(self._status_sub)
-        v.addWidget(stc)
-        self._status_timer = QTimer(self)
-        self._status_timer.timeout.connect(self._refresh_model_status)
-        self._refresh_model_status()
-
-        # appearance
-        ap = Card()
-        ap.vbox.addWidget(self._section("מראה"))
-        row = QHBoxLayout()
-        row.addWidget(self._plain("מצב כהה"))
-        row.addStretch(1)
-        self._theme_sw = ToggleSwitch(self.p, checked=(self.p["name"] == "dark"))
-        self._theme_sw.toggled.connect(
-            lambda on: self.ui.set_theme("dark" if on else "light"))
-        row.addWidget(self._theme_sw)
-        ap.vbox.addLayout(row)
-        v.addWidget(ap)
-
-        # microphone
-        mc = Card()
-        mc.vbox.addWidget(self._section("מיקרופון"))
-        mrow = QHBoxLayout()
-        mrow.addWidget(self._plain("התקן קלט"))
-        mrow.addStretch(1)
-        self._mic_combo = QComboBox()
-        self._mic_combo.setMinimumWidth(240)
-        self._mic_combo.setStyleSheet(_combo_qss(self.p))
-        self._mic_combo.currentIndexChanged.connect(self._on_mic_changed)
-        mrow.addWidget(self._mic_combo)
-        mrow.addWidget(self._tool_btn("refresh", "רענן", self._populate_mics))
-        mc.vbox.addLayout(mrow)
-        mic_hint = QLabel("בחר את המיקרופון להקלטה. \"ברירת מחדל של המערכת\" עוקב אחר "
-                          "ההתקן שמוגדר ב-Windows. אם הרשימה ריקה — אין מיקרופון מחובר.")
-        mic_hint.setWordWrap(True)
-        mic_hint.setObjectName("hint")
-        mc.vbox.addWidget(mic_hint)
-        # live test: open the selected mic and show the input level
-        trow = QHBoxLayout()
-        self._mic_test_btn = QPushButton("בדוק מיקרופון")
-        self._mic_test_btn.setCursor(Qt.PointingHandCursor)
-        self._mic_test_btn.clicked.connect(self._toggle_mic_test)
-        trow.addWidget(self._mic_test_btn)
-        self._mic_level = QProgressBar()
-        self._mic_level.setRange(0, 100)
-        self._mic_level.setTextVisible(False)
-        self._mic_level.setFixedHeight(12)
-        self._mic_level.setStyleSheet(
-            f"QProgressBar{{background:{self.p['surface_alt']};border:none;border-radius:6px;}}"
-            f"QProgressBar::chunk{{background:{self.p['accent']};border-radius:6px;}}")
-        trow.addWidget(self._mic_level, 1)
-        mc.vbox.addLayout(trow)
-        self._mic_status = QLabel("")
-        self._mic_status.setObjectName("hint")
-        mc.vbox.addWidget(self._mic_status)
-        self._mic_testing = False
-        self._mic_detected = False
-        self._mic_timer = QTimer(self)
-        self._mic_timer.timeout.connect(self._update_mic_level)
-        v.addWidget(mc)
-        self._populate_mics()
-
-        # sound
-        sc = Card()
-        sc.vbox.addWidget(self._section("צליל"))
-        r1 = QHBoxLayout()
-        r1.addWidget(self._plain("הפעל צלילים"))
-        r1.addStretch(1)
-        self._snd_sw = ToggleSwitch(self.p, checked=self.ui.config.get("sounds", True))
-        self._snd_sw.toggled.connect(self._on_sound_toggle)
-        r1.addWidget(self._snd_sw)
-        sc.vbox.addLayout(r1)
-        r2 = QHBoxLayout()
-        r2.addWidget(self._plain("עוצמה"))
-        self._vol = QSlider(Qt.Horizontal)
-        # Forced LTR: the app is globally RightToLeft, but Qt does not mirror
-        # QSlider::sub-page, so the filled part was drawn on the wrong side —
-        # volume 0 painted a full blue bar. A level slider reads min-left /
-        # max-right in either language anyway.
-        self._vol.setLayoutDirection(Qt.LeftToRight)
-        self._vol.setRange(0, 100)
-        self._vol.setValue(int(self.ui.config.get("sound_volume", 0.25) * 100))
-        self._vol.valueChanged.connect(self._on_volume)
-        self._vol_lbl = self._plain(f"{self._vol.value()}%")
-        r2.addWidget(self._vol, 1)
-        r2.addWidget(self._vol_lbl)
-        sc.vbox.addLayout(r2)
-        r3 = QHBoxLayout()
-        for txt, cue in (("נגן התחלה", "start"), ("נגן סיום", "stop")):
-            b = QPushButton(txt)
-            b.clicked.connect(lambda _=False, c=cue: self.ui.test_sound(c))
-            r3.addWidget(b)
-        for txt, cue in (("החלף התחלה…", "start"), ("החלף סיום…", "stop")):
-            b = QPushButton(txt)
-            b.clicked.connect(lambda _=False, c=cue: self._replace_sound(c))
-            r3.addWidget(b)
-        sc.vbox.addLayout(r3)
-        v.addWidget(sc)
-
-        # smart processing — optional local LLM polish via Ollama (opt-in)
-        lc = Card()
-        lc.vbox.addWidget(self._section("עיבוד חכם — LLM מקומי (ניסיוני)"))
-        lrow = QHBoxLayout()
-        lrow.addWidget(self._plain("שיפור לשוני עם Ollama"))
-        lrow.addStretch(1)
-        self._llm_sw = ToggleSwitch(self.p, checked=self.ui.config.get("llm_polish", False))
-        self._llm_sw.toggled.connect(self._on_llm_toggle)
-        lrow.addWidget(self._llm_sw)
-        lc.vbox.addLayout(lrow)
-        lmrow = QHBoxLayout()
-        lmrow.addWidget(self._plain("מודל"))
-        lmrow.addStretch(1)
-        self._llm_combo = QComboBox()
-        self._llm_combo.setMinimumWidth(240)
-        self._llm_combo.setStyleSheet(_combo_qss(self.p))
-        self._llm_combo.currentIndexChanged.connect(self._on_llm_model_changed)
-        lmrow.addWidget(self._llm_combo)
-        lmrow.addWidget(self._tool_btn("refresh", "רענן", self._populate_llm_models))
-        lc.vbox.addLayout(lmrow)
-        cmprow = QHBoxLayout()
-        cmprow_lbl = self._plain("מצב השוואה (הדבק את שתי הגרסאות)")
-        cmprow.addWidget(cmprow_lbl)
-        cmprow.addStretch(1)
-        self._llm_cmp_sw = ToggleSwitch(self.p, checked=self.ui.config.get("llm_compare", False))
-        self._llm_cmp_sw.toggled.connect(self._on_llm_compare_toggle)
-        cmprow.addWidget(self._llm_cmp_sw)
-        lc.vbox.addLayout(cmprow)
-        styrow = QHBoxLayout()
-        styrow.addWidget(self._plain("ניסוח מקצועי (שכתוב קרוב למקור)"))
-        styrow.addStretch(1)
-        self._llm_style_sw = ToggleSwitch(
-            self.p, checked=self.ui.config.get("llm_style", "correct") == "rewrite")
-        self._llm_style_sw.toggled.connect(self._on_llm_style_toggle)
-        styrow.addWidget(self._llm_style_sw)
-        lc.vbox.addLayout(styrow)
-        self._llm_status = QLabel("")
-        self._llm_status.setObjectName("hint")
-        lc.vbox.addWidget(self._llm_status)
-        llm_hint = QLabel(
-            "מריץ מודל שפה מקומי (Ollama) לשיפור הטקסט אחרי התמלול — הכול נשאר "
-            "במחשב, והמודל מנסח בעצמו בלי להשתמש במילון הידני. כשמצב “ניסוח "
-            "מקצועי” כבוי המודל מתקן רק שגיאות כתיב ופיסוק; כשהוא דלוק המודל "
-            "משכתב את המשפט בצורה מקצועית יותר תוך שמירה קרובה למקור. ⚠️ ניסיוני: "
-            "מוסיף כמה שניות לכל תמלול (בעיקר בפעם הראשונה). אם משהו משתבש — התמלול "
-            "המקורי נשמר. דורש GPU חזק.")
-        llm_hint.setWordWrap(True)
-        llm_hint.setObjectName("hint")
-        lc.vbox.addWidget(llm_hint)
-        v.addWidget(lc)
-        self._populate_llm_models()
-
-        # hotkey
-        hc = Card()
-        hc.vbox.addWidget(self._section("קיצור מקלדת"))
-        row = QHBoxLayout()
-        row.addWidget(self._plain("קיצור להקלטה"))
-        row.addStretch(1)
-        self._hk_edit = HotkeyEdit(self.p, self.ui.config.get("hotkey", "ctrl+space"))
-        self._hk_edit.captured.connect(self._on_hotkey_captured)
-        row.addWidget(self._hk_edit)
-        hc.vbox.addLayout(row)
-        hk_hint = QLabel("לחץ על הכפתור הכחול ואז הקש צירוף (למשל Ctrl+Alt+Space), "
-                         "או בחר צירוף מוכן למטה. אם הקיצור לא מגיב — הצירוף כנראה תפוס "
-                         "בתוכנה אחרת; נסה אחד אחר.")
-        hk_hint.setWordWrap(True)
-        hk_hint.setObjectName("hint")
-        hc.vbox.addWidget(hk_hint)
-        presets = QHBoxLayout()
-        presets.addWidget(self._plain("מהיר:"))
-        for combo in ("ctrl+alt+space", "ctrl+shift+space", "alt+q", "f9"):
-            pb = QPushButton(combo)
-            pb.setCursor(Qt.PointingHandCursor)
-            pb.clicked.connect(lambda _=False, c=combo: self._apply_preset(c))
-            presets.addWidget(pb)
-        presets.addStretch(1)
-        hc.vbox.addLayout(presets)
-        v.addWidget(hc)
-
-        # clipboard history
-        cc = Card()
-        cc.vbox.addWidget(self._section("היסטוריית העתקות"))
-        crow = QHBoxLayout()
-        ck = (self.ui.config.get("clipboard_hotkey", "ctrl+`") or "").upper()
-        crow.addWidget(self._plain(f"פתיחת הרשימה: {ck}"))
-        crow.addStretch(1)
-        self._clip_count_lbl = QLabel("")
-        self._clip_count_lbl.setObjectName("hint")
-        crow.addWidget(self._clip_count_lbl)
-        cc.vbox.addLayout(crow)
-        prow = QHBoxLayout()
-        prow.addWidget(self._plain("השהה שמירה"))
-        prow.addStretch(1)
-        self._clip_pause_sw = ToggleSwitch(self.p, checked=self.ui.clip_paused())
-        self._clip_pause_sw.toggled.connect(self._on_clip_pause_toggle)
-        prow.addWidget(self._clip_pause_sw)
-        cc.vbox.addLayout(prow)
-        crow2 = QHBoxLayout()
-        crow2.addStretch(1)
-        crow2.addWidget(self._tool_btn("trash", "נקה היסטוריית העתקות",
-                                       self._clear_clips, danger=True))
-        cc.vbox.addLayout(crow2)
-        cc.vbox.addWidget(self._hint(
-            "כל טקסט או תמונה שאתה מעתיק נשמר כאן, ולחיצה על הקיצור פותחת רשימה "
-            "לחיפוש. בחירה מעתיקה את הפריט חזרה ללוח כדי שתדביק איפה שתרצה. "
-            "סיסמאות ממנהלי סיסמאות (1Password, Bitwarden, KeePass) לא נשמרות — "
-            "הן מסומנות ככאלה, והתוכנה מכבדת את הסימון. \"השהה שמירה\" עוצר את "
-            "המעקב זמנית."))
-        v.addWidget(cc)
-        self._refresh_clip_count()
-
-        # updates / version
-        upc = Card()
-        upc.vbox.addWidget(self._section("עדכונים"))
-        urow = QHBoxLayout()
-        urow.addWidget(self._plain(f"גרסה נוכחית: v{APP_VERSION}"))
-        urow.addStretch(1)
-        self._cl_btn = QPushButton("מה חדש?")
-        self._cl_btn.setCursor(Qt.PointingHandCursor)
-        self._cl_btn.clicked.connect(self._show_changelog)
-        urow.addWidget(self._cl_btn)
-        self._upd_btn = QPushButton("בדוק עדכונים")
-        self._upd_btn.setCursor(Qt.PointingHandCursor)
-        self._upd_btn.clicked.connect(self._on_check_update)
-        urow.addWidget(self._upd_btn)
-        upc.vbox.addLayout(urow)
-        self._upd_status = QLabel("")
-        self._upd_status.setWordWrap(True)
-        self._upd_status.setObjectName("hint")
-        upc.vbox.addWidget(self._upd_status)
-        self._upd_now_btn = QPushButton("עדכן עכשיו")
-        self._upd_now_btn.setStyleSheet(_primary_btn_qss(self.p))
-        self._upd_now_btn.setCursor(Qt.PointingHandCursor)
-        self._upd_now_btn.clicked.connect(self._on_update_now)
-        self._upd_now_btn.setVisible(False)
-        upc.vbox.addWidget(self._upd_now_btn)
-        v.addWidget(upc)
-
-        v.addStretch(1)
-        # Wrap in a scroll area so a small window scrolls instead of squeezing
-        # all the cards into an unreadable, overlapping stack.
-        area = QScrollArea()
-        area.setWidgetResizable(True)
-        area.setFrameShape(QFrame.NoFrame)
-        area.setStyleSheet("background:transparent;")
-        area.setWidget(w)
-        return area
-
-    def _on_hotkey_captured(self, combo):
-        if self.ui.set_hotkey(combo):
-            QMessageBox.information(self, "MyWhisper",
-                                    f"הקיצור עודכן ל-{combo}. נסה אותו עכשיו בכל שדה טקסט.")
-        else:
-            QMessageBox.warning(self, "MyWhisper",
-                                f"לא ניתן להגדיר את הקיצור '{combo}'. נסה צירוף אחר.")
-            self._hk_edit.reset()
-
-    def _apply_preset(self, combo):
-        """Set a ready-made combo without needing the key-capture interaction."""
-        if self.ui.set_hotkey(combo):
-            self._hk_edit._current = combo
-            self._hk_edit.setText(combo)
-            QMessageBox.information(self, "MyWhisper",
-                                    f"הקיצור עודכן ל-{combo}. נסה אותו עכשיו בכל שדה טקסט.")
-        else:
-            QMessageBox.warning(self, "MyWhisper",
-                                f"'{combo}' תפוס בתוכנה אחרת. נסה צירוף אחר.")
-
-    def _refresh_clip_count(self):
-        n = self.ui.clip_count()
-        self._clip_count_lbl.setText(f"{n} פריטים שמורים" if n else "עדיין ריק")
-
-    def _on_clip_pause_toggle(self, on):
-        self.ui.set_clip_paused(bool(on))
-
-    def _clear_clips(self):
-        n = self.ui.clip_count()
-        if not n:
-            return
-        box = QMessageBox(self)
-        box.setIcon(QMessageBox.Warning)
-        box.setWindowTitle("MyWhisper")
-        box.setText(f"למחוק את היסטוריית ההעתקות? {n} פריטים יימחקו לצמיתות.")
-        wipe = box.addButton("מחק הכל", QMessageBox.DestructiveRole)
-        cancel = box.addButton("ביטול", QMessageBox.RejectRole)
-        box.setDefaultButton(cancel)
-        box.setEscapeButton(cancel)
-        box.exec()
-        if box.clickedButton() is not wipe:
-            return
-        self.ui.clear_clips()
-        self._refresh_clip_count()
-        self._toast.show_message("היסטוריית ההעתקות נמחקה", msec=3000)
-
-    def _refresh_model_status(self):
-        st = self.ui.model_status()
-        if not st:  # not wired (tests / standalone UI) — hide the row
-            self._status_lbl.setText("—")
-            self._status_sub.setText("")
-            return
-        ok = "#2ea043"
-        state = st.get("state")
-        dev = (st.get("device") or "").lower()
-        if state == "ready":
-            where = "על ה-GPU" if dev == "cuda" else "על המעבד (CPU)"
-            color, text = ok, f"טעון ומוכן — רץ {where}"
-            sub = ("המודל שמור בזיכרון, כך שהתמלול מתחיל מיד."
-                   if dev == "cuda" else
-                   "רץ על המעבד — איטי בהרבה מ-GPU. בדוק דרייבר NVIDIA וספריות CUDA.")
-        elif state == "loading":
-            color, text = self.p["accent"], "נטען…"
-            sub = "בהרצה הראשונה המודל גם יורד מהרשת (~1.5–3GB) — פעם אחת בלבד."
-        else:
-            color, text = self.p["text_muted"], "משוחרר מהזיכרון"
-            sub = ("שוחרר כדי לפנות משאבים אחרי חוסר פעילות או בזמן משחק במסך מלא. "
-                   "ייטען מחדש אוטומטית בלחיצה הבאה על הקיצור.")
-        if st.get("fallback"):
-            sub += "  ⚠️ טעינת ה-GPU נכשלה, לכן בוצעה נפילה למעבד."
-        self._status_dot.setStyleSheet(f"color:{color}; font-size:15px;")
-        self._status_lbl.setText(text)
-        self._status_sub.setText(sub)
-        model = st.get("model")
-        self._status_lbl.setToolTip(model or "")
-
-    def _show_changelog(self):
-        ChangelogDialog(self, self.p).exec()
 
     # ---------------- updates ----------------
-    def _on_check_update(self):
-        self._upd_btn.setEnabled(False)
-        _set_role(self._upd_status, "hint")
-        self._upd_status.setText("בודק עדכונים…")
-        threading.Thread(
-            target=lambda: self._update_result.emit(self.ui.check_update()),
-            daemon=True).start()
 
-    def _on_update_result(self, latest):
-        self._upd_btn.setEnabled(True)
-        if not latest:
-            self._upd_status.setText("בדיקת העדכונים נכשלה — בדוק את החיבור לאינטרנט.")
-            self._upd_now_btn.setVisible(False)
-            return
-        if _version_gt(latest, APP_VERSION):
-            self._upd_status.setText(f"עדכון זמין: v{latest} (מותקן: v{APP_VERSION})")
-            self._upd_now_btn.setVisible(True)
-        else:
-            _set_role(self._upd_status, "statusok")
-            self._upd_status.setText("✓ מותקנת הגרסה האחרונה")
-            self._upd_now_btn.setVisible(False)
-
-    def _on_update_now(self):
-        if self.ui.do_update():
-            QMessageBox.information(
-                self, "MyWhisper",
-                "העדכון החל בחלון נפרד. האפליקציה תיסגר ותיפתח מחדש אוטומטית "
-                "בסיום. אל תסגור את חלון העדכון.")
-        else:
-            QMessageBox.warning(
-                self, "MyWhisper",
-                "לא ניתן להפעיל את העדכון. עדכן ידנית בעזרת פקודת ההתקנה מה-README.")
-
-    def _populate_mics(self):
-        self._mic_combo.blockSignals(True)
-        self._mic_combo.clear()
-        self._mic_combo.addItem("ברירת מחדל של המערכת", "")
-        for name in self.ui.list_input_devices():
-            self._mic_combo.addItem(name, name)
-        current = self.ui.config.get("input_device", "")
-        idx = self._mic_combo.findData(current)
-        self._mic_combo.setCurrentIndex(idx if idx >= 0 else 0)
-        self._mic_combo.blockSignals(False)
-
-    def _on_mic_changed(self, _idx):
-        if self._mic_testing:
-            self._stop_mic_test()  # the old device stream is stale now
-        self.ui.set_input_device(self._mic_combo.currentData() or "")
-
-    def _toggle_mic_test(self):
-        if self._mic_testing:
-            self._stop_mic_test()
-            return
-        device = self._mic_combo.currentData() or ""
-        if not self.ui.mic_test_start(device):
-            QMessageBox.warning(self, "MyWhisper",
-                                "לא ניתן לפתוח את המיקרופון הזה. בחר התקן אחר מהרשימה.")
-            return
-        self._mic_testing = True
-        self._mic_detected = False
-        self._mic_test_btn.setText("עצור בדיקה")
-        self._mic_status.setText("דבר עכשיו כדי לבדוק…")
-        self._mic_timer.start(50)
-
-    def _stop_mic_test(self):
-        self._mic_timer.stop()
-        self.ui.mic_test_stop()
-        self._mic_testing = False
-        self._mic_test_btn.setText("בדוק מיקרופון")
-        self._mic_level.setValue(0)
-
-    def _update_mic_level(self):
-        lvl = self.ui.mic_level()
-        self._mic_level.setValue(int(max(0.0, min(1.0, lvl)) * 100))
-        if lvl > 0.06:
-            self._mic_detected = True
-        # Only restyle on an actual transition — this runs every 50ms.
-        role = "statusok" if self._mic_detected else "hint"
-        if self._mic_status.objectName() != role:
-            _set_role(self._mic_status, role)
-        self._mic_status.setText("✓ קלט זוהה — המיקרופון עובד" if self._mic_detected
-                                 else "דבר עכשיו כדי לבדוק…")
-
-    def _on_sound_toggle(self, on):
-        self.ui.config["sounds"] = bool(on)
-        self.ui.on_change(self.ui.config)
-
-    def _populate_llm_models(self):
-        self._llm_combo.blockSignals(True)
-        self._llm_combo.clear()
-        models = self.ui.llm_list_models()
-        if models:
-            for m in models:
-                self._llm_combo.addItem(m, m)
-            idx = self._llm_combo.findData(self.ui.config.get("llm_model", ""))
-            self._llm_combo.setCurrentIndex(idx if idx >= 0 else 0)
-            self._llm_combo.setEnabled(True)
-            self._llm_status.setText(f"Ollama זוהה · {len(models)} מודלים מותקנים")
-        else:
-            self._llm_combo.addItem("— לא זוהה Ollama —", "")
-            self._llm_combo.setEnabled(False)
-            self._llm_status.setText(
-                "Ollama לא זוהה. התקן והפעל אותו (ollama.com), הורד מודל, ולחץ רענן.")
-        self._llm_combo.blockSignals(False)
-
-    def _on_llm_toggle(self, on):
-        self.ui.config["llm_polish"] = bool(on)
-        # Adopt the currently shown model if none is saved yet, so enabling it
-        # actually does something without a second click.
-        if on and not self.ui.config.get("llm_model") and self._llm_combo.currentData():
-            self.ui.config["llm_model"] = self._llm_combo.currentData()
-        self.ui.on_change(self.ui.config)
-
-    def _on_llm_model_changed(self, _idx):
-        self.ui.config["llm_model"] = self._llm_combo.currentData() or ""
-        self.ui.on_change(self.ui.config)
-
-    def _on_llm_compare_toggle(self, on):
-        self.ui.config["llm_compare"] = bool(on)
-        # Comparison needs a model; adopt the shown one if none saved yet.
-        if on and not self.ui.config.get("llm_model") and self._llm_combo.currentData():
-            self.ui.config["llm_model"] = self._llm_combo.currentData()
-        self.ui.on_change(self.ui.config)
-
-    def _on_llm_style_toggle(self, on):
-        # Off = "correct" (fix errors only); On = "rewrite" (professional
-        # rephrase kept close to the original).
-        self.ui.config["llm_style"] = "rewrite" if on else "correct"
-        self.ui.on_change(self.ui.config)
-
-    def _on_volume(self, val):
-        self._vol_lbl.setText(f"{val}%")
-        self.ui.config["sound_volume"] = round(val / 100.0, 3)
-        self.ui.on_change(self.ui.config)
-
-    def _replace_sound(self, cue):
-        path, _ = QFileDialog.getOpenFileName(
-            self, "בחר קובץ שמע", "",
-            "Audio (*.wav *.mp3 *.m4a *.ogg *.flac *.aac);;All files (*.*)")
-        if not path:
-            return
-        ok = self.ui.import_sound(cue, path)
-        QMessageBox.information(self, "MyWhisper",
-                               "הצליל הוחלף בהצלחה." if ok else "החלפת הצליל נכשלה.")
 
     # ---------------- helpers ----------------
     def _tool_btn(self, icon_name, text, cb, danger=False):
@@ -1687,6 +716,7 @@ class MainWindow(FramelessWindow):
         if danger:
             b.setProperty("variant", "danger")
         b.setIcon(icons.icon(icon_name, self.p["danger"] if danger else self.p["text_muted"], 16))
+        b.setMinimumHeight(34)
         b.setCursor(Qt.PointingHandCursor)
         b.clicked.connect(lambda: cb())
         return b

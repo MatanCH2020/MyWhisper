@@ -195,14 +195,16 @@ class ClipPicker(QWidget):
         if not cid:
             return
         row = self.list.currentRow()
-        self._on_delete(cid)
+        if not self._on_delete(cid):
+            return
         self._entries = [e for e in self._entries if e.get("id") != cid]
         self._apply_filter()
         if self.list.count():
             self.list.setCurrentRow(min(row, self.list.count() - 1))
 
     def _clear_all(self):
-        self._on_clear()
+        if self._on_clear() is False:
+            return
         self._entries = []
         self._apply_filter()
 

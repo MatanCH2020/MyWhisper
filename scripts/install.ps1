@@ -1,60 +1,48 @@
-# MyWhisper one-line installer.
-# From any PowerShell window:
-#   irm https://raw.githubusercontent.com/MatanCH2020/MyWhisper/main/scripts/install.ps1 | iex
-#
-# What it does: installs Git if missing, clones (or updates) the repo into
-# %USERPROFILE%\MyWhisper, runs setup.ps1 (Python 3.12 venv + all deps incl.
-# CUDA), puts a MyWhisper shortcut on the Desktop, and launches the app.
-# On update it also closes the running instance first so the new code takes over.
-
+# Stable-release installer. Existing installations use the transactional updater.
 $ErrorActionPreference = "Stop"
 $RepoUrl = "https://github.com/MatanCH2020/MyWhisper.git"
 $InstallDir = Join-Path $env:USERPROFILE "MyWhisper"
-
-Write-Host ""
-Write-Host "=== MyWhisper installer ===" -ForegroundColor Cyan
-Write-Host "Install dir: $InstallDir" -ForegroundColor DarkGray
-
-# 1. Git
+function Assert-NativeSuccess([string]$Step) {
+    if ($LASTEXITCODE -ne 0) { throw "$Step failed with exit code $LASTEXITCODE" }
+}
+$release = Invoke-RestMethod -Uri "https://api.github.com/repos/MatanCH2020/MyWhisper/releases/latest" -Headers @{"User-Agent"="MyWhisper"}
+$tag = $release.tag_name
+if ($release.draft -or $release.prerelease -or $tag -notmatch '^v?\d+\.\d+\.\d+$') {
+    throw "No valid stable release was found"
+}
 if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
-    Write-Host "Git not found - installing via winget..." -ForegroundColor Yellow
     winget install -e --id Git.Git --accept-source-agreements --accept-package-agreements
-    $env:Path = [Environment]::GetEnvironmentVariable("Path", "Machine") + ";" +
-                [Environment]::GetEnvironmentVariable("Path", "User")
-    if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
-        Write-Host "Git installed but not visible yet - open a new terminal and re-run the install command." -ForegroundColor Red
-        exit 1
+    Assert-NativeSuccess "Git installation"
+    $env:Path = [Environment]::GetEnvironmentVariable("Path", "Machine") + ";" + [Environment]::GetEnvironmentVariable("Path", "User")
+    if (-not (Get-Command git -ErrorAction SilentlyContinue)) { throw "Reopen PowerShell so Git is available" }
+}
+if (Test-Path -LiteralPath (Join-Path $InstallDir ".git")) {
+    # Exact-release bootstrap gives older installations the safe updater too.
+    # No process is killed; the updater refuses to change a running installation.
+    $cfg = Get-Content -LiteralPath (Join-Path $InstallDir ".venv\pyvenv.cfg")
+    $homeLine = $cfg | Where-Object { $_ -match '^home\s*=' } | Select-Object -First 1
+    if (-not $homeLine) { throw "Cannot find the installed Python environment" }
+    $basePy = Join-Path (($homeLine -split '=', 2)[1].Trim()) "python.exe"
+    $bootstrap = Join-Path ([IO.Path]::GetTempPath()) ("mywhisper-updater-" + [guid]::NewGuid().ToString('N') + ".py")
+    try {
+        Invoke-WebRequest -UseBasicParsing -Uri "https://raw.githubusercontent.com/MatanCH2020/MyWhisper/$tag/app/updater.py" -OutFile $bootstrap
+        Remove-Item Env:__PYVENV_LAUNCHER__ -ErrorAction SilentlyContinue
+        & $basePy $bootstrap --root $InstallDir --tag $tag
+        Assert-NativeSuccess "Update"
+    } finally {
+        Remove-Item -LiteralPath $bootstrap -ErrorAction SilentlyContinue
+    }
+    return
+}
+if (Test-Path -LiteralPath $InstallDir) {
+    if (Get-ChildItem -LiteralPath $InstallDir -Force | Select-Object -First 1) {
+        throw "The installation folder already contains files and is not a Git checkout"
     }
 }
-
-# Stop any running instance first, so an update isn't blocked by locked files
-# and the new code takes over on launch below.
-function Stop-MyWhisper {
-    Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object {
-        $_.Name -eq "pythonw.exe" -and $_.CommandLine -and
-        $_.CommandLine -match "main\.py" -and $_.CommandLine -like "*$InstallDir*"
-    } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
-}
-Stop-MyWhisper
-Start-Sleep -Milliseconds 800
-
-# 2. Clone or update
-if (Test-Path (Join-Path $InstallDir ".git")) {
-    Write-Host "Existing install found - updating..." -ForegroundColor Cyan
-    git -C $InstallDir pull --ff-only
-} else {
-    Write-Host "Cloning repository..." -ForegroundColor Cyan
-    git clone $RepoUrl $InstallDir
-}
-
-# 3. Python 3.12 venv + dependencies (setup.ps1 also creates config.json)
-& powershell -ExecutionPolicy Bypass -File (Join-Path $InstallDir "scripts\setup.ps1")
-if ($LASTEXITCODE -ne 0) {
-    Write-Host "Setup failed - see messages above." -ForegroundColor Red
-    exit 1
-}
-
-# 4. Desktop shortcut -> silent launcher (no console window)
+git clone --branch $tag --single-branch $RepoUrl $InstallDir
+Assert-NativeSuccess "Repository clone"
+& powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $InstallDir "scripts\setup.ps1")
+Assert-NativeSuccess "Setup"
 $ws = New-Object -ComObject WScript.Shell
 $desktop = [Environment]::GetFolderPath("Desktop")
 $lnk = $ws.CreateShortcut((Join-Path $desktop "MyWhisper.lnk"))
@@ -62,21 +50,7 @@ $lnk.TargetPath = "wscript.exe"
 $lnk.Arguments = '"' + (Join-Path $InstallDir "scripts\run_mywishper.vbs") + '"'
 $lnk.WorkingDirectory = $InstallDir
 $lnk.Description = "MyWhisper - Hebrew dictation"
-$icon = Join-Path $InstallDir "app\assets\icon.ico"
-if (Test-Path $icon) { $lnk.IconLocation = "$icon,0" }
+$lnk.IconLocation = Join-Path $InstallDir "app\assets\icon.ico"
 $lnk.Save()
-
-# 5. Launch the app now (silent, to the tray). Stop a leftover instance first
-# in case one was started during setup.
-Stop-MyWhisper
-Start-Sleep -Milliseconds 500
-$vbs = Join-Path $InstallDir "scripts\run_mywishper.vbs"
-Start-Process wscript.exe -ArgumentList ('"' + $vbs + '"') -WorkingDirectory $InstallDir
-
-Write-Host ""
-Write-Host "=== Installation complete ===" -ForegroundColor Green
-Write-Host "MyWhisper is starting - look for the microphone icon in the system tray." -ForegroundColor White
-Write-Host "First run downloads the Whisper model (~1.5-3 GB, one time); the tray icon" -ForegroundColor DarkGray
-Write-Host "is blue while it loads and turns grey when ready. A Desktop shortcut was created." -ForegroundColor DarkGray
-Write-Host "Start with Windows (optional):" -ForegroundColor White
-Write-Host "  powershell -ExecutionPolicy Bypass -File `"$InstallDir\scripts\install_autostart.ps1`"" -ForegroundColor DarkGray
+Start-Process -WindowStyle Hidden -FilePath wscript.exe -ArgumentList $lnk.Arguments -WorkingDirectory $InstallDir
+Write-Host "Installation verified. MyWhisper is starting." -ForegroundColor Green

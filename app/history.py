@@ -13,6 +13,8 @@ import uuid
 from datetime import datetime
 from pathlib import Path
 
+from safe_json import atomic_save, read_json
+
 log = logging.getLogger("history")
 
 HISTORY_PATH = Path(__file__).resolve().parent.parent / "history.json"
@@ -22,22 +24,14 @@ _lock = threading.Lock()
 
 
 def _read():
-    if not HISTORY_PATH.exists():
-        return []
-    try:
-        with open(HISTORY_PATH, "r", encoding="utf-8") as f:
-            entries = json.load(f)
-    except (json.JSONDecodeError, OSError):
-        return []
-    return entries if isinstance(entries, list) else []
+    return read_json(HISTORY_PATH, [], lambda items: isinstance(items, list) and all(
+        isinstance(e, dict) and isinstance(e.get("text"), str)
+        and isinstance(e.get("time", ""), str)
+        and ("id" not in e or isinstance(e["id"], str)) for e in items))
 
 
 def _write(entries):
-    try:
-        with open(HISTORY_PATH, "w", encoding="utf-8") as f:
-            json.dump(entries, f, ensure_ascii=False, indent=2)
-    except OSError as e:
-        log.error("Failed to write: %s", e)
+    return atomic_save(HISTORY_PATH, entries)
 
 
 def _new_id() -> str:
@@ -72,7 +66,7 @@ def add(text: str):
                            "time": datetime.now().strftime("%Y-%m-%d %H:%M"),
                            "text": text})
         del entries[MAX_ENTRIES:]
-        _write(entries)
+        return _write(entries)
 
 
 def update(entry_id: str, new_text: str):
@@ -85,8 +79,8 @@ def update(entry_id: str, new_text: str):
         for e in entries:
             if e.get("id") == entry_id:
                 e["text"] = new_text
-                _write(entries)
-                return
+                return _write(entries)
+        return False
 
 
 def delete(entry_id: str):
@@ -100,8 +94,7 @@ def delete(entry_id: str):
         for i, e in enumerate(entries):
             if e.get("id") == entry_id:
                 removed = entries.pop(i)
-                _write(entries)
-                return removed, i
+                return (removed, i) if _write(entries) else None
         return None
 
 
@@ -119,13 +112,10 @@ def restore(entry: dict, index: int):
             return
         entries.insert(max(0, min(index, len(entries))), entry)
         del entries[MAX_ENTRIES:]
-        _write(entries)
+        return _write(entries)
 
 
 def clear():
     with _lock:
-        try:
-            if HISTORY_PATH.exists():
-                HISTORY_PATH.unlink()
-        except OSError:
-            pass
+        _read()  # Preserve corrupt data / detect unreadable files before replacing.
+        return _write([])

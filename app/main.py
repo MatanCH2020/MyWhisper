@@ -5,6 +5,9 @@ transcribed locally with faster-whisper (Hebrew, with punctuation) and pasted
 into whatever field has focus.
 """
 import ctypes
+import enum
+import os
+import updater
 import subprocess
 import sys
 import threading
@@ -36,17 +39,18 @@ def _acquire_single_instance():
         return True  # never block startup if the guard itself errors
 
 
-if not _acquire_single_instance():
+if __name__ == "__main__" and not _acquire_single_instance():
     print("[mywishper] Another instance is already running. Exiting.")
     sys.exit(0)
 
 import applog
-applog.setup()  # before the component imports so their import-time logs are captured
+if __name__ == "__main__":
+    applog.setup()
 
 import logging
 log = logging.getLogger("main")
 
-from PySide6.QtCore import QTimer
+from PySide6.QtCore import QObject, QTimer, Signal, Slot
 from PySide6.QtGui import QIcon, QImage
 from PySide6.QtWidgets import QApplication
 
@@ -55,6 +59,7 @@ import corrections
 import history
 import llm
 import sounds
+import safe_json
 from config import load_config, save_config
 from recorder import Recorder, has_input_device, list_input_devices, MicMonitor
 from transcriber import Transcriber
@@ -65,8 +70,29 @@ from paste import paste_text
 from tray import Tray
 
 
-class Mywishper:
-    def __init__(self):
+class State(enum.Enum):
+    """Explicit states for the toggle-based dictation state machine."""
+    IDLE = "idle"
+    RECORDING = "recording"
+    TRANSCRIBING = "transcribing"
+
+
+class Mywishper(QObject):
+    _worker_finished = Signal()
+    _load_finished = Signal(bool)
+    _storage_error = Signal(str)
+    _update_prepared = Signal(str, str)
+
+    def __init__(self, startup=False):
+        super().__init__()
+        self._startup = startup
+        self._hotkey_ready = False
+        self._closing = False
+        self._updating = False
+        self._update_prepared.connect(self._launch_update)
+        self._worker_finished.connect(self._finish_transcription)
+        self._load_finished.connect(self._finish_load)
+        self._storage_error.connect(self._show_storage_error)
         self.config = load_config()
         self._apply_sound_config()
 
@@ -97,7 +123,7 @@ class Mywishper:
             english_terms=corrections.english_terms,
             add_english_term=corrections.add_english_term,
             remove_english_term=corrections.remove_english_term,
-            llm_list_models=llm.list_models,
+            llm_list_models=lambda: llm.list_models(self.config.get("llm_url", llm.DEFAULT_URL)),
         )
         self.tray = Tray(
             on_quit=self.quit,
@@ -105,6 +131,7 @@ class Mywishper:
             hotkey=self.config.get("hotkey"),
         )
         self.ui.notify = self.tray.notify  # balloon hints (minimize-to-tray etc.)
+        safe_json.set_error_handler(self._storage_error.emit)
         self.hotkeys = HotkeyManager(self.config.get("hotkey"), self.toggle)
         # Clipboard history: a watcher on the Qt clipboard plus its own hotkey.
         self.clipwatch = None
@@ -118,7 +145,7 @@ class Mywishper:
                 self.config.get("clipboard_hotkey", "ctrl+`"), self.show_clips)
         self.ui.clip_paused = lambda: bool(self.clipwatch and self.clipwatch.is_paused())
         self.ui.set_clip_paused = self._set_clip_paused
-        self.ui.clear_clips = clips.clear
+        self.ui.clear_clips = self.clipwatch.clear_history if self.clipwatch else clips.clear
         self.ui.clip_count = lambda: len(clips.load())
         self.ui.set_hotkey = self._set_hotkey            # live hotkey editor
         self.ui.list_input_devices = lambda: [n for _, n in list_input_devices()]
@@ -132,7 +159,7 @@ class Mywishper:
         self.ui.do_update = self._do_update
 
         self._lock = threading.Lock()
-        self._busy = False  # True while transcribing (ignore toggles)
+        self._state = State.IDLE
         self._esc_hook = None   # Esc-to-cancel, registered only while recording
         self._max_timer = None  # auto-stop for a forgotten recording
         self._loading = False           # model load in progress
@@ -150,7 +177,12 @@ class Mywishper:
         """Called from the settings UI when sound options change: apply + persist."""
         self.config = config
         self._apply_sound_config()
-        save_config(self.config)
+        return save_config(self.config)
+
+    @Slot(str)
+    def _show_storage_error(self, message):
+        if not self._closing:
+            self.tray.notify("MyWhisper — שמירת נתונים", message, "warning")
 
     def _set_hotkey(self, new_hotkey):
         """Live-rebind the global hotkey from the settings UI. Returns True on
@@ -160,14 +192,22 @@ class Mywishper:
             return False
         if new_hotkey == self.config.get("hotkey"):
             return True
+        previous = self.config.get("hotkey")
         try:
             self.hotkeys.rebind(new_hotkey)
         except Exception:
             log.exception("Failed to set hotkey '%s'", new_hotkey)
             return False
         self.config["hotkey"] = new_hotkey
-        save_config(self.config)
+        if not save_config(self.config):
+            self.config["hotkey"] = previous
+            try:
+                self.hotkeys.rebind(previous)
+            except Exception:
+                log.exception("Could not restore the previous hotkey binding")
+            return False
         self.tray.set_hotkey_label(new_hotkey)
+        self._hotkey_ready = True
         log.info("Hotkey changed to '%s'.", new_hotkey)
         return True
 
@@ -195,7 +235,7 @@ class Mywishper:
             self._clip_picker = ClipPicker(
                 self.ui.p, on_pick=self._use_clip,
                 on_delete=lambda cid: clips.delete(cid),
-                on_clear=clips.clear)
+                on_clear=self.ui.clear_clips)
         if self._clip_picker.isVisible():
             self._clip_picker.hide()   # same key closes it again
             return
@@ -260,26 +300,54 @@ class Mywishper:
             return None
 
     def _do_update(self):
-        """Launch the in-place updater in a visible window, then quit so it can
-        replace the running process. Returns False if it couldn't be launched."""
-        updater = Path(__file__).resolve().parent.parent / "scripts" / "update.ps1"
-        try:
-            subprocess.Popen(
-                ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass",
-                 "-File", str(updater)],
-                cwd=str(updater.parent))
-        except Exception:
-            log.exception("Failed to launch updater")
+        """Prepare in the background while the current installation stays usable."""
+        if self._updating or self._state != State.IDLE or self._loading:
             return False
-        QTimer.singleShot(800, self.quit)
+        self._updating = True
+        root = Path(__file__).resolve().parent.parent
+        def prepare():
+            try:
+                tag = updater.prepare(root)
+                self._update_prepared.emit(tag, "")
+            except Exception as exc:
+                self._update_prepared.emit("", str(exc))
+        threading.Thread(target=prepare, daemon=True).start()
         return True
 
+    @Slot(str, str)
+    def _launch_update(self, tag, error):
+        if self._closing:
+            return
+        if error:
+            self._updating = False
+            log.warning("Update preflight failed: %s", error)
+            self.tray.notify("MyWhisper — העדכון נעצר", error, "warning")
+            return
+        script = Path(__file__).resolve().parent.parent / "scripts" / "update.ps1"
+        try:
+            subprocess.Popen(
+                ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File",
+                 str(script), "-Tag", tag, "-ParentPid", str(os.getpid())],
+                cwd=str(script.parent), creationflags=subprocess.CREATE_NEW_CONSOLE)
+        except OSError:
+            self._updating = False
+            log.exception("Could not start updater")
+            self.tray.notify("MyWhisper", "לא ניתן להפעיל את העדכון.", "warning")
+            return
+        self.quit()
+
+
     def toggle(self):
+        if self._closing or self._updating:
+            return
         log.info("Hotkey toggle triggered.")
         self._mark_used()
         with self._lock:
+            if self._state == State.TRANSCRIBING:
+                return
             if not self.transcriber.is_loaded():
                 if not self._model_ever_ready:
+                    self._start_load_async()
                     # First-ever load may still be downloading — don't record yet.
                     self.tray.notify("MyWhisper",
                                      "מודל התמלול עדיין נטען — נסה שוב בעוד רגע.")
@@ -287,7 +355,7 @@ class Mywishper:
                 # Released to save resources: warm it up now; the transcription
                 # worker waits for it. Recording itself needs no model.
                 self._start_load_async()
-            if self._busy:
+            if self._state == State.TRANSCRIBING:
                 return  # mid-transcription, ignore extra presses
             try:
                 if not self.recorder.recording:
@@ -307,7 +375,7 @@ class Mywishper:
             self.recorder.stop()
         except Exception:
             pass
-        self._busy = False
+        self._state = State.IDLE
         self.tray.set_state("idle", "MyWhisper — שגיאה")
         self.ui.set_overlay_state("idle")
         sounds.error()
@@ -319,6 +387,7 @@ class Mywishper:
 
     def _start_recording(self):
         self.recorder.start()
+        self._state = State.RECORDING
         self.tray.set_state("recording", "MyWhisper — מקליט...")
         self.ui.set_overlay_state("recording")
         sounds.start_recording()
@@ -348,10 +417,15 @@ class Mywishper:
     def cancel_recording(self):
         """Discard the current recording without transcribing (Esc)."""
         with self._lock:
-            if self._busy or not self.recorder.recording:
+            if self._state == State.TRANSCRIBING or not self.recorder.recording:
                 return
             self._end_recording_hooks()
-            self.recorder.stop()  # audio discarded
+            try:
+                self.recorder.stop()  # audio discarded
+            except Exception:
+                log.exception("Microphone failed while cancelling")
+            finally:
+                self._state = State.IDLE
             sounds.stop_recording()
             self.tray.set_state("idle", "MyWhisper — מוכן")
             self.ui.set_overlay_state("idle")
@@ -360,13 +434,17 @@ class Mywishper:
     def _auto_stop(self):
         """Stop-and-transcribe when the recording cap is reached (forgotten mic)."""
         with self._lock:
-            if self._busy or not self.recorder.recording:
+            if self._state == State.TRANSCRIBING or not self.recorder.recording:
                 return
             log.warning("Max recording length reached — stopping automatically.")
-            self._stop_and_transcribe()
+            try:
+                self._stop_and_transcribe()
+            except Exception:
+                log.exception("Microphone failed during automatic stop")
+                self._recover_from_error()
 
     def _stop_and_transcribe(self):
-        self._busy = True
+        self._state = State.TRANSCRIBING
         self._end_recording_hooks()
         audio = self.recorder.stop()
         sounds.stop_recording()
@@ -425,7 +503,7 @@ class Mywishper:
                         2.0 + float(self.config.get("clipboard_restore_delay", 0.5)))
                 paste_text(out, self.config.get("restore_clipboard", True),
                            self.config.get("clipboard_restore_delay", 0.5))
-                log.info("-> %s", logical)
+                log.info("Transcription delivered (%d characters)", len(logical))
             else:
                 log.info("(empty transcription)")
                 sounds.error()
@@ -436,15 +514,25 @@ class Mywishper:
         except Exception:
             log.exception("Transcription failed")
             sounds.error()
+            self.tray.notify("MyWhisper — התמלול לא הושלם",
+                             "אפשר לנסות שוב. אם הטקסט כבר נשמר, הוא זמין בהיסטוריה.", "warning")
         finally:
+            self._worker_finished.emit()
+
+    @Slot()
+    def _finish_transcription(self):
+        self._state = State.IDLE
+        self._mark_used()
+        if not self._closing:
             self.tray.set_state("idle", "MyWhisper — מוכן")
             self.ui.set_overlay_state("idle")
-            self._busy = False
 
     def start(self):
         try:
             self.hotkeys.start()
+            self._hotkey_ready = True
         except Exception:
+            self._hotkey_ready = False
             log.exception("Hotkey registration failed")
             hk = self.config.get("hotkey")
             QTimer.singleShot(1500, lambda: self.tray.notify(
@@ -498,19 +586,27 @@ class Mywishper:
             self.transcriber.load()
         except Exception:
             log.exception("Model load failed")
-            self._loading = False
+            self._load_finished.emit(False)
+            return
+        self._load_finished.emit(True)
+
+    @Slot(bool)
+    def _finish_load(self, succeeded):
+        self._loading = False
+        if self._closing:
+            return
+        if not succeeded:
             self.tray.set_state("idle", "MyWhisper — שגיאה בטעינת המודל")
             self.tray.notify("MyWhisper — שגיאה",
                              "טעינת מודל התמלול נכשלה. בדוק את mywhisper.log.",
                              "warning")
             return
-        self._loading = False
         first_ready = not self._model_ever_ready
         self._model_ever_ready = True
         self._mark_used()  # start the idle countdown now that it's loaded
         # Don't clobber an active recording/transcribing state if this was a
         # background reload triggered mid-use.
-        if not self.recorder.recording and not self._busy:
+        if not self.recorder.recording and self._state == State.IDLE:
             self.tray.set_state("idle", "MyWhisper — מוכן")
         log.info("Model ready. Press the hotkey to dictate. (Quit from the tray icon.)")
         # A silent GPU->CPU fallback would otherwise only show as 10x slower
@@ -520,6 +616,15 @@ class Mywishper:
                 "MyWhisper — מצב CPU",
                 "טעינת ה-GPU נכשלה, התמלול ירוץ על המעבד (איטי יותר). "
                 "בדוק דרייבר NVIDIA וספריות CUDA (setup.ps1).", "warning")
+        elif first_ready and self._startup and self._hotkey_ready:
+            mic_name = self.config.get("input_device")
+            mic_available = (any(name == mic_name for _, name in list_input_devices())
+                             if mic_name else has_input_device())
+            if mic_available:
+                self.tray.notify(
+                    "MyWhisper — מוכן להכתבה",
+                    f"התוכנה פועלת ברקע. להקלטה לחץ {self.config.get('hotkey', 'ctrl+space')}.",
+                    duration_ms=4000)
 
     # ---- resource management: release the model when idle / gaming ----
     def _mark_used(self):
@@ -528,7 +633,7 @@ class Mywishper:
     def _resource_poll(self):
         """On the GUI thread every few seconds: free the model when the app has
         been idle or a fullscreen game/video is in the foreground."""
-        if (self._busy or self._loading or self.recorder.recording
+        if (self._state != State.IDLE or self._loading
                 or not self.transcriber.is_loaded()):
             return
         mins = self.config.get("idle_release_minutes", 10)
@@ -544,6 +649,18 @@ class Mywishper:
         log.info("Model released to free resources (%s).", reason)
 
     def quit(self):
+        # Let an in-flight transcription finish and paste before tearing down Qt.
+        if self._state == State.TRANSCRIBING or self._loading:
+            self.tray.notify("MyWhisper", "יש להמתין לסיום הפעולה לפני יציאה או עדכון.")
+            return
+        self._closing = True
+        if self.recorder.recording:
+            self.cancel_recording()
+        self.mic_monitor.stop()
+        if self.clip_hotkeys:
+            self.clip_hotkeys.stop()
+        if self.clipwatch:
+            self.clipwatch.close()
         try:
             self.hotkeys.stop()
         except Exception:
@@ -569,11 +686,13 @@ def main():
     icon_path = Path(__file__).resolve().parent / "assets" / "icon.ico"
     if icon_path.exists():
         qapp.setWindowIcon(QIcon(str(icon_path)))
-    app = Mywishper()  # loads the Whisper model
+    startup = "--startup" in sys.argv[1:]
+    app = Mywishper(startup=startup)  # loads the Whisper model
     app.start()
     # Open the window shortly after the event loop starts so it's visibly "there"
     # on launch (it also lives in the tray; closing the window keeps it running).
-    QTimer.singleShot(300, app.ui.open_settings)
+    if not startup:
+        QTimer.singleShot(300, app.ui.open_settings)
     sys.exit(qapp.exec())
 
 

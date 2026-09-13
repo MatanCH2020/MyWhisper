@@ -18,6 +18,7 @@ clip_images/
 
 # Logs and diagnostics
 *.log
+*.log.*
 *_log.txt
 diag*.txt
 
@@ -30,3 +31,10 @@ screen*.png
 # OS
 Thumbs.db
 desktop.ini
+
+# Recovery files may contain private user data.
+*.corrupt-*.bak
+.update-backups/
+.mywhisper-update.lock
+test-artifacts/
+/app/split_ui.py

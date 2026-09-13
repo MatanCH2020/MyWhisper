@@ -15,8 +15,11 @@ import difflib
 import json
 import logging
 import re
+import threading
 from functools import lru_cache
 from pathlib import Path
+
+from safe_json import atomic_save, read_json
 
 log = logging.getLogger("corrections")
 
@@ -77,47 +80,41 @@ _dict_cache = {"mtime": -1.0, "list": [], "set": set()}
 _eng_cache = {"mtime": -1.0, "list": []}
 
 
-def _load_corrections() -> dict:
+def _file_stamp(path):
     try:
-        mtime = CORRECTIONS_PATH.stat().st_mtime
+        stat = path.stat()
+        return (str(path.absolute()), stat.st_mtime_ns, stat.st_size)
     except OSError:
-        return {}
-    if mtime != _corr_cache["mtime"]:
-        try:
-            with open(CORRECTIONS_PATH, "r", encoding="utf-8") as f:
-                data = json.load(f)
-            _corr_cache["data"] = data if isinstance(data, dict) else {}
-        except (json.JSONDecodeError, OSError):
-            _corr_cache["data"] = {}
-        _corr_cache["mtime"] = mtime
+        return (str(path.absolute()), None, None)
+
+
+def _load_corrections() -> dict:
+    stamp = _file_stamp(CORRECTIONS_PATH)
+    if stamp != _corr_cache["mtime"] or stamp[1] is None:
+        _corr_cache["data"] = read_json(CORRECTIONS_PATH, {}, lambda d:
+            isinstance(d, dict) and all(isinstance(k, str) and isinstance(v, str)
+                                       for k, v in d.items()))
+        _corr_cache["mtime"] = stamp
     return _corr_cache["data"]
 
 
+_lock = threading.Lock()
+
+
 def _save_corrections(data: dict):
-    try:
-        with open(CORRECTIONS_PATH, "w", encoding="utf-8") as f:
-            json.dump(data, f, ensure_ascii=False, indent=2)
-    except OSError as e:
-        log.error("Failed to write: %s", e)
+    saved = atomic_save(CORRECTIONS_PATH, data)
+    if saved:
+        _corr_cache["mtime"] = -1.0
+    return saved
 
 
 def _load_dictionary() -> list:
-    """Approved words in the order they were added (oldest first)."""
-    try:
-        mtime = DICTIONARY_PATH.stat().st_mtime
-    except OSError:
-        _dict_cache.update(mtime=-1.0, list=[], set=set())
-        return []
-    if mtime != _dict_cache["mtime"]:
-        try:
-            with open(DICTIONARY_PATH, "r", encoding="utf-8") as f:
-                data = json.load(f)
-            words = [w for w in data if isinstance(w, str)] if isinstance(data, list) else []
-        except (json.JSONDecodeError, OSError):
-            words = []
-        _dict_cache["list"] = words
-        _dict_cache["set"] = set(words)
-        _dict_cache["mtime"] = mtime
+    """Approved words, oldest first; failed reads must not permit overwrites."""
+    stamp = _file_stamp(DICTIONARY_PATH)
+    if stamp != _dict_cache["mtime"] or stamp[1] is None:
+        words = read_json(DICTIONARY_PATH, [], lambda d:
+            isinstance(d, list) and all(isinstance(w, str) for w in d))
+        _dict_cache.update(list=words, set=set(words), mtime=stamp)
     return _dict_cache["list"]
 
 
@@ -130,45 +127,29 @@ def _dictionary_set() -> set:
 def _save_dictionary(words: list):
     """Persist the dictionary, preserving insertion order (newest last) so
     bias_terms() can favor recently approved words."""
-    try:
-        with open(DICTIONARY_PATH, "w", encoding="utf-8") as f:
-            json.dump(words, f, ensure_ascii=False, indent=2)
-    except OSError as e:
-        log.error("Failed to write: %s", e)
+    saved = atomic_save(DICTIONARY_PATH, words)
+    if saved:
+        _dict_cache["mtime"] = -1.0
+    return saved
 
 
 def _save_english_terms(terms: list):
-    try:
-        with open(ENGLISH_TERMS_PATH, "w", encoding="utf-8") as f:
-            json.dump(terms, f, ensure_ascii=False, indent=2)
-    except OSError as e:
-        log.error("Failed to write: %s", e)
+    saved = atomic_save(ENGLISH_TERMS_PATH, terms)
+    if saved:
+        _eng_cache["mtime"] = -1.0
+    return saved
 
 
 def _load_english_terms() -> list:
-    """User's English/tech glossary, seeded with defaults on first load.
-
-    When english_terms.json does not exist yet it is created from
-    _DEFAULT_ENGLISH_TERMS so mixed dictation works out of the box.
-    """
-    if not ENGLISH_TERMS_PATH.exists():
-        _save_english_terms(_DEFAULT_ENGLISH_TERMS)
-        _eng_cache.update(mtime=-1.0, list=list(_DEFAULT_ENGLISH_TERMS))
-    try:
-        mtime = ENGLISH_TERMS_PATH.stat().st_mtime
-    except OSError:
-        _eng_cache.update(mtime=-1.0, list=[])
-        return []
-    if mtime != _eng_cache["mtime"]:
-        try:
-            with open(ENGLISH_TERMS_PATH, "r", encoding="utf-8") as f:
-                data = json.load(f)
-            terms = [t for t in data if isinstance(t, str) and t.strip()] \
-                if isinstance(data, list) else []
-        except (json.JSONDecodeError, OSError):
-            terms = []
-        _eng_cache["list"] = terms
-        _eng_cache["mtime"] = mtime
+    """Seed a missing glossary, while preserving corrupt or unreadable originals."""
+    stamp = _file_stamp(ENGLISH_TERMS_PATH)
+    if stamp != _eng_cache["mtime"] or stamp[1] is None:
+        terms = read_json(ENGLISH_TERMS_PATH, list(_DEFAULT_ENGLISH_TERMS), lambda d:
+            isinstance(d, list) and all(isinstance(w, str) for w in d))
+        if stamp[1] is None:
+            _save_english_terms(terms)  # read_json blocks this if the file was unreadable
+            stamp = _file_stamp(ENGLISH_TERMS_PATH)
+        _eng_cache.update(list=terms, mtime=stamp)
     return _eng_cache["list"]
 
 
@@ -250,7 +231,8 @@ def apply(text: str) -> str:
     (no A->B, B->C chaining into A->C)."""
     if not text:
         return text
-    corr = _load_corrections()
+    with _lock:
+        corr = dict(_load_corrections())
     if not corr:
         return text
     alternation = "|".join(
@@ -265,10 +247,12 @@ def add_correction(wrong: str, right: str):
     wrong, right = _normalize(wrong), _normalize(right)
     if not wrong or not right or wrong == right:
         return
-    corr = _load_corrections()
-    corr[wrong] = right
-    _save_corrections(corr)
-    approve_word(right)
+    with _lock:
+        corr = dict(_load_corrections())
+        corr[wrong] = right
+        if not _save_corrections(corr):
+            return False
+    return approve_word(right)
 
 
 def approve_word(word: str):
@@ -276,28 +260,34 @@ def approve_word(word: str):
     w = _normalize(word)
     if not w:
         return
-    if w not in _dictionary_set():
-        _save_dictionary(_load_dictionary() + [w])
+    with _lock:
+        if w not in _dictionary_set():
+            return _save_dictionary(_load_dictionary() + [w])
+        return True
 
 
 def list_corrections() -> dict:
     """Return the current {wrong: right} map (for the management UI)."""
-    return _load_corrections()
+    with _lock:
+        return dict(_load_corrections())
 
 
 def remove_correction(wrong: str):
     """Forget a learned correction."""
-    corr = _load_corrections()
-    if wrong in corr:
-        del corr[wrong]
-        _save_corrections(corr)
+    with _lock:
+        corr = dict(_load_corrections())
+        if wrong in corr:
+            del corr[wrong]
+            return _save_corrections(corr)
+        return True
 
 
 # ---------------- English glossary ----------------
 
 def english_terms() -> list:
     """The user's English/tech glossary (seeded with defaults on first use)."""
-    return list(_load_english_terms())
+    with _lock:
+        return list(_load_english_terms())
 
 
 def add_english_term(term: str):
@@ -305,18 +295,21 @@ def add_english_term(term: str):
     term = (term or "").strip()
     if not term:
         return
-    terms = list(_load_english_terms())
-    if any(term.lower() == t.lower() for t in terms):
-        return
-    _save_english_terms(terms + [term])
+    with _lock:
+        terms = list(_load_english_terms())
+        if any(term.lower() == t.lower() for t in terms):
+            return
+        return _save_english_terms(terms + [term])
 
 
 def remove_english_term(term: str):
     """Remove an English term from the glossary (case-insensitive)."""
-    terms = _load_english_terms()
-    kept = [t for t in terms if t.lower() != (term or "").strip().lower()]
-    if len(kept) != len(terms):
-        _save_english_terms(kept)
+    with _lock:
+        terms = _load_english_terms()
+        kept = [t for t in terms if t.lower() != (term or "").strip().lower()]
+        if len(kept) != len(terms):
+            return _save_english_terms(kept)
+        return True
 
 
 def bias_terms() -> str:
@@ -327,12 +320,13 @@ def bias_terms() -> str:
     the most recently approved dictionary words fill the remaining slots, so the
     prompt stays bounded at _MAX_BIAS_TERMS.
     """
-    eng_terms = list(dict.fromkeys(_load_english_terms()))[:_MAX_BIAS_TERMS]
-    seen = set(eng_terms)
-    corr_terms = [v for v in dict.fromkeys(_load_corrections().values())
-                  if v not in seen][:max(0, _MAX_BIAS_TERMS - len(eng_terms))]
-    seen.update(corr_terms)
-    dict_terms = [w for w in _load_dictionary() if w not in seen]
+    with _lock:
+        eng_terms = list(dict.fromkeys(_load_english_terms()))[:_MAX_BIAS_TERMS]
+        seen = set(eng_terms)
+        corr_terms = [v for v in dict.fromkeys(_load_corrections().values())
+                      if v not in seen][:max(0, _MAX_BIAS_TERMS - len(eng_terms))]
+        seen.update(corr_terms)
+        dict_terms = [w for w in _load_dictionary() if w not in seen]
     remaining = _MAX_BIAS_TERMS - len(eng_terms) - len(corr_terms)
     terms = eng_terms + corr_terms + (dict_terms[-remaining:] if remaining > 0 else [])
     return " ".join(terms)

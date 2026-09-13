@@ -1,7 +1,11 @@
 # MyWhisper setup - creates a Python 3.12 venv and installs dependencies.
 # Run from the project root:  powershell -ExecutionPolicy Bypass -File setup.ps1
 
+param([switch]$SkipCuda)
 $ErrorActionPreference = "Stop"
+function Assert-NativeSuccess([string]$Step) {
+    if ($LASTEXITCODE -ne 0) { throw "$Step failed with exit code $LASTEXITCODE" }
+}
 $root = Split-Path $PSScriptRoot -Parent
 Set-Location $root
 
@@ -17,6 +21,7 @@ try {
 if (-not $py312) {
     Write-Host "Python 3.12 not found. Installing via winget..." -ForegroundColor Yellow
     winget install -e --id Python.Python.3.12 --accept-source-agreements --accept-package-agreements
+    Assert-NativeSuccess "Python installation"
     # Refresh PATH so the just-installed launcher is visible in this session.
     $env:Path = [Environment]::GetEnvironmentVariable("Path", "Machine") + ";" +
                 [Environment]::GetEnvironmentVariable("Path", "User")
@@ -39,13 +44,14 @@ try {
 } catch {}
 
 # Default config: copy the example on first install (config.json is per-user).
-if ((Test-Path "app\config.example.json") -and -not (Test-Path "config.json")) {
+$newConfig = -not (Test-Path "config.json")
+if ((Test-Path "app\config.example.json") -and $newConfig) {
     Copy-Item "app\config.example.json" "config.json"
     Write-Host "Created config.json from app\config.example.json" -ForegroundColor Green
 }
 
 # No NVIDIA card -> point the config at the CPU so the app doesn't try CUDA.
-if (-not $hasNvidia -and (Test-Path "config.json")) {
+if ($newConfig -and -not $hasNvidia -and (Test-Path "config.json")) {
     try {
         $cfg = Get-Content "config.json" -Raw | ConvertFrom-Json
         if ($cfg.device -eq "cuda") {
@@ -62,28 +68,35 @@ if (-not $hasNvidia -and (Test-Path "config.json")) {
 # 2. Create the virtual environment.
 if (-not (Test-Path ".venv")) {
     Write-Host "Creating virtual environment (.venv) with Python 3.12..." -ForegroundColor Cyan
-    Invoke-Expression "$py312 -m venv .venv"
+    & py -3.12 -m venv .venv
+    Assert-NativeSuccess "Virtual environment creation"
 } else {
     Write-Host ".venv already exists - reusing it." -ForegroundColor Green
 }
 
 $venvPy = Join-Path $root ".venv\Scripts\python.exe"
 
-# 3. Upgrade pip and install dependencies.
-Write-Host "Upgrading pip..." -ForegroundColor Cyan
-& $venvPy -m pip install --upgrade pip
+# 3. Verify the existing interpreter, then install the tested dependency set.
+& $venvPy -c "import sys; assert sys.version_info[:2] == (3, 12), 'Python 3.12 is required'"
+Assert-NativeSuccess "Python version check"
 
 Write-Host "Installing dependencies..." -ForegroundColor Cyan
 & $venvPy -m pip install -r requirements.txt
+Assert-NativeSuccess "Dependency installation"
 
-if ($hasNvidia) {
+if ($hasNvidia -and -not $SkipCuda) {
     Write-Host "NVIDIA GPU detected - installing CUDA libraries (large download, one time)..." -ForegroundColor Cyan
     & $venvPy -m pip install -r requirements-cuda.txt
+    Assert-NativeSuccess "CUDA dependency installation"
 } else {
-    Write-Host "No NVIDIA GPU detected - skipping CUDA libraries (transcription will run on the CPU)." -ForegroundColor Yellow
+    Write-Host "Skipping CUDA libraries (CPU install or explicit -SkipCuda)." -ForegroundColor Yellow
 }
 
 Write-Host ""
+& $venvPy -m pip check
+Assert-NativeSuccess "Dependency verification"
+& $venvPy (Join-Path $root "scripts\verify_install.py")
+Assert-NativeSuccess "Installation smoke check"
 Write-Host "=== Setup complete ===" -ForegroundColor Green
 Write-Host "Test the engine:   .\.venv\Scripts\python app\check_gpu.py" -ForegroundColor White
 Write-Host "Run the app:       .\.venv\Scripts\python app\main.py" -ForegroundColor White

@@ -3,7 +3,7 @@ drop shadow and native edge-resize, a branded title bar, a side nav rail, an
 iOS-style toggle switch, and a card frame.
 """
 from PySide6.QtCore import QEvent, QPointF, QRectF, Qt, Signal
-from PySide6.QtGui import QColor, QFont, QPainter
+from PySide6.QtGui import QColor, QFont, QPainter, QPen
 from PySide6.QtWidgets import (
     QFrame, QGraphicsDropShadowEffect, QHBoxLayout, QLabel, QPushButton,
     QVBoxLayout, QWidget, QCheckBox,
@@ -126,17 +126,18 @@ class TitleBar(QWidget):
         lay.addStretch(1)
 
         self._theme_btn = self._icon_btn("moon" if p["name"] == "light" else "sun",
-                                         p["text_muted"], on_theme)
+                                         p["text_muted"], on_theme, "החלף מצב תצוגה")
         for w in (self._theme_btn,
-                  self._icon_btn("minimize", p["text_muted"], on_min),
-                  self._icon_btn("close", p["text_muted"], on_close)):
+                  self._icon_btn("minimize", p["text_muted"], on_min, "מזער"),
+                  self._icon_btn("close", p["text_muted"], on_close, "סגור למגש")):
             lay.addWidget(w)
 
-    def _icon_btn(self, name, color, cb):
+    def _icon_btn(self, name, color, cb, tip):
         b = QPushButton()
         b.setProperty("variant", "icon")
-        b.setFixedSize(34, 30)
+        b.setFixedSize(38, 34)
         b.setIcon(icons.icon(name, color, 18))
+        b.setToolTip(tip)
         b.setCursor(Qt.PointingHandCursor)
         b.clicked.connect(lambda: cb())
         return b
@@ -157,7 +158,7 @@ class NavRail(QWidget):
     def __init__(self, palette, items):
         super().__init__()
         self.setObjectName("navrail")
-        self.setFixedWidth(168)
+        self.setFixedWidth(156)
         p = palette
         lay = QVBoxLayout(self)
         lay.setContentsMargins(10, 12, 10, 12)
@@ -194,6 +195,7 @@ class ToggleSwitch(QCheckBox):
         super().__init__()
         self._p = palette
         self.setChecked(checked)
+        self.setFocusPolicy(Qt.StrongFocus)
         self.setCursor(Qt.PointingHandCursor)
         self.setFixedSize(46, 26)
 
@@ -221,6 +223,11 @@ class ToggleSwitch(QCheckBox):
         x = self.width() - d - 3 if on else 3
         p.setBrush(QColor("#FFFFFF"))
         p.drawEllipse(QRectF(x, 3, d, d))
+        if self.hasFocus():
+            p.setPen(QPen(QColor(self._p["on_accent"] if on else self._p["accent"]), 2))
+            p.setBrush(Qt.NoBrush)
+            p.drawRoundedRect(QRectF(1, 1, self.width() - 2, self.height() - 2),
+                              self.height() / 2, self.height() / 2)
         p.end()
 
 

@@ -106,6 +106,10 @@ QPushButton {{
 }}
 QPushButton:hover {{ background: {p['hover']}; }}
 QPushButton:pressed {{ background: {p['border']}; }}
+QPushButton:focus {{
+    border: 2px solid {p['accent']};
+    padding: 5px 13px;
+}}
 
 QPushButton[variant="primary"] {{
     background: {p['accent']};
@@ -114,6 +118,10 @@ QPushButton[variant="primary"] {{
     font-weight: 600;
 }}
 QPushButton[variant="primary"]:hover {{ background: {p['accent_hover']}; }}
+QPushButton[variant="primary"]:focus {{
+    border: 2px solid {p['on_accent']};
+    padding: 4px 12px;
+}}
 
 QPushButton[variant="ghost"] {{
     background: transparent;
@@ -121,6 +129,12 @@ QPushButton[variant="ghost"] {{
     color: {p['text_muted']};
 }}
 QPushButton[variant="ghost"]:hover {{ background: {p['hover']}; color: {p['text']}; }}
+QPushButton[variant="ghost"]:focus {{
+    background: {p['hover']};
+    border: 1px solid {p['accent']};
+    padding: 5px 13px;
+    color: {p['text']};
+}}
 
 QPushButton[variant="danger"] {{
     background: transparent;
@@ -128,6 +142,11 @@ QPushButton[variant="danger"] {{
     color: {p['danger']};
 }}
 QPushButton[variant="danger"]:hover {{ background: {p['danger_soft']}; }}
+QPushButton[variant="danger"]:focus {{
+    background: {p['danger_soft']};
+    border: 1px solid {p['danger']};
+    padding: 5px 13px;
+}}
 
 QPushButton[variant="icon"] {{
     background: transparent;
@@ -136,6 +155,11 @@ QPushButton[variant="icon"] {{
     padding: 4px;
 }}
 QPushButton[variant="icon"]:hover {{ background: {p['hover']}; }}
+QPushButton[variant="icon"]:focus {{
+    background: {p['hover']};
+    border: 1px solid {p['accent']};
+    padding: 3px;
+}}
 
 QLineEdit {{
     background: {p['surface_alt']};
@@ -157,6 +181,7 @@ QComboBox {{
     font-size: 13px;
 }}
 QComboBox:hover {{ border: 1px solid {p['accent']}; }}
+QComboBox:focus {{ border: 1px solid {p['accent']}; }}
 QComboBox::drop-down {{ border: none; width: 22px; }}
 QComboBox::down-arrow {{
     width: 0; height: 0;
@@ -214,6 +239,7 @@ QScrollBar:horizontal {{ height: 0; }}
     font-size: 13px; }}
 #navitem:hover {{ background: {p['hover']}; color: {p['text']}; }}
 #navitem:checked {{ background: {p['nav_sel']}; color: {p['accent']}; font-weight: 600; }}
+#navitem:focus {{ border: 1px solid {p['accent']}; padding: 8px 11px; }}
 
 #sectiontitle {{ color: {p['text_muted']}; font-size: {FS['small']}px; font-weight: 600; }}
 #muted {{ color: {p['text_muted']}; }}

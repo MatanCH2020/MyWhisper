@@ -11,6 +11,7 @@ import sys
 import threading
 
 log = logging.getLogger("transcriber")
+_dll_handles = []
 
 
 def _add_cuda_dll_dirs():
@@ -37,7 +38,7 @@ def _add_cuda_dll_dirs():
         # CTranslate2's own LoadLibrary calls actually honor on Windows.
         if hasattr(os, "add_dll_directory"):
             try:
-                os.add_dll_directory(bindir)
+                _dll_handles.append(os.add_dll_directory(bindir))
             except OSError:
                 pass
         os.environ["PATH"] = bindir + os.pathsep + os.environ.get("PATH", "")
@@ -72,7 +73,7 @@ class Transcriber:
         self.device = None            # actual device in use after load
         self.fallback_reason = None   # set when GPU load failed and CPU took over
         self.model = None             # loaded lazily via load()/ensure_loaded()
-        self._lock = threading.Lock()
+        self._lock = threading.RLock()
 
     def load(self):
         """Load the model into memory (no-op if already loaded)."""
@@ -148,14 +149,15 @@ class Transcriber:
         """
         if audio is None or len(audio) == 0:
             return ""
-        self.ensure_loaded()  # reload transparently if it was released
-        segments, _info = self.model.transcribe(
-            audio,
-            language=self.language,
-            beam_size=self._effective_beam(),
-            vad_filter=self.vad_filter,
-            initial_prompt=self._effective_prompt(glossary),
-            hotwords=hotwords or None,
-        )
-        text = "".join(segment.text for segment in segments)
-        return text.strip()
+        with self._lock:
+            self.ensure_loaded()  # reload transparently if it was released
+            segments, _info = self.model.transcribe(
+                audio,
+                language=self.language,
+                beam_size=self._effective_beam(),
+                vad_filter=self.vad_filter,
+                initial_prompt=self._effective_prompt(glossary),
+                hotwords=hotwords or None,
+            )
+            text = "".join(segment.text for segment in segments)
+            return text.strip()

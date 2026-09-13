@@ -40,7 +40,7 @@ class ClipboardWatcherTestCase(unittest.TestCase):
         clips.CLIPS_PATH = root / "clips.json"
         clips.IMAGE_DIR = root / "clip_images"
         self.changed = []
-        self.w = ClipboardWatcher(on_change=lambda: self.changed.append(1))
+        self.w = ClipboardWatcher(on_change=lambda: self.changed.append(1), persist_async=False)
         self.w._last_text = None  # ignore whatever the real clipboard held
 
     def tearDown(self):

@@ -1,7 +1,11 @@
 """Load and access Mywishper configuration from config.json."""
 import json
 import logging
+import math
+from urllib.parse import urlsplit
 from pathlib import Path
+
+from safe_json import atomic_save, read_json, report_error
 
 log = logging.getLogger("config")
 
@@ -44,23 +48,59 @@ DEFAULTS = {
     "theme": "dark",
 }
 
+# Invalid values recover per key; unknown keys are preserved for compatibility.
+_RANGES = {
+    "beam_size": (1, 100), "beam_size_cpu": (1, 100), "cpu_threads": (0, 256),
+    "max_record_seconds": (0, 86400), "idle_release_minutes": (0, 10080),
+    "sound_volume": (0, 1), "clipboard_restore_delay": (0, 30), "llm_timeout": (1, 600),
+}
+_CHOICES = {
+    "device": {"cuda", "cpu", "auto"}, "theme": {"dark", "light"},
+    "llm_style": {"correct", "rewrite"},
+    "compute_type": {"default", "auto", "int8", "int8_float16", "int8_float32",
+                     "int8_bfloat16", "int16", "float16", "bfloat16", "float32"},
+}
+
+
+def _validate(key, value):
+    if key not in DEFAULTS:
+        return value
+    default = DEFAULTS[key]
+    ok = True
+    if key in _RANGES:
+        ok = (type(value) in (int, float) and _RANGES[key][0] <= value <= _RANGES[key][1]
+              and math.isfinite(value)
+              and (type(default) is float or float(value).is_integer()))
+        if ok:
+            value = type(default)(value)
+    elif isinstance(default, bool):
+        ok = type(value) is bool
+    elif isinstance(default, str):
+        ok = isinstance(value, str)
+        if ok and key in _CHOICES:
+            ok = value in _CHOICES[key]
+        if ok and key in ("model", "language", "hotkey", "clipboard_hotkey"):
+            ok = bool(value.strip())
+        if ok and key == "llm_url":
+            try:
+                parsed = urlsplit(value)
+                ok = parsed.scheme in ("http", "https") and bool(parsed.hostname)
+            except ValueError:
+                ok = False
+    if not ok:
+        report_error(CONFIG_PATH, f"הערך של {key} אינו תקין; נבחרה ברירת מחדל")
+        return default
+    return value
+
 
 def load_config():
-    """Return the merged config dict (file values override defaults)."""
     cfg = dict(DEFAULTS)
-    if CONFIG_PATH.exists():
-        try:
-            with open(CONFIG_PATH, "r", encoding="utf-8") as f:
-                cfg.update(json.load(f))
-        except (json.JSONDecodeError, OSError) as e:
-            log.warning("Failed to read %s: %s. Using defaults.", CONFIG_PATH, e)
-    return cfg
+    cfg.update(read_json(CONFIG_PATH, {}, lambda d: isinstance(d, dict)))
+    return {key: _validate(key, value) for key, value in cfg.items()}
 
 
-def save_config(cfg: dict):
-    """Write the config dict back to config.json (preserves unknown keys)."""
-    try:
-        with open(CONFIG_PATH, "w", encoding="utf-8") as f:
-            json.dump(cfg, f, ensure_ascii=False, indent=2)
-    except OSError as e:
-        log.error("Failed to write %s: %s", CONFIG_PATH, e)
+def save_config(cfg: dict) -> bool:
+    if not isinstance(cfg, dict):
+        report_error(CONFIG_PATH)
+        return False
+    return atomic_save(CONFIG_PATH, {k: _validate(k, v) for k, v in cfg.items()})

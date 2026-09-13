@@ -1,6 +1,6 @@
-# CUDA runtime libs for CTranslate2 GPU inference (needed by faster-whisper on GPU).
-# Installed by setup.ps1 only on machines with an NVIDIA card — huge download.
-# cuda-runtime provides cudart64_12.dll, which cublas/cudnn depend on.
-nvidia-cuda-runtime-cu12
-nvidia-cublas-cu12
-nvidia-cudnn-cu12
+# Windows x64 / Python 3.12; pinned from the verified development environment.
+# Direct dependency intent is in requirements-cuda.in.
+nvidia-cublas-cu12==12.9.2.10
+nvidia-cuda-nvrtc-cu12==12.9.86
+nvidia-cuda-runtime-cu12==12.9.79
+nvidia-cudnn-cu12==9.23.0.39

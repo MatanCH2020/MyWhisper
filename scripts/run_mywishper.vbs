@@ -32,4 +32,9 @@ End If
 Set shell = CreateObject("WScript.Shell")
 shell.CurrentDirectory = rootDir
 shell.Environment("PROCESS")("__PYVENV_LAUNCHER__") = venvPythonw
-shell.Run """" & basePythonw & """ """ & mainPy & """", 0, False
+' Only forward the supported switch, never arbitrary shell arguments.
+startupArg = ""
+For Each arg In WScript.Arguments
+    If LCase(arg) = "--startup" Then startupArg = " --startup"
+Next
+shell.Run """" & basePythonw & """ """ & mainPy & """" & startupArg, 0, False

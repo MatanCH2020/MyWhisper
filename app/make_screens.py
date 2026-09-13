@@ -5,14 +5,24 @@ so the images are safe to publish. Re-run after UI changes:
 
     .\\.venv\\Scripts\\python app\\make_screens.py
 """
+import os
 import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+from PySide6.QtGui import QFontDatabase
 from PySide6.QtWidgets import QApplication
 
 app = QApplication(sys.argv)
+# In Qt's offscreen backend the font database can be empty on Windows, which
+# turns Hebrew README screenshots into square boxes. Seed known system fonts
+# before the themed UI asks theme.pick_font() for a family.
+if os.environ.get("QT_QPA_PLATFORM") == "offscreen":
+    for font in ("segoeui.ttf", "segoeuib.ttf", "arial.ttf"):
+        path = Path(os.environ.get("WINDIR", "C:/Windows")) / "Fonts" / font
+        if path.exists():
+            QFontDatabase.addApplicationFont(str(path))
 
 import corrections
 import ui as ui_mod
@@ -29,6 +39,7 @@ DEMO_HISTORY = [
      "text": "מה השעה עכשיו? תזכיר לי פגישה מחר בעשר בבוקר."},
 ]
 DEMO_CORRECTIONS = {"תאמנל": "thumbnail", "וייס פר": "Whisper", "רנדר": "render"}
+DEMO_TERMS = ["GitHub", "WhatsApp", "thumbnail", "render"]
 
 
 def build(theme_name):
@@ -42,8 +53,18 @@ def build(theme_name):
         import_sound=lambda n, p: False,
         flag_tokens=corrections.flag_tokens,
         list_corrections=lambda: DEMO_CORRECTIONS,
+        english_terms=lambda: DEMO_TERMS,
         format_bidi=corrections.format_bidi,
     )
+    ctl.list_input_devices = lambda: ["Microphone Array (Realtek Audio)", "NVIDIA Broadcast"]
+    ctl.model_status = lambda: {
+        "state": "ready",
+        "device": "cuda",
+        "model": cfg["model"],
+        "fallback": False,
+    }
+    ctl.clip_count = lambda: 18
+    ctl.clip_paused = lambda: False
     win = ui_mod.MainWindow(ctl, ctl.p)
     win.resize(960, 660)
     # Show far off-screen so grab() renders a fully laid-out window without
@@ -80,6 +101,8 @@ def main():
     ov.move(-4000, 200)
     ov.state = "recording"
     ov.frame = 7
+    ov._level = 0.7
+    ov._elapsed = 23
     ov.show()
     app.processEvents()
     ov.grab().save(str(DOCS / "app-overlay.png"), "PNG")
