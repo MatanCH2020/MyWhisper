@@ -5,6 +5,7 @@ so the images are safe to publish. Re-run after UI changes:
 
     .\\.venv\\Scripts\\python app\\make_screens.py
 """
+import argparse
 import os
 import sys
 from pathlib import Path
@@ -84,8 +85,14 @@ def shoot(win, page, path):
 
 
 def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--overlay-only", action="store_true",
+                        help="Refresh only the recording HUD screenshot")
+    args = parser.parse_args()
     DOCS.mkdir(exist_ok=True)
-
+    if args.overlay_only:
+        shoot_overlay()
+        return
     win = build("dark")
     shoot(win, 0, DOCS / "app-history-dark.png")
     shoot(win, 1, DOCS / "app-dictionary-dark.png")
@@ -96,7 +103,18 @@ def main():
     shoot(win, 2, DOCS / "app-settings-light.png")
     win.close()
 
-    # Recording HUD (the floating overlay).
+    shoot_overlay()
+
+    # Icon as PNG for the README header.
+    from make_icon import draw
+    draw(128).save(str(DOCS / "icon.png"), "PNG")
+    print(f"wrote {DOCS / 'icon.png'}")
+
+
+def shoot_overlay():
+    # Match the application's global RTL, including for --overlay-only.
+    from PySide6.QtCore import Qt
+    app.setLayoutDirection(Qt.RightToLeft)
     ov = ui_mod.Overlay(lambda: 0.7)
     ov.move(-4000, 200)
     ov.state = "recording"
@@ -109,10 +127,6 @@ def main():
     ov.close()
     print(f"wrote {DOCS / 'app-overlay.png'}")
 
-    # Icon as PNG for the README header.
-    from make_icon import draw
-    draw(128).save(str(DOCS / "icon.png"), "PNG")
-    print(f"wrote {DOCS / 'icon.png'}")
 
 
 if __name__ == "__main__":

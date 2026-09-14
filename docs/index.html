@@ -496,7 +496,7 @@ nav{
 .winbar span{margin-inline-start:12px;color:var(--faint);font-size:.78rem;font-family:'JetBrains Mono',monospace;letter-spacing: 0.5px}
 .window img.shot{display:block;width:100%;opacity: 0.95;transition: opacity 0.3s ease}
 .window:hover img.shot{opacity: 1}
-.overlay-float{position:absolute;z-index:3;top:-56px;left:calc(50% - 140px);width:280px;height:auto;
+.overlay-float{position:absolute;z-index:3;top:-44px;left:calc(50% - 128px);width:256px;height:auto;
   filter:drop-shadow(0 18px 34px rgba(0,0,0,.65));animation:bob 3.4s ease-in-out infinite}
 @keyframes bob{0%,100%{transform:translateY(0)}50%{transform:translateY(-10px)}}
 
@@ -784,10 +784,10 @@ footer a{color:var(--muted);transition:color 0.2s}footer a:hover{color:var(--tex
 
     <div class="stage">
       <div class="halo" aria-hidden="true"></div>
-      <img class="overlay-float" src="app-overlay.png?v=1.11.1" alt="מחוון ההקלטה הצף">
+      <img class="overlay-float" src="app-overlay.png?v=1.11.2" alt="מחוון ההקלטה הצף">
       <div class="window">
         <div class="winbar"><span class="d r"></span><span class="d y"></span><span class="d g"></span><span>MyWhisper — Matan Digital</span></div>
-        <img class="shot" src="app-history-dark.png?v=1.11.1" alt="חלון ההיסטוריה של MyWhisper עם תמלולים בעברית">
+        <img class="shot" src="app-history-dark.png?v=1.11.2" alt="חלון ההיסטוריה של MyWhisper עם תמלולים בעברית">
       </div>
     </div>
   </div>
@@ -892,29 +892,26 @@ footer a{color:var(--muted);transition:color 0.2s}footer a:hover{color:var(--tex
       <div class="pt"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg><span>המודל מקבל את המילה כרמז ומפיק אותה נכון מראש</span></div>
       <div class="pt"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg><span>מילים באנגלית נשארות LTR בתוך העברית — בלי בלגן כיווניות</span></div>
     </div>
-    <div class="media"><img class="shot" src="app-dictionary-dark.png?v=1.11.1" alt="מילון התיקונים הנלמדים של MyWhisper"></div>
+    <div class="media"><img class="shot" src="app-dictionary-dark.png?v=1.11.2" alt="מילון התיקונים הנלמדים של MyWhisper"></div>
   </div>
 </section>
 
 <!-- release:start -->
-<section id="updates" data-release-version="1.11.1">
+<section id="updates" data-release-version="1.11.2">
   <div class="wrap">
     <span class="eyebrow">מה חדש</span>
-    <h2 class="h2">הגרסה העדכנית: <bdi>v1.11.1</bdi></h2>
+    <h2 class="h2">הגרסה העדכנית: <bdi>v1.11.2</bdi></h2>
     <p class="sub">העדכונים האחרונים מתוך יומן השינויים של התוכנה.</p>
     <div class="release-notes">
       <ul>
-        <li><strong>חיווי הקלטה חדש — 13.09.2026</strong>: כרטיס גדול וברור יותר עם אייקון מיקרופון, זמן הקלטה וגלי קול שמגיבים לדיבור. הכניסה למסך מונפשת בעדינות ומכבדת את הגדרת האנימציות של Windows.</li>
-        <li><strong>הקלטה במסך שבו נמצא העכבר</strong>: החיווי מופיע למעלה במרכז המסך של העכבר בתחילת כל הקלטה, נשאר שם גם בזמן התמלול ומתמקם מחדש אם המסך מתנתק. הוא אינו לוקח את הפוקוס משדה ההקלדה.</li>
-        <li><strong>עלייה ברקע עם Windows</strong>: קיצור ההפעלה האוטומטית מפעיל את התוכנה בלי לפתוח את החלון הראשי, עם הודעת מוכנות קצרה לאחר טעינת המודל. פתיחה ידנית עדיין מציגה את החלון. אפשר להפעיל את האפשרות באמצעות סקריפט ההפעלה האוטומטית המתואר במדריך.</li>
-        <li><strong>מסך הגדרות מסודר יותר</strong>: חלוקה ברורה לנושאים, אפשרויות מתקדמות שנפתחות לפי הצורך, והודעות מצב שקל יותר להבין.</li>
-        <li><strong>מילון ברור ונוח יותר</strong>: הצגת התיקונים בעמודות &quot;נשמע&quot; ו&quot;ייכתב&quot;, שיפור הקריאות בעברית וסידור רכיבי המילון.</li>
-        <li><strong>ליטוש הממשק הבהיר והכהה</strong>: כפתורים נוחים יותר ללחיצה, סימון ברור של הרכיב הפעיל בניווט מקלדת, הסברים לכפתורים והודעות הצלחה שאינן מפריעות לעבודה.</li>
+        <li><strong>חלונית הקלטה קומפקטית</strong>: כרטיס בגודל 240×72 עם אייקון קטן, זמן הקלטה נפרד וגל קול עדין שמגיב לדיבור.</li>
+        <li><strong>טקסט וטיימר ללא חפיפה</strong>: אזורי תצוגה נפרדים וכיווניות מפורשת לעברית ולזמן ההקלטה, עם רמז Esc לביטול בשורה התחתונה.</li>
+        <li><strong>תצוגת תמלול עקבית</strong>: החלונית שומרת על גודלה ומיקומה בזמן העיבוד, עם זמן ההקלטה הסופי ומחוון התקדמות, בלי לקחת את הפוקוס משדה ההקלדה.</li>
       </ul>
     </div>
     <div class="cta-row">
-      <a class="btn btn-lg btn-primary" href="https://github.com/MatanCH2020/MyWhisper/releases/download/v1.11.1/MyWhisper-Setup.cmd">הורדת המתקין</a>
-      <a class="btn btn-lg btn-ghost" href="https://github.com/MatanCH2020/MyWhisper/releases/tag/v1.11.1">כל פרטי הגרסה</a>
+      <a class="btn btn-lg btn-primary" href="https://github.com/MatanCH2020/MyWhisper/releases/download/v1.11.2/MyWhisper-Setup.cmd">הורדת המתקין</a>
+      <a class="btn btn-lg btn-ghost" href="https://github.com/MatanCH2020/MyWhisper/releases/tag/v1.11.2">כל פרטי הגרסה</a>
     </div>
   </div>
 </section>

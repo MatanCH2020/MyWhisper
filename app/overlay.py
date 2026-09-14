@@ -6,7 +6,7 @@ import time
 
 from PySide6.QtCore import (QEasingCurve, QPoint, QRectF, Qt, QTimer,
                             QParallelAnimationGroup, QPropertyAnimation)
-from PySide6.QtGui import QColor, QCursor, QFont, QPainter, QPen
+from PySide6.QtGui import QColor, QCursor, QFont, QFontMetricsF, QPainter, QPen, QTextOption
 from PySide6.QtWidgets import QApplication, QWidget
 
 import icons
@@ -35,7 +35,7 @@ def hud_position(available, size):
 
 
 class Overlay(QWidget):
-    CARD_W, CARD_H, SHADOW = 280, 100, 12
+    CARD_W, CARD_H, SHADOW = 240, 72, 8
 
     def __init__(self, level_provider):
         super().__init__(None, Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint
@@ -148,57 +148,72 @@ class Overlay(QWidget):
         self.set_state("idle")
         super().closeEvent(event)
 
+    def _text(self, painter, rect, text, pixels, color, *, rtl=False, bold=False):
+        """Use physical alignment and explicit direction, independent of app RTL.
+
+        Qt's flag-based drawText mirrors AlignLeft/Right in an RTL application.
+        QTextOption plus AlignAbsolute keeps each run in its own reserved region.
+        Measure the actual font so a fallback font cannot silently clip a label.
+        """
+        font = QFont(theme.pick_font())
+        font.setPixelSize(pixels)
+        font.setBold(bold)
+        while font.pixelSize() > 12:
+            metrics = QFontMetricsF(font)
+            if metrics.horizontalAdvance(text) <= rect.width() and metrics.height() <= rect.height():
+                break
+            font.setPixelSize(font.pixelSize() - 1)
+        option = QTextOption()
+        option.setTextDirection(Qt.RightToLeft if rtl else Qt.LeftToRight)
+        option.setAlignment(Qt.AlignAbsolute | Qt.AlignVCenter |
+                            (Qt.AlignRight if rtl else Qt.AlignLeft))
+        option.setWrapMode(QTextOption.NoWrap)
+        painter.setFont(font)
+        painter.setPen(QColor(color))
+        painter.drawText(rect, text, option)
+
     def paintEvent(self, _event):
         p = QPainter(self)
         p.setRenderHint(QPainter.Antialiasing)
         s = self.SHADOW
         card = QRectF(s, s, self.CARD_W, self.CARD_H)
         p.setPen(Qt.NoPen)
-        for spread in range(10, 0, -2):
+        for spread in range(6, 0, -2):
             p.setBrush(QColor(0, 0, 0, 6))
-            p.drawRoundedRect(card.adjusted(-spread, -spread + 3, spread, spread + 3),
-                              22 + spread, 22 + spread)
+            p.drawRoundedRect(card.adjusted(-spread, -spread + 2, spread, spread + 2),
+                              16 + spread, 16 + spread)
         p.setBrush(QColor("#1C1F29"))
         p.setPen(QPen(QColor("#424653"), 1))
-        p.drawRoundedRect(card, 22, 22)
+        p.drawRoundedRect(card, 16, 16)
         recording = self.state == "recording"
         accent = QColor("#FF777D" if recording else "#F4CC77")
         p.setPen(Qt.NoPen)
         p.setBrush(QColor("#3B2832" if recording else "#3A3428"))
-        p.drawRoundedRect(QRectF(s + 226, s + 14, 38, 38), 13, 13)
+        p.drawRoundedRect(QRectF(s + 200, s + 10, 26, 26), 9, 9)
         if recording:
-            self._mic.paint(p, s + 233, s + 21, 24, 24)
+            self._mic.paint(p, s + 204, s + 14, 18, 18)
         else:
             p.setPen(QPen(accent, 2.5, Qt.SolidLine, Qt.RoundCap))
             angle = -(self.frame * 9 % 360) if self._motion else 90
-            p.drawArc(QRectF(s + 237, s + 25, 16, 16), angle * 16, 265 * 16)
-        font = QFont(theme.pick_font())
-        font.setPixelSize(16)
-        font.setBold(True)
-        p.setFont(font)
-        p.setPen(QColor("#F5F6FA"))
-        p.drawText(s + 88, s + 12, 126, 24, Qt.AlignRight | Qt.AlignVCenter,
-                   "מקליט" if recording else "מתמלל")
-        font.setPixelSize(12)
-        font.setBold(False)
-        p.setFont(font)
-        p.setPen(QColor("#B9BFCE"))
-        p.drawText(s + 78, s + 36, 136, 18, Qt.AlignRight | Qt.AlignVCenter,
-                   "מקש Esc לביטול" if recording else "מעבד את ההקלטה")
-        font.setPixelSize(18)
-        p.setFont(font)
-        p.setPen(accent)
-        p.drawText(s + 18, s + 17, 68, 30, Qt.AlignLeft | Qt.AlignVCenter,
-                   f"{self._elapsed // 60:02d}:{self._elapsed % 60:02d}")
+            p.drawArc(QRectF(s + 205, s + 15, 16, 16), angle * 16, 265 * 16)
+        # Top row: timer | 12px gap | title | 12px gap | icon.
+        self._text(p, QRectF(s + 100, s + 10, 88, 26),
+                   "מקליט" if recording else "מתמלל", 15, "#F5F6FA", rtl=True, bold=True)
+        self._text(p, QRectF(s + 14, s + 10, 74, 26),
+                   f"{self._elapsed // 60:02d}:{self._elapsed % 60:02d}", 16, accent)
+        # Bottom row has a separate 94px waveform and a 106px Hebrew hint.
+        self._text(p, QRectF(s + 120, s + 48, 106, 18),
+                   "\u2066Esc\u2069 לביטול" if recording else "מעבד את ההקלטה",
+                   12, "#B9BFCE", rtl=True)
         p.setPen(Qt.NoPen)
         p.setBrush(accent)
-        for i in range(29):
+        for i in range(16):
             phase = self.frame * 0.22 if self._motion else 0
             wave = (math.sin(phase + i * 0.55) + 1) / 2
             if recording:
                 # Quiet microphone stays quiet: no artificial signal animation.
-                h = 4 + self._level * 23 * (0.35 + 0.65 * wave)
+                h = 3 + self._level * 11 * (0.35 + 0.65 * wave)
             else:
-                h = 4 + 17 * (wave if self._motion else 0.25)
-            p.drawRoundedRect(QRectF(s + 26 + i * 8, s + 76 - h / 2, 4, h), 2, 2)
+                h = 3 + 11 * (wave if self._motion else 0.25)
+            p.drawRoundedRect(QRectF(s + 14 + i * 6, s + 57 - h / 2, 4, h), 2, 2)
         p.end()

@@ -17,7 +17,7 @@
 ### 🌐 [דף הבית ← matanch2020.github.io/MyWhisper](https://matanch2020.github.io/MyWhisper/) · ⬇️ [הורדת מתקין](https://github.com/MatanCH2020/MyWhisper/releases/latest/download/MyWhisper-Setup.cmd)
 
 <!-- release-version:start -->
-**גרסה נוכחית: [v1.11.1](https://github.com/MatanCH2020/MyWhisper/releases/tag/v1.11.1)** · [היסטוריית העדכונים](CHANGELOG.md)
+**גרסה נוכחית: [v1.11.2](https://github.com/MatanCH2020/MyWhisper/releases/tag/v1.11.2)** · [היסטוריית העדכונים](CHANGELOG.md)
 <!-- release-version:end -->
 
 <br>
@@ -28,7 +28,7 @@
 
 *מחוון ההקלטה הצף — מופיע בראש המסך בזמן שמדברים:*
 
-<img src="docs/app-overlay.png" width="304" alt="מחוון הקלטה עם טיימר וגלי קול">
+<img src="docs/app-overlay.png?v=1.11.2" width="256" alt="חלונית הקלטה קומפקטית עם טיימר נפרד וגלי קול">
 
 </div>
 
@@ -85,7 +85,8 @@ irm https://raw.githubusercontent.com/MatanCH2020/MyWhisper/main/scripts/uninsta
 הקלטה שנשכחה פתוחה נעצרת ומתומללת אוטומטית אחרי 10 דקות.
 
 חיווי ההקלטה מופיע למעלה במרכז **המסך שבו נמצא העכבר בתחילת ההקלטה**,
-עם מיקרופון, זמן הקלטה וגלי קול. הוא נשאר באותו מסך גם בזמן התמלול,
+בחלונית קומפקטית עם מיקרופון, זמן הקלטה נפרד, גלי קול ורמז Esc לביטול.
+הוא נשאר באותו מסך ובאותו גודל גם בזמן התמלול,
 בלי לקחת את הפוקוס משדה ההקלדה. בכל הקלטה חדשה המסך נבחר מחדש.
 אנימציית הכניסה מכבדת את הגדרת האנימציות של Windows.
 

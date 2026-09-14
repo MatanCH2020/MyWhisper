@@ -8,11 +8,17 @@ from unittest.mock import Mock, patch
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "app"))
 from PySide6.QtCore import QAbstractAnimation, QPoint, QRect, QSize, Qt
+from PySide6.QtGui import QFontDatabase, QFontMetricsF
 from PySide6.QtTest import QTest
 from PySide6.QtWidgets import QApplication
 import overlay
 
 qapp = QApplication.instance() or QApplication([])
+if os.environ.get("QT_QPA_PLATFORM") == "offscreen":
+    for name in ("segoeui.ttf", "segoeuib.ttf", "arial.ttf"):
+        path = Path(os.environ.get("WINDIR", "C:/Windows")) / "Fonts" / name
+        if path.exists():
+            QFontDatabase.addApplicationFont(str(path))
 
 
 def screen(rect):
@@ -26,10 +32,12 @@ class PlacementTest(unittest.TestCase):
         for rect in (QRect(0, 0, 1920, 1040), QRect(-1920, 0, 1920, 1040),
                      QRect(1920, -200, 1707, 920), QRect(0, -1440, 2560, 1400)):
             with self.subTest(rect=rect):
-                pos = overlay.hud_position(rect, QSize(304, 124))
-                self.assertEqual(pos.x(), rect.x() + (rect.width() - 304) // 2)
+                size = QSize(overlay.Overlay.CARD_W + 2 * overlay.Overlay.SHADOW,
+                             overlay.Overlay.CARD_H + 2 * overlay.Overlay.SHADOW)
+                pos = overlay.hud_position(rect, size)
+                self.assertEqual(pos.x(), rect.x() + (rect.width() - size.width()) // 2)
                 self.assertEqual(pos.y(), rect.y() + 32)
-                self.assertTrue(rect.contains(QRect(pos, QSize(304, 124))))
+                self.assertTrue(rect.contains(QRect(pos, size)))
 
 
 class OverlayTest(unittest.TestCase):
@@ -64,10 +72,51 @@ class OverlayTest(unittest.TestCase):
         self.choose.return_value = self.right
         self.hud._screen_removed(self.left)
         self.assertEqual(self.hud._screen, self.right)
-        self.assertEqual(self.hud.pos(), QPoint(1128, 32))
+        self.assertEqual(self.hud.pos(), QPoint((2560 - self.hud.width()) // 2, 32))
         self.right.availableGeometry.return_value = QRect(0, 40, 1280, 680)
         self.hud._reposition()
-        self.assertEqual(self.hud.pos(), QPoint(488, 72))
+        self.assertEqual(self.hud.pos(), QPoint((1280 - self.hud.width()) // 2, 72))
+
+    def test_rendering_is_independent_of_global_rtl(self):
+        original = qapp.layoutDirection()
+        try:
+            for state in ("recording", "transcribing"):
+                self.hud.state = state
+                self.hud._level = 1.0
+                for elapsed in (0, 599, 600, 5999):
+                    self.hud._elapsed = elapsed
+                    images = []
+                    for direction in (Qt.LeftToRight, Qt.RightToLeft):
+                        qapp.setLayoutDirection(direction)
+                        images.append(self.hud.grab().toImage())
+                    with self.subTest(state=state, elapsed=elapsed):
+                        self.assertEqual(images[0], images[1])
+        finally:
+            qapp.setLayoutDirection(original)
+
+    def test_painted_text_fits_separate_regions(self):
+        # Exercise the actual paint path and actual font metrics; catch clipping,
+        # overlapping regions and lost minimum spacing in both HUD states.
+        original = self.hud._text
+        for state in ("recording", "transcribing"):
+            for elapsed in (0, 599, 600, 5999):
+                regions = []
+
+                def measure(painter, rect, text, *args, **kwargs):
+                    original(painter, rect, text, *args, **kwargs)
+                    metrics = QFontMetricsF(painter.font())
+                    self.assertLessEqual(metrics.horizontalAdvance(text), rect.width())
+                    self.assertLessEqual(metrics.height(), rect.height())
+                    regions.append(rect)
+
+                self.hud.state = state
+                self.hud._elapsed = elapsed
+                with patch.object(self.hud, "_text", side_effect=measure):
+                    self.hud.grab()
+                self.assertEqual(len(regions), 3)
+                title, clock, hint = regions
+                self.assertGreaterEqual(title.left() - clock.right(), 12)
+                self.assertGreaterEqual(hint.top() - title.bottom(), 12)
 
     def test_reduced_motion_and_nonactivation(self):
         self.hud.set_state("recording")
