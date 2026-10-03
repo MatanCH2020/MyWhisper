@@ -7,6 +7,7 @@ allows background refresh. Tokens and dictated text are never logged.
 import asyncio
 import base64
 import ctypes
+import copy
 from ctypes import wintypes
 import hashlib
 from http.server import BaseHTTPRequestHandler, HTTPServer
@@ -21,7 +22,10 @@ from urllib.parse import parse_qs, urlencode, urlsplit
 import uuid
 
 import jwt
+import logging
 from external_browser import open_external_browser
+
+log = logging.getLogger("chatgpt_auth")
 
 AUTH = "https://auth.openai.com"
 RESOURCE = "https://api.openai.com/v1"
@@ -204,20 +208,35 @@ class ChatGPTAuth:
     async def _validate_identity(self, token, client_id, nonce):
         # Trusted issuer/JWKS fixed from the official discovery document.
         keys = await self._json("GET", AUTH + "/.well-known/jwks.json")
+        reason = "malformed"
         try:
             header = jwt.get_unverified_header(token)
+            reason = "algorithm"
             if header.get("alg") != "RS256":
                 raise ValueError()
+            reason = "signing_key"
             matching = [k for k in keys.get("keys", []) if k.get("kid") == header.get("kid")]
             if len(matching) != 1:
                 raise ValueError()
             key = jwt.PyJWK.from_dict(matching[0], algorithm="RS256").key
             identity = jwt.decode(token, key, algorithms=["RS256"], audience=client_id,
-                                  issuer=AUTH, options={"require": ["exp", "iss", "aud", "sub", "nonce"]})
+                                  issuer=AUTH, leeway=5,
+                                  options={"require": ["exp", "iss", "aud", "sub", "nonce"]})
+            reason = "nonce_or_subject"
             if not secrets.compare_digest(identity["nonce"], nonce) or not identity["sub"]:
                 raise ValueError()
             return identity
-        except Exception:
+        except Exception as error:
+            # Log a fixed failure category only, never claims, tokens or the
+            # exception text (which may include account-specific values).
+            category = {
+                jwt.InvalidIssuerError: "issuer", jwt.InvalidAudienceError: "audience",
+                jwt.ExpiredSignatureError: "expired", jwt.ImmatureSignatureError: "clock",
+                jwt.InvalidSignatureError: "signature", jwt.MissingRequiredClaimError: "missing_claim",
+            }.get(type(error), reason)
+            if isinstance(error, jwt.MissingRequiredClaimError) and error.claim in {"exp", "iss", "aud", "sub", "nonce"}:
+                category += "_" + error.claim
+            log.info("ID-token validation rejected (%s)", category)
             raise AuthError("identity") from None
 
     @staticmethod
@@ -273,6 +292,8 @@ class ChatGPTAuth:
         client_id = old.get("client_id") or pending_client or "dynamic_agent_client"
         state, nonce, verifier = (secrets.token_urlsafe(32) for _ in range(3))
         answer = {}
+        outcome = {}
+        owner = self
 
         class Callback(BaseHTTPRequestHandler):
             def setup(self):
@@ -285,16 +306,32 @@ class ChatGPTAuth:
             def do_GET(self):
                 parsed = urlsplit(self.path)
                 query = parse_qs(parsed.query)
-                valid = (parsed.path == "/auth/callback" and all(len(v) == 1 for v in query.values())
+                valid = (not answer and parsed.path == "/auth/callback" and all(len(v) == 1 for v in query.values())
                          and secrets.compare_digest(query.get("state", [""])[0], state))
                 if valid:
                     answer.update({k: v[0] for k, v in query.items()})
-                self.send_response(200 if valid else 400)
-                self.send_header("Content-Type", "text/plain; charset=utf-8")
-                self.send_header("Cache-Control", "no-store")
-                self.end_headers()
-                self.wfile.write(("אפשר לחזור ל-MyWhisper. החיבור אינו מפעיל עריכה בענן."
-                                  if valid else "Invalid authorization callback.").encode("utf-8"))
+                    try:
+                        # Complete verification/storage before telling the
+                        # browser that sign-in succeeded. No partial success.
+                        outcome["status"] = owner._complete_sign_in(
+                            answer, old, client_id, nonce, verifier, redirect)
+                    except Exception as error:
+                        outcome["error"] = error
+                code = (str(outcome["error"]) if isinstance(outcome.get("error"), AuthError)
+                        else "connection" if outcome.get("error") else "") if valid else "callback"
+                page = owner._callback_page(outcome.get("status"), code)
+                try:
+                    self.send_response(200 if valid and not code else 400)
+                    self.send_header("Content-Type", "text/html; charset=utf-8")
+                    self.send_header("Cache-Control", "no-store")
+                    self.send_header("Referrer-Policy", "no-referrer")
+                    self.send_header("X-Content-Type-Options", "nosniff")
+                    self.send_header("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; frame-ancestors 'none'; base-uri 'none'")
+                    self.end_headers()
+                    self.wfile.write(page.encode("utf-8"))
+                except OSError:
+                    # Closing the tab must not discard a verified stored account.
+                    pass
 
         with HTTPServer(("127.0.0.1", 0), Callback) as server:
             server.timeout = 0.25
@@ -321,6 +358,36 @@ class ChatGPTAuth:
             raise AuthError("cancelled")
         if not answer:
             raise AuthError("timeout")
+        if "error" in outcome:
+            raise outcome["error"]
+        return outcome["status"]
+
+    @staticmethod
+    def _callback_page(status, error):
+        if error:
+            title = "ההתחברות לא הושלמה"
+            message = {
+                "identity": "האישור התקבל, אך אימות זהות החשבון נכשל. חזור להגדרות MyWhisper ונסה שוב.",
+                "permission": "הרשאת החיבור לא אושרה. אפשר לחזור להגדרות MyWhisper ולנסות שוב.",
+                "storage": "לא ניתן לשמור את ההרשאות במחשב. חזור ל-MyWhisper לקבלת פרטים.",
+                "cancelled": "ניסיון ההתחברות בוטל. אפשר לחזור ל-MyWhisper.",
+                "callback": "האישור אינו שייך לניסיון התחברות פעיל. פתח ניסיון חדש מתוך MyWhisper.",
+            }.get(error, "לא ניתן להשלים את החיבור. חזור להגדרות MyWhisper ובדוק את מצב החיבור.")
+        else:
+            title = "החשבון מחובר ל-MyWhisper"
+            message = ("אפשר לחזור לאפליקציה. עריכת הטקסט עדיין כבויה; להפעלתה בחר מודל והפעל אותה בהגדרות."
+                       if status and status.get("eligible") else
+                       "החשבון מחובר, אך עריכת הטקסט לא אושרה או אינה זמינה לחשבון. התמלול ממשיך מקומית.")
+        # All content is app-defined. Never reflect query parameters, tokens or
+        # identity claims into the callback page.
+        return f"""<!doctype html><html lang="he" dir="rtl"><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1"><title>{title}</title>
+<style>body{{margin:0;background:#15171c;color:#e6e8ec;font:17px/1.7 'Segoe UI',Arial,sans-serif;display:grid;min-height:100vh;place-items:center}}
+main{{max-width:560px;margin:24px;padding:32px;border:1px solid #30353f;border-radius:16px;background:#1e2128}}
+h1{{font-size:26px;line-height:1.4}}small{{color:#9aa2ae}}p{{margin-bottom:0}}</style>
+<main><small>MyWhisper · Matan Digital</small><h1>{title}</h1><p>{message}</p></main></html>"""
+
+    def _complete_sign_in(self, answer, old, client_id, nonce, verifier, redirect):
         if answer.get("error"):
             raise AuthError("permission")
         issued = answer.get("client_id", client_id if client_id != "dynamic_agent_client" else "")
@@ -349,10 +416,12 @@ class ChatGPTAuth:
             if self._signin_cancel.is_set():
                 raise AuthError("cancelled")
             self.set_enabled(False)
-            self.data["accounts"][key] = account
-            self.data["active"] = key
-            self.data.pop("pending_client", None)
-            self.store.save(self.data)
+            candidate = copy.deepcopy(self.data)
+            candidate["accounts"][key] = account
+            candidate["active"] = key
+            candidate.pop("pending_client", None)
+            self.store.save(candidate)
+            self.data = candidate
             self.error = "" if REQUIRED_SCOPES <= set(account["scopes"]) else "permission"
         if not self.error:
             self.catalog()

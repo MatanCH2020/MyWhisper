@@ -10,6 +10,7 @@ import time
 import unittest
 from urllib.parse import parse_qs, urlencode, urlsplit
 from urllib.request import urlopen
+from urllib.error import HTTPError
 from unittest.mock import ANY, Mock, patch
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
@@ -181,6 +182,8 @@ class OAuthTests(unittest.TestCase):
         cls.jwk.update(kid="test-key", use="sig", alg="RS256")
 
     def setup_auth(self, identity_changes=None, callback_changes=None, scopes=None):
+        self.callback_pages = []
+        self.callback_done = threading.Event()
         self.params, self.calls = {}, []
         async def handler(request):
             self.calls.append(request)
@@ -211,9 +214,13 @@ class OAuthTests(unittest.TestCase):
             def callback():
                 try:
                     with urlopen(self.params["redirect_uri"] + "?" + urlencode(query), timeout=2) as response:
-                        response.read()
+                        self.callback_pages.append((response.status, response.read().decode("utf-8")))
+                except HTTPError as error:
+                    self.callback_pages.append((error.code, error.read().decode("utf-8")))
                 except Exception:
                     pass
+                finally:
+                    self.callback_done.set()
             threading.Thread(target=callback, daemon=True).start()
             return True
         return auth, browser
@@ -227,6 +234,10 @@ class OAuthTests(unittest.TestCase):
         self.assertEqual(status["sign_in_error"], "")
         self.assertTrue(status["eligible"])
         self.assertEqual(status["models"][0]["slug"], "gpt-6-luna")
+        self.assertTrue(self.callback_done.wait(1))
+        self.assertEqual(self.callback_pages[0][0], 200)
+        self.assertIn("החשבון מחובר ל-MyWhisper", self.callback_pages[0][1])
+        self.assertNotIn("code=", self.callback_pages[0][1])
         self.assertEqual(self.params["client_id"], "dynamic_agent_client")
         self.assertEqual(self.params["agent_name_hint"], "MyWhisper")
         self.assertEqual(self.params["code_challenge_method"], "S256")
@@ -240,12 +251,15 @@ class OAuthTests(unittest.TestCase):
 
     def test_nonce_issuer_audience_expiry_and_subject_are_checked(self):
         for changes in ({"nonce": "wrong"}, {"iss": "https://evil.test"}, {"aud": "other"},
-                        {"exp": time.time() - 1}, {"sub": ""}):
+                        {"exp": time.time() - 10}, {"sub": ""}):
             with self.subTest(changes=changes):
                 auth, browser = self.setup_auth(identity_changes=changes)
                 with self.assertRaises(AuthError):
                     auth.sign_in(browser=browser, timeout=1)
                 self.assertEqual(auth.status()["accounts"], [])
+                self.assertTrue(self.callback_done.wait(1))
+                self.assertEqual(self.callback_pages[0][0], 400)
+                self.assertIn("ההתחברות לא הושלמה", self.callback_pages[0][1])
 
     def test_invalid_state_never_exchanges_code(self):
         auth, browser = self.setup_auth(callback_changes={"state": "wrong"})
@@ -272,6 +286,37 @@ class OAuthTests(unittest.TestCase):
             "sub": "person-a", "nonce": "nonce"}, private, algorithm="RS256", headers={"kid": "test-key"})
         with self.assertRaises(AuthError):
             auth.http.call(auth._validate_identity(token, "oaiapp_test", "nonce"))
+
+    def test_small_clock_skew_is_tolerated_but_wrong_nonce_is_not(self):
+        auth, browser = self.setup_auth(identity_changes={"iat": time.time() + 2})
+        self.assertTrue(auth.sign_in(browser=browser, timeout=1)["connected"])
+        auth, browser = self.setup_auth(identity_changes={"iat": time.time() + 2, "nonce": "wrong"})
+        with self.assertRaises(AuthError):
+            auth.sign_in(browser=browser, timeout=1)
+
+    def test_identity_diagnostics_never_log_token_or_private_claims(self):
+        auth, browser = self.setup_auth(identity_changes={"email": "private@example.test", "nonce": "wrong"})
+        with self.assertLogs("chatgpt_auth", level="INFO") as captured, self.assertRaises(AuthError):
+            auth.sign_in(browser=browser, timeout=1)
+        messages = " ".join(captured.output)
+        self.assertIn("nonce_or_subject", messages)
+        self.assertNotIn("private@example.test", messages)
+        self.assertNotIn("person-a", messages)
+        self.assertNotIn(self.params["nonce"], messages)
+
+    def test_failed_credential_save_never_reports_connected(self):
+        auth, browser = self.setup_auth()
+        save = auth.store.save
+        def fail_account_save(data):
+            if data["accounts"]:
+                raise AuthError("storage")
+            save(data)
+        auth.store.save = fail_account_save
+        with self.assertRaises(AuthError):
+            auth.sign_in(browser=browser, timeout=1)
+        self.assertFalse(auth.status()["connected"])
+        self.assertTrue(self.callback_done.wait(1))
+        self.assertIn("לא ניתן לשמור", self.callback_pages[0][1])
 
     def test_returning_identity_cannot_replace_selected_account(self):
         auth, browser = self.setup_auth(identity_changes={"sub": "other-person"})
