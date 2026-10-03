@@ -327,6 +327,7 @@ class SettingsPageMixin:
         return card
 
     def _refresh_cloud(self, status=None):
+        self._refresh_scan_controls()
         if self._cloud_busy:
             return
         st = status or self.ui.chatgpt_status()

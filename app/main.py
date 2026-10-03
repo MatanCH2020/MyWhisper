@@ -70,6 +70,7 @@ from paste import paste_text
 from tray import Tray
 from cloud_http import CloudHTTP
 from chatgpt_auth import ChatGPTAuth, AuthError, DEFAULT_MODEL
+from history_scanner import HistoryScanner
 from text_editor import TextEditor
 from delivery import foreground_window, same_destination, DestinationGuard
 from external_browser import browser_choices, open_external_browser
@@ -102,6 +103,7 @@ class Mywishper(QObject):
         self.cloud_http = CloudHTTP()
         self.chatgpt = ChatGPTAuth(self.cloud_http)
         self.text_editor = TextEditor(self.chatgpt, self.cloud_http)
+        self.history_scanner = HistoryScanner(self.chatgpt, self.cloud_http)
         self._set_chatgpt_enabled(self.config.get("chatgpt_enabled") is True)
         self._cloud_timer = QTimer(self)
         self._cloud_timer.timeout.connect(self.chatgpt.schedule_refresh)
@@ -173,6 +175,10 @@ class Mywishper(QObject):
         self.ui.chatgpt_status = self._chatgpt_status
         self.ui.chatgpt_action = self._chatgpt_action
         self.ui.chatgpt_browsers = browser_choices
+        self.ui.scan_history = self._scan_history
+        self.ui.cancel_history_scan = self.history_scanner.cancel
+        self.ui.undo_history_scan = self.history_scanner.undo
+        self.ui.can_undo_history_scan = self.history_scanner.can_undo
 
         self._lock = threading.Lock()
         self._state = State.IDLE
@@ -201,6 +207,8 @@ class Mywishper(QObject):
         enabled = enabled is True and bool(allowed)
         self.chatgpt.set_enabled(enabled)
         self.text_editor.cancel()
+        if hasattr(self, "history_scanner"):
+            self.history_scanner.cancel()
         self.config["chatgpt_enabled"] = enabled
         if not save_config(self.config):
             self.chatgpt.set_enabled(False)
@@ -209,6 +217,15 @@ class Mywishper(QObject):
         if enabled:
             self.chatgpt.schedule_refresh()
         return enabled
+
+    def _scan_history(self, progress):
+        result = self.history_scanner.scan(self.config.get("chatgpt_model", ""), progress)
+        if result.status in ("quota", "authorization", "ineligible"):
+            self.chatgpt.error = result.status
+            self._set_chatgpt_enabled(False)
+        log.info("History scan status=%s scanned=%d corrected=%d learned=%d english=%d",
+                 result.status, result.scanned, result.corrected, result.learned, result.english)
+        return result
 
     def _chatgpt_action(self, action, value=None):
         """Injected callback. Network actions are invoked on a UI worker thread."""
@@ -780,6 +797,7 @@ class Mywishper(QObject):
         self._cloud_timer.stop()
         self.chatgpt.close()
         self.text_editor.cancel()
+        self.history_scanner.cancel()
         self.cloud_http.close()
         if self.recorder.recording:
             self.cancel_recording()

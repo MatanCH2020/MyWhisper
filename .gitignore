@@ -8,6 +8,7 @@ __pycache__/
 
 # User data (personal — must not be published)
 history.json
+history_scan_undo.json
 corrections.json
 dictionary.json
 english_terms.json

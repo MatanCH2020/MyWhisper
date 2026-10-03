@@ -127,3 +127,41 @@ def clear():
     with _lock:
         _read()  # Preserve corrupt data / detect unreadable files before replacing.
         return _write([])
+
+
+def apply_scan(changes, model, save_undo=None):
+    """Atomically apply snapshot-checked edits; return receipts for safe undo.
+
+    A user edit or deletion during inference wins. The original source remains
+    available through the existing source viewer, including after a restart.
+    """
+    with _lock:
+        entries = _read()
+        receipts = []
+        for entry in entries:
+            change = changes.get(entry.get("id"))
+            if not change or entry["text"] != change[0] or change[0] == change[1]:
+                continue
+            before = dict(entry)
+            entry.setdefault("original_text", entry["text"])
+            entry["text"] = change[1]
+            entry["scan_model"] = model
+            entry["scan_status"] = "corrected"
+            receipts.append((before, dict(entry)))
+        if receipts and save_undo and not save_undo(receipts):
+            return None
+        return receipts if not receipts or _write(entries) else None
+
+
+def undo_scan(receipts):
+    """Restore only records still equal to this scan's result, never newer edits."""
+    with _lock:
+        entries = _read()
+        by_id = {after["id"]: (before, after) for before, after in receipts}
+        restored = 0
+        for index, entry in enumerate(entries):
+            pair = by_id.get(entry.get("id"))
+            if pair and entry == pair[1]:
+                entries[index] = dict(pair[0])
+                restored += 1
+        return restored if not restored or _write(entries) else None

@@ -44,6 +44,7 @@ CASES = [
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--model", help="Measure an available model without changing app settings")
     args = parser.parse_args()
     cfg = load_config()
     if cfg.get("chatgpt_enabled") is not True:
@@ -52,7 +53,7 @@ def main():
     try:
         auth = ChatGPTAuth(http)
         st = auth.status()
-        model = cfg.get("chatgpt_model", "")
+        model = args.model or cfg.get("chatgpt_model", "")
         if not st["connected"] or not st["eligible"] or model not in {m["slug"] for m in st["models"]}:
             parser.error("An eligible account and an available model are required.")
         auth.set_enabled(True)

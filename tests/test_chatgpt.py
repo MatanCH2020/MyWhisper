@@ -113,6 +113,32 @@ class EditorTests(unittest.TestCase):
         result = editor.edit("original", "gpt-6-luna")
         self.assertEqual((result.text, result.status), ("original", "incomplete"))
 
+    def test_completed_item_is_accepted_only_after_successful_response_completion(self):
+        item = {"type": "message", "role": "assistant", "status": "completed",
+                "content": [{"type": "output_text", "text": "clean"}]}
+        item_done = event("response.output_item.done", output_index=0, item=item)
+        for terminal, expected in ((event("response.completed", response={"status": "completed", "output": []}), "edited"),
+                                   (b"", "incomplete"),
+                                   (event("response.incomplete"), "incomplete"),
+                                   (event("response.failed", response={"error": {"code": "subscription_sharing_usage_limit_exceeded"}}), "quota")):
+            with self.subTest(expected=expected):
+                auth, editor = self.setup_editor(httpx.Response(200, content=item_done + terminal))
+                auth.set_enabled(True)
+                result = editor.edit("original", "gpt-6-luna")
+                self.assertEqual(result.status, expected)
+                self.assertEqual(result.text, "clean" if expected == "edited" else "original")
+
+    def test_stream_response_identity_mismatch_rejects_completed_items(self):
+        auth, editor = self.setup_editor(httpx.Response(200, content=
+            event("response.created", response={"id": "one"}) +
+            event("response.completed", response={"id": "two", "status": "completed", "output": []})))
+        auth.set_enabled(True)
+        self.assertEqual(editor.edit("original", "gpt-6-luna").status, "invalid")
+
+    def test_luna_uses_no_reasoning_for_latency(self):
+        _, editor = self.setup_editor(httpx.Response(200, content=completed("clean")))
+        self.assertEqual(editor._payload("text", "gpt-5.6-luna")["reasoning"], {"effort": "none"})
+
     def test_usage_failure_after_deltas_keeps_local_text(self):
         auth, editor = self.setup_editor(httpx.Response(200, content=
             event("response.output_text.delta", delta="partial") +
@@ -503,6 +529,31 @@ class CloudSettingsTests(unittest.TestCase):
         self.win._refresh_cloud()
         self.assertFalse(self.win._cloud_switch.isChecked())
         self.ui.chatgpt_action.assert_not_called()
+
+    def test_history_scan_controls_require_explicit_opt_in_and_do_not_run_on_open(self):
+        self.ui.scan_history = Mock()
+        self.win._refresh_cloud()
+        self.assertFalse(self.win._scan_start.isEnabled())
+        self.ui.scan_history.assert_not_called()
+        self.ui.chatgpt_status = lambda: {"connected": True, "eligible": True, "enabled": False,
+            "models": [{"slug": "luna", "display_name": "Luna"}], "model": "luna"}
+        self.win._refresh_cloud()
+        self.assertFalse(self.win._scan_start.isEnabled())
+        self.ui.chatgpt_status = lambda: {"connected": True, "eligible": True, "enabled": True,
+            "models": [{"slug": "luna", "display_name": "Luna"}], "model": "luna"}
+        self.win._refresh_cloud()
+        self.assertTrue(self.win._scan_start.isEnabled())
+        self.win._scan_busy = True
+        self.win._refresh_scan_controls()
+        self.assertFalse(self.win._scan_start.isEnabled())
+
+    def test_history_scan_summary_reports_actual_changes_and_undo(self):
+        from history_scanner import ScanResult
+        self.win._on_scan_result(ScanResult("completed", 20, 3, 2, 1))
+        self.assertIn("נבדקו 20", self.win._scan_status.text())
+        self.assertIn("תוקנו 3", self.win._scan_status.text())
+        self.win._on_scan_result(ScanResult("invalid"))
+        self.assertIn("לא נשמרו שינויים", self.win._scan_status.text())
 
     def test_connection_and_editing_states_are_independent_and_controls_are_gated(self):
         base = {"accounts": [], "models": [{"slug": "luna", "display_name": "Luna"}], "enabled": False}
