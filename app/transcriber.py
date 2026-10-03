@@ -64,12 +64,9 @@ class Transcriber:
         self.cpu_threads = config.get("cpu_threads", 0)  # 0 = CTranslate2 auto-detect
         self.vad_filter = config.get("vad_filter", True)
         self.initial_prompt = config.get("initial_prompt") or None
-        # Fold the English glossary into initial_prompt to nudge Latin output for
-        # mixed dictation. Disable if the term list ever bleeds into transcripts.
+        # Vocabulary uses one bounded channel; never duplicate the glossary in
+        # initial_prompt and hotwords.
         self.glossary_prompt = config.get("glossary_prompt", True)
-        # Cap glossary terms folded into the prompt (faster-whisper's prompt token
-        # budget is ~224); hotwords carries the full list unbounded-by-this.
-        self._glossary_prompt_max = 30
         self.device = None            # actual device in use after load
         self.fallback_reason = None   # set when GPU load failed and CPU took over
         self.model = None             # loaded lazily via load()/ensure_loaded()
@@ -124,18 +121,33 @@ class Transcriber:
         """Fewer beams on CPU for speed; full beam on GPU for accuracy."""
         return self.beam_size_cpu if self.device == "cpu" else self.beam_size
 
-    def _effective_prompt(self, glossary=None) -> str:
-        """Combine the configured initial_prompt with a short Hebrew priming
-        sentence that lists English glossary terms (in Latin), nudging the model
-        to keep them in English. Returns None if there is nothing to prompt with.
-        """
-        prompt = self.initial_prompt or ""
-        if self.glossary_prompt and glossary:
-            terms = [t for t in glossary if t][:self._glossary_prompt_max]
-            if terms:
-                priming = "מונחים באנגלית: " + ", ".join(terms) + "."
-                prompt = f"{prompt} {priming}".strip() if prompt else priming
-        return prompt or None
+    def _fit_hint(self, text, budget):
+        """Keep complete words inside the actual model-token budget."""
+        kept = []
+        for word in (text or "").split():
+            candidate = " ".join(kept + [word])
+            if len(self.model.hf_tokenizer.encode(" " + candidate).ids) > budget:
+                break
+            kept.append(word)
+        return " ".join(kept) or None
+
+    def _prompt_inputs(self, hotwords, glossary):
+        # faster-whisper adds hotwords AND initial_prompt to the decoder prefix.
+        # Repeating a glossary in both overloaded that prefix and could cause
+        # spoken English to disappear. Share one bounded vocabulary channel.
+        budget = min(112, self.model.max_length // 2 - 8)
+        prompt = self._fit_hint(self.initial_prompt, min(16, budget))
+        used = len(self.model.hf_tokenizer.encode(" " + prompt).ids) if prompt else 0
+        words, seen = [], set()
+        sources = list(reversed(glossary or [])) if self.glossary_prompt else []
+        sources.append(hotwords or "")
+        for source in sources:
+            for word in source.split():
+                key = word.casefold()
+                if key not in seen:
+                    seen.add(key)
+                    words.append(word)
+        return prompt, self._fit_hint(" ".join(words), min(96, budget - used))
 
     def transcribe(self, audio: np.ndarray, hotwords: str = None,
                    glossary=None) -> str:
@@ -143,21 +155,24 @@ class Transcriber:
 
         hotwords: optional space-joined vocabulary (learned corrections / approved
         words / English glossary) that biases the model toward those words.
-        glossary: optional list of English terms folded into initial_prompt (when
-        config glossary_prompt is on) so mixed dictation stays in Latin.
-        faster-whisper folds hotwords into the prompt alongside initial_prompt.
+        glossary: optional English vocabulary, prioritized newest first when
+        glossary_prompt is on. Vocabulary is deduplicated and bounded together
+        with initial_prompt using the loaded model's actual tokenizer.
         """
         if audio is None or len(audio) == 0:
             return ""
         with self._lock:
             self.ensure_loaded()  # reload transparently if it was released
+            prompt, vocabulary = self._prompt_inputs(hotwords, glossary)
             segments, _info = self.model.transcribe(
                 audio,
                 language=self.language,
+                task="transcribe",
                 beam_size=self._effective_beam(),
                 vad_filter=self.vad_filter,
-                initial_prompt=self._effective_prompt(glossary),
-                hotwords=hotwords or None,
+                initial_prompt=prompt,
+                hotwords=vocabulary,
+                condition_on_previous_text=False,
             )
             text = "".join(segment.text for segment in segments)
             return text.strip()

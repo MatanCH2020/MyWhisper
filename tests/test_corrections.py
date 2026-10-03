@@ -158,6 +158,8 @@ class CorrectionsTestCase(unittest.TestCase):
         terms = corrections.english_terms()
         self.assertIn("PowerShell", terms)
         self.assertIn("GitHub", terms)
+        self.assertIn("iOS", terms)
+        self.assertIn("Android", terms)
         self.assertTrue(corrections.ENGLISH_TERMS_PATH.exists())
 
     def test_add_english_term(self):
@@ -189,6 +191,12 @@ class CorrectionsTestCase(unittest.TestCase):
             corrections.add_english_term(f"Term{i}")
         self.assertLessEqual(len(corrections.bias_terms().split()),
                              corrections._MAX_BIAS_TERMS)
+
+    def test_recent_english_terms_survive_a_large_dictionary(self):
+        for i in range(110):
+            corrections.add_english_term(f"OldTerm{i}")
+        corrections.add_english_term("MyPlatform")
+        self.assertEqual(corrections.bias_terms().split()[0], "MyPlatform")
 
     # ---- multi-word / English correction backstop ----
 

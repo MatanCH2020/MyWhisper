@@ -30,7 +30,7 @@ DEFAULTS = {
     "sounds": True,
     "sound_volume": 0.25,
     "initial_prompt": "",
-    "glossary_prompt": True,          # fold the English glossary into the prompt
+    "glossary_prompt": True,          # prioritize English vocabulary in bounded hints
     # Clipboard history — everything you copy, independent of transcription.
     "clipboard_history": True,
     "clipboard_hotkey": "ctrl+`",     # opens the picker

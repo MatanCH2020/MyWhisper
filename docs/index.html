@@ -784,10 +784,10 @@ footer a{color:var(--muted);transition:color 0.2s}footer a:hover{color:var(--tex
 
     <div class="stage">
       <div class="halo" aria-hidden="true"></div>
-      <img class="overlay-float" src="app-overlay.png?v=1.13.1" alt="מחוון ההקלטה הצף">
+      <img class="overlay-float" src="app-overlay.png?v=1.13.2" alt="מחוון ההקלטה הצף">
       <div class="window">
         <div class="winbar"><span class="d r"></span><span class="d y"></span><span class="d g"></span><span>MyWhisper — Matan Digital</span></div>
-        <img class="shot" src="app-history-dark.png?v=1.13.1" alt="חלון ההיסטוריה של MyWhisper עם תמלולים בעברית">
+        <img class="shot" src="app-history-dark.png?v=1.13.2" alt="חלון ההיסטוריה של MyWhisper עם תמלולים בעברית">
       </div>
     </div>
   </div>
@@ -892,7 +892,7 @@ footer a{color:var(--muted);transition:color 0.2s}footer a:hover{color:var(--tex
       <div class="pt"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg><span>המודל מקבל את המילה כרמז ומפיק אותה נכון מראש</span></div>
       <div class="pt"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg><span>מילים באנגלית נשארות LTR בתוך העברית — בלי בלגן כיווניות</span></div>
     </div>
-    <div class="media"><img class="shot" src="app-dictionary-dark.png?v=1.13.1" alt="מילון התיקונים הנלמדים של MyWhisper"></div>
+    <div class="media"><img class="shot" src="app-dictionary-dark.png?v=1.13.2" alt="מילון התיקונים הנלמדים של MyWhisper"></div>
   </div>
 </section>
 
@@ -904,26 +904,26 @@ footer a{color:var(--muted);transition:color 0.2s}footer a:hover{color:var(--tex
       <p>פתחו עם <bdi>Ctrl+`</bdi> ובחרו פריט ברשימה כדי לקרוא את הטקסט המלא או לצפות בתמונה עם הגדלה. אפשר לגרור את החלון, לשנות את גודלו ולהגדיל למסך מלא.</p>
       <p>כפתור ההעתקה, Enter או לחיצה כפולה מחזירים את הפריט ללוח. Esc סוגר את החלון.</p>
     </div>
-    <div class="media"><img class="shot" src="app-clipboard-dark.png?v=1.13.1" alt="היסטוריית העתקות עם תצוגת הטקסט המלא לצד הרשימה"></div>
+    <div class="media"><img class="shot" src="app-clipboard-dark.png?v=1.13.2" alt="היסטוריית העתקות עם תצוגת הטקסט המלא לצד הרשימה"></div>
   </div>
 </section>
 
 <!-- release:start -->
-<section id="updates" data-release-version="1.13.1">
+<section id="updates" data-release-version="1.13.2">
   <div class="wrap">
     <span class="eyebrow">מה חדש</span>
-    <h2 class="h2">הגרסה העדכנית: <bdi>v1.13.1</bdi></h2>
+    <h2 class="h2">הגרסה העדכנית: <bdi>v1.13.2</bdi></h2>
     <p class="sub">העדכונים האחרונים מתוך יומן השינויים של התוכנה.</p>
     <div class="release-notes">
       <ul>
-        <li><strong>סריקה שלא נעצרת בגלל הצעה בודדת</strong>: תיקון שאינו מתאים למקור, משנה מספר או שלילה, או חופף לתיקון אחר נדחה בנפרד. התיקונים המאומתים ממשיכים להיבדק ולהישמר בסיום תקין. כשל חיבור, ביטול או תשובה חלקית עדיין אינם מחילים שינויים.</li>
-        <li><strong>התקדמות ברורה בסריקה</strong>: הצגת שלב הפעולה, הקבוצה הנבדקת, מספר התמלולים שנבדקו, זמן שחלף וזמן ההמתנה לתשובת ChatGPT. כפתור הסריקה משתנה ל„סורק…” ונשאר כפתור ביטול פעיל.</li>
-        <li><strong>סיכום קבוע ופירוט התיקונים</strong>: מספר התמלולים שתוקנו, תיקונים שנלמדו, מונחי אנגלית שנוספו והצעות שנדחו עם הסבר. „הצג תוצאות” פותח טבלת לפני ואחרי. הסיכום נשמר גם לאחר הפעלה מחדש; סריקה ללא שינויים או כשל מוצגות במפורש.</li>
+        <li><strong>תיקון אובדן אנגלית בהכתבה משולבת</strong>: המילון הוזן למודל בשני ערוצים במקביל ויצר הכוונה ארוכה מדי. כעת המונחים מוזנים פעם אחת, עם תקציב לפי הטוקנייזר של המודל, כדי לצמצם השמטת מילים באנגלית וחזרות מההכוונה. התיקון מתבצע בתמלול המקומי.</li>
+        <li><strong>עדיפות למונחים חדשים</strong>: מילים שנוספו לאחרונה מקבלות עדיפות גם במילון גדול. `iOS` ו-`Android` נוספו למילון ברירת המחדל להתקנות חדשות; מילונים אישיים קיימים נשמרים.</li>
+        <li><strong>אימות אודיו משולב</strong>: בדיקות GPU עם עברית מוקלטת ומונחי אנגלית סינתטיים, וכן בדיקות רגרסיה לתקציב ההכוונה, מניעת כפילויות ושמירת טקסט משולב. המודל עדיין עלול לטעות בזיהוי; אין הבטחה לתמלול מושלם של כל שילוב שפות.</li>
       </ul>
     </div>
     <div class="cta-row">
-      <a class="btn btn-lg btn-primary" href="https://github.com/MatanCH2020/MyWhisper/releases/download/v1.13.1/MyWhisper-Setup.cmd">הורדת המתקין</a>
-      <a class="btn btn-lg btn-ghost" href="https://github.com/MatanCH2020/MyWhisper/releases/tag/v1.13.1">כל פרטי הגרסה</a>
+      <a class="btn btn-lg btn-primary" href="https://github.com/MatanCH2020/MyWhisper/releases/download/v1.13.2/MyWhisper-Setup.cmd">הורדת המתקין</a>
+      <a class="btn btn-lg btn-ghost" href="https://github.com/MatanCH2020/MyWhisper/releases/tag/v1.13.2">כל פרטי הגרסה</a>
     </div>
   </div>
 </section>
@@ -938,6 +938,7 @@ footer a{color:var(--muted);transition:color 0.2s}footer a:hover{color:var(--tex
       <details><summary>מה צריך כדי שזה ירוץ?<span class="plus"></span></summary><p>Windows 10/11 ומיקרופון. מומלץ כרטיס NVIDIA (מהיר מאוד); בלעדיו התוכנה עוברת אוטומטית למעבד — עובד, רק איטי יותר. ההתקנה מסדרת לבד את Python וכל התלויות.</p></details>
       <details><summary>כמה זה עולה?<span class="plus"></span></summary><p>התמלול המקומי חינם וללא חשבון. עריכת ChatGPT היא תוספת כבויה כברירת מחדל, בכפוף לזכאות ולמכסת החשבון האישי. אין מעבר אוטומטי ל-API בתשלום.</p></details>
       <details><summary>המידע שלי נשלח לענן?<span class="plus"></span></summary><p>ברירת המחדל היא תמלול מקומי ללא בקשות עריכה ל-OpenAI. בהפעלה מפורשת של „שיפור הטקסט עם ChatGPT”, עותק טקסט ההכתבה נשלח ל-OpenAI לעריכה. לחיצה על סריקת ההיסטוריה בעמוד המילון שולחת גם את היסטוריית התמלולים לתיקון. האודיו והיסטוריית ההעתקות אינם נשלחים. כיבוי המתג מפסיק עריכות, סריקה וחידוש הרשאות ברקע.</p></details>
+      <details><summary>אפשר לשלב עברית ואנגלית באותה הכתבה?<span class="plus"></span></summary><p>אפשר לשלב מונחים באנגלית בתוך משפט בעברית, למשל אפליקציה ל־<bdi>iOS</bdi> ול־<bdi>Android</bdi>. בעמוד המילון מוסיפים שמות ומונחים באנגלית; תוספות חדשות מקבלות עדיפות בהכוונת התמלול. בגרסה 1.13.2 תוקן עומס בהכוונה שגרם להשמטת אנגלית. השיפור פועל מקומית גם כשהתוספת של ChatGPT כבויה. זיהוי הדיבור עדיין עלול לטעות.</p></details>
       <details><summary>אפשר לתקן תמלולים קודמים וללמוד מילים?<span class="plus"></span></summary><p>בעמוד המילון בוחרים „סרוק ותקן את ההיסטוריה” אחרי חיבור והפעלה מפורשת של ChatGPT. הסריקה משתמשת במשפט המלא לתיקון כתיב ותחביר ולכתיבת מונחים לועזיים באנגלית. תיקונים עקביים נלמדים להמשך, ותיקוני הקשר נשארים במשפט בלבד. בזמן הסריקה מוצגים השלב, הקבוצה, מספר התמלולים וזמן ההמתנה. בסיום נשאר סיכום עם מספר התיקונים שנשמרו וההצעות שנדחו; „הצג תוצאות” מציג טבלת לפני ואחרי. הצעה בעייתית נדחית בנפרד ואינה מבטלת תיקונים אחרים שאומתו. הסיכום והמקור נשמרים גם אחרי הפעלה מחדש וניתן לבטל את התיקונים שנשמרו. הפעולה משתמשת במכסת החשבון ואינה מתבצעת אוטומטית.</p></details>
       <details><summary>איך מפעילים שיפור טקסט עם ChatGPT?<span class="plus"></span></summary><p>בהגדרות מתחברים עם Continue with ChatGPT ומאשרים בדפדפן. ההתחברות לבדה אינה מפעילה עריכה. בוחרים מודל זמין בחשבון, מפעילים את המתג ומאשרים שליחת טקסט. התוספת מנקה חזרות והיסוסים ומשפרת ניסוח, בלי להבטיח תיקון של כל טעות בזיהוי. בכשל או בעיכוב מעל שתי שניות משתמשים בתמלול המקומי. בהיסטוריה נשמר גם המקור; מעבר לחלון אחר בזמן העיבוד משאיר את התוצאה בהיסטוריה.</p></details>
       <details><summary>איך משנים את קיצור המקלדת?<span class="plus"></span></summary><p>ישירות מתוך <b>הגדרות ← קיצור מקלדת</b> — לוחצים ומקישים צירוף חדש (למשל <code>Ctrl+Alt+Space</code>), והוא מתעדכן מיד. יש גם כפתורי צירוף-מהיר.</p></details>

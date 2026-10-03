@@ -32,6 +32,7 @@ ENGLISH_TERMS_PATH = _ROOT / "english_terms.json"
 # of the box. The user can add or remove terms from the מילון page; the file is
 # seeded from this list on first load (when english_terms.json does not exist).
 _DEFAULT_ENGLISH_TERMS = [
+    "iOS", "Android",
     "PowerShell", "GitHub", "Git", "Docker", "Python", "Node", "npm",
     "API", "JSON", "VSCode", "Linux", "Windows", "Claude", "Cursor",
     "Anthropic", "Whisper", "CUDA", "GPU", "README", "commit", "terminal",
@@ -353,13 +354,13 @@ def remove_english_term(term: str):
 def bias_terms() -> str:
     """Space-joined string of glossary/corrected/approved words to bias Whisper toward.
 
-    English glossary terms come first (highest signal for mixed dictation), then
+    Newest English glossary terms come first (highest signal for mixed dictation), then
     correction targets — neither is dropped in favor of plain dictionary words;
     the most recently approved dictionary words fill the remaining slots, so the
     prompt stays bounded at _MAX_BIAS_TERMS.
     """
     with _lock:
-        eng_terms = list(dict.fromkeys(_load_english_terms()))[:_MAX_BIAS_TERMS]
+        eng_terms = list(dict.fromkeys(reversed(_load_english_terms())))[:_MAX_BIAS_TERMS]
         seen = set(eng_terms)
         corr_terms = [v for v in dict.fromkeys(_load_corrections().values())
                       if v not in seen][:max(0, _MAX_BIAS_TERMS - len(eng_terms))]

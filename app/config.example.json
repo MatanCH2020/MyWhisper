@@ -16,7 +16,7 @@
   "release_on_fullscreen": true,
   "sounds": true,
   "sound_volume": 0.25,
-  "initial_prompt": "שלום, מה שלומך? היום יום יפה.",
+  "initial_prompt": "",
   "glossary_prompt": true,
   "clipboard_history": true,
   "clipboard_hotkey": "ctrl+`",

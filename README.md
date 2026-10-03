@@ -17,7 +17,7 @@
 ### 🌐 [דף הבית ← matanch2020.github.io/MyWhisper](https://matanch2020.github.io/MyWhisper/) · ⬇️ [הורדת מתקין](https://github.com/MatanCH2020/MyWhisper/releases/latest/download/MyWhisper-Setup.cmd)
 
 <!-- release-version:start -->
-**גרסה נוכחית: [v1.13.1](https://github.com/MatanCH2020/MyWhisper/releases/tag/v1.13.1)** · [היסטוריית העדכונים](CHANGELOG.md)
+**גרסה נוכחית: [v1.13.2](https://github.com/MatanCH2020/MyWhisper/releases/tag/v1.13.2)** · [היסטוריית העדכונים](CHANGELOG.md)
 <!-- release-version:end -->
 
 <br>
@@ -170,6 +170,14 @@ irm https://raw.githubusercontent.com/MatanCH2020/MyWhisper/main/scripts/uninsta
 [ניהול שימוש והרשאות ב-ChatGPT](https://chatgpt.com/settings/usage) מאפשר לבדוק מכסה וניתוק.
 בקשות העריכה משתמשות ב-Responses API עם `store=false` ו-`stream=true`; רק תשובה שהושלמה מתקבלת.
 
+### הכתבה עם עברית ואנגלית
+
+אפשר לשלב מונחים באנגלית בתוך משפט בעברית, למשל „אני רוצה לבנות אפליקציה ל־iOS ול־Android”.
+בעמוד **מילון** אפשר להוסיף שמות מוצרים ומונחים באנגלית; מונחים שנוספו לאחרונה מקבלים
+עדיפות בהכוונת התמלול. ההכוונה מוגבלת ואינה מוזנת פעמיים, כדי למנוע עומס שגרם להשמטת
+מילים בהכתבות משולבות. זהו חלק מהתמלול המקומי ופועל גם כשהתוספת של ChatGPT כבויה.
+המילון עוזר לזיהוי, אך אינו מבטיח לזהות כל מילה או לכתוב כל מונח לועזי באנגלית.
+
 ### תיקון חכם של ההיסטוריה ולמידה להמשך
 
 בעמוד **מילון** לחצו **סרוק ותקן את ההיסטוריה**, לאחר חיבור חשבון, בחירת מודל והפעלת
@@ -238,7 +246,7 @@ irm https://raw.githubusercontent.com/MatanCH2020/MyWhisper/main/scripts/uninsta
 | `highlight_unknown` | סימון אדום של מילים לא-מוכרות בהיסטוריה |
 | `bidi_isolate` | שמירת כיווניות — אנגלית נשארת LTR בתוך עברית |
 | `glossary_prompt` | שילוב המונחים האישיים באנגלית בהכוונת מודל התמלול |
-| `initial_prompt` | טקסט עברי שמכוון את המודל לפיסוק |
+| `initial_prompt` | הקשר קצר נוסף לתמלול (עד 16 טוקנים); מומלץ להשאיר ריק |
 | `theme` | `dark` / `light` |
 | `chatgpt_enabled` | עריכת טקסט בענן לאחר התמלול המקומי; ברירת מחדל `false`, גם בשדרוג. התחברות אינה מפעילה את התוספת |
 | `chatgpt_model` | מזהה המודל מהקטלוג של החשבון המחובר. GPT-6 Luna נבחר אם זמין; אחרת יש לבחור מודל לפני הפעלה |
