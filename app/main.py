@@ -72,6 +72,7 @@ from cloud_http import CloudHTTP
 from chatgpt_auth import ChatGPTAuth, AuthError, DEFAULT_MODEL
 from text_editor import TextEditor
 from delivery import foreground_window, same_destination, DestinationGuard
+from external_browser import browser_choices, open_external_browser
 
 
 class State(enum.Enum):
@@ -171,6 +172,7 @@ class Mywishper(QObject):
         self.ui.do_update = self._do_update
         self.ui.chatgpt_status = self._chatgpt_status
         self.ui.chatgpt_action = self._chatgpt_action
+        self.ui.chatgpt_browsers = browser_choices
 
         self._lock = threading.Lock()
         self._state = State.IDLE
@@ -225,7 +227,8 @@ class Mywishper(QObject):
             elif action in ("login", "relogin", "select", "disconnect"):
                 self._set_chatgpt_enabled(False)
                 if action in ("login", "relogin"):
-                    self.chatgpt.sign_in(returning=action == "relogin")
+                    self.chatgpt.sign_in(returning=action == "relogin", browser=lambda url:
+                        open_external_browser(url, self.config.get("chatgpt_browser", "system")))
                     message = ("החשבון מחובר. השימוש במסגרת חשבון ChatGPT ובכפוף למכסתו. "
                                "העריכה עדיין כבויה; אפשר להפעיל אותה בנפרד.")
                     if not self.chatgpt.status()["eligible"]:
@@ -245,6 +248,13 @@ class Mywishper(QObject):
                 with self.chatgpt.lock:
                     self.chatgpt.data["welcome_seen"] = True
                     self.chatgpt.store.save(self.chatgpt.data)
+            elif action == "browser":
+                if value in {b["slug"] for b in browser_choices()}:
+                    self.config["chatgpt_browser"] = value
+                    save_config(self.config)
+            elif action == "usage":
+                if not open_external_browser("https://chatgpt.com/settings/usage", self.config.get("chatgpt_browser", "system")):
+                    message = "לא ניתן לפתוח דפדפן חיצוני. בחר דפדפן מותקן בהגדרות ההתחברות."
             elif action == "catalog":
                 self.chatgpt.catalog()
                 if self.config.get("chatgpt_model") not in {m["slug"] for m in self.chatgpt.status()["models"]}:

@@ -121,7 +121,7 @@ Keys by group:
 - *Resources*: `idle_release_minutes`, `release_on_fullscreen` (both drive `_resource_poll`'s model unload).
 - *Clipboard history*: `clipboard_history` (master switch — when off, no watcher and no second hotkey are created at all), `clipboard_hotkey`, `clipboard_paused`.
 - *UI*: `theme`, `sounds`, `sound_volume`, `highlight_unknown`, `bidi_isolate`.
-- *ChatGPT*: `chatgpt_enabled` (strict boolean, default false), `chatgpt_model` (account-catalog slug, default empty). Never store credentials in config.
+- *ChatGPT*: `chatgpt_enabled` (strict boolean, default false), `chatgpt_model` (account-catalog slug, default empty), `chatgpt_browser` (system or an explicitly selected installed external browser, e.g. chrome). Never store credentials in config.
 
 ## Distribution & updates
 

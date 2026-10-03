@@ -472,6 +472,41 @@ class CloudSettingsTests(unittest.TestCase):
             config.save_config({"chatgpt_enabled": True, "chatgpt_model": "gpt-6-luna"})
             self.assertIs(config.load_config()["chatgpt_enabled"], True)
 
+    def test_selected_browser_survives_login_and_settings_save(self):
+        app = main.Mywishper.__new__(main.Mywishper)
+        QObject.__init__(app)
+        app.config = self.ui.config
+        app.chatgpt = Mock()
+        status = {"eligible": False, "models": [], "enabled": False}
+        app.chatgpt.status.return_value = status
+        app.chatgpt.data = {}
+        app._chatgpt_status = Mock(return_value=status)
+        app._set_chatgpt_enabled = Mock(return_value=False)
+        app._apply_sound_config = Mock()
+        app.tray = Mock()
+        app._clip_picker = None
+        self.ui.chatgpt_action = app._chatgpt_action
+        self.ui.chatgpt_browsers = lambda: [{"slug": "system", "name": "System"},
+                                          {"slug": "chrome", "name": "Chrome"}]
+        # Recreate settings just as a theme change or app restart would.
+        from ui import MainWindow
+        win = MainWindow(self.ui, self.ui.p)
+        self.addCleanup(win.deleteLater)
+        url = "https://auth.openai.com/api/accounts/authorize?state=synthetic"
+        app.chatgpt.sign_in.side_effect = lambda **kw: kw["browser"](url)
+        with tempfile.TemporaryDirectory() as folder, \
+             patch.object(config, "CONFIG_PATH", Path(folder) / "config.json"), \
+             patch.object(main, "browser_choices", self.ui.chatgpt_browsers), \
+             patch.object(main, "open_external_browser", return_value=True) as launch:
+            win._cloud_browser.setCurrentIndex(win._cloud_browser.findData("chrome"))
+            self.assertEqual(config.load_config()["chatgpt_browser"], "chrome")
+            app._chatgpt_action("login")
+            launch.assert_called_once_with(url, "chrome")
+            app._on_settings_change(self.ui.config)
+            restored = config.load_config()
+            self.assertEqual(restored["chatgpt_browser"], "chrome")
+            self.assertIs(restored["chatgpt_enabled"], False)
+
 
 class PipelineTests(unittest.TestCase):
     def run_pipeline(self, edited, destination=True, enabled=True):

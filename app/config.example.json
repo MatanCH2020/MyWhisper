@@ -25,5 +25,6 @@
   "bidi_isolate": true,
   "theme": "dark",
   "chatgpt_enabled": false,
-  "chatgpt_model": ""
+  "chatgpt_model": "",
+  "chatgpt_browser": "system"
 }

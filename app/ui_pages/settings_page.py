@@ -6,8 +6,6 @@ import theme
 from version import __version__ as APP_VERSION
 
 from PySide6.QtCore import Qt, QTimer
-from PySide6.QtCore import QUrl
-from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import QComboBox, QFileDialog, QFrame, QHBoxLayout, QLabel, QMessageBox, QProgressBar, QPushButton, QScrollArea, QSlider, QVBoxLayout, QWidget
 
 from widgets import Card, ToggleSwitch
@@ -251,6 +249,18 @@ class SettingsPageMixin:
         self._cloud_account.setAccessibleName("חשבון ChatGPT פעיל")
         self._cloud_account.currentIndexChanged.connect(self._cloud_account_changed)
         card.vbox.addWidget(self._cloud_account)
+        browser_row = QHBoxLayout()
+        browser_row.addWidget(self._plain("דפדפן להתחברות"))
+        self._cloud_browser = QComboBox()
+        self._cloud_browser.setAccessibleName("דפדפן חיצוני להתחברות ChatGPT")
+        for browser in self.ui.chatgpt_browsers():
+            self._cloud_browser.addItem(browser["name"], browser["slug"])
+        self._cloud_browser.setCurrentIndex(max(0, self._cloud_browser.findData(self.ui.config.get("chatgpt_browser", "system"))))
+        self._cloud_browser.currentIndexChanged.connect(lambda: self.ui.chatgpt_action("browser", self._cloud_browser.currentData()))
+        browser_row.addWidget(self._cloud_browser, 1)
+        card.vbox.addLayout(browser_row)
+        card.vbox.addWidget(self._hint("ההתחברות נפתחת בדפדפן החיצוני שנבחר, עם פרופיל הדפדפן הרגיל שלך. "
+                                      "בחר את הדפדפן שבו כבר התחברת לחשבון ChatGPT."))
         row = QHBoxLayout()
         self._cloud_login = QPushButton("Continue with ChatGPT")
         self._cloud_login.setAccessibleName("התחברות עם ChatGPT")
@@ -295,7 +305,7 @@ class SettingsPageMixin:
         self._cloud_status.setObjectName("hint")
         card.vbox.addWidget(self._cloud_status)
         usage = QPushButton("ניהול שימוש והרשאות ב-ChatGPT")
-        usage.clicked.connect(lambda: QDesktopServices.openUrl(QUrl("https://chatgpt.com/settings/usage")))
+        usage.clicked.connect(lambda: self.ui.chatgpt_action("usage"))
         card.vbox.addWidget(usage)
         self._cloud_timer = QTimer(self)
         self._cloud_timer.timeout.connect(self._refresh_cloud)
@@ -382,6 +392,7 @@ class SettingsPageMixin:
                        self._cloud_account, self._cloud_model, self._cloud_refresh, self._cloud_switch):
             widget.setEnabled(False)
         self._cloud_switch.setEnabled(action == "catalog" and self.ui.chatgpt_status().get("enabled", False))
+        self._cloud_browser.setEnabled(False)
         self._cloud_cancel.setVisible(action in ("login", "relogin"))
         self._cloud_status.setText("השלם התחברות ואישור בדפדפן…" if action in ("login", "relogin") else "מעבד…")
         def work():
@@ -395,6 +406,7 @@ class SettingsPageMixin:
     def _on_cloud_result(self, result):
         self._cloud_busy = False
         self._cloud_cancel.hide()
+        self._cloud_browser.setEnabled(True)
         for widget in (self._cloud_login, self._cloud_relogin, self._cloud_logout,
                        self._cloud_account, self._cloud_model, self._cloud_refresh, self._cloud_switch):
             widget.setEnabled(True)

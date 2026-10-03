@@ -870,6 +870,7 @@ class AppUI(QObject):
         self.do_update = lambda: False
         self.chatgpt_status = lambda: {"accounts": [], "models": [], "enabled": False}
         self.chatgpt_action = lambda action, value=None: self.chatgpt_status()
+        self.chatgpt_browsers = lambda: [{"slug": "system", "name": "דפדפן ברירת המחדל — חיצוני"}]
         self._minimize_hint_shown = False
         # Transcriptions that landed while the window was hidden; the history
         # page is rebuilt on the way back in instead of on every dictation.

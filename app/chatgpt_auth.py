@@ -19,9 +19,9 @@ import threading
 import time
 from urllib.parse import parse_qs, urlencode, urlsplit
 import uuid
-import webbrowser
 
 import jwt
+from external_browser import open_external_browser
 
 AUTH = "https://auth.openai.com"
 RESOURCE = "https://api.openai.com/v1"
@@ -233,7 +233,7 @@ class ChatGPTAuth:
         except (ValueError, TypeError, KeyError):
             raise AuthError("authorization") from None
 
-    def sign_in(self, returning=False, browser=webbrowser.open, timeout=180):
+    def sign_in(self, returning=False, browser=open_external_browser, timeout=180):
         if not self._signin_lock.acquire(blocking=False):
             raise AuthError("busy")
         try:
