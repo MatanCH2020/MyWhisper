@@ -25,7 +25,8 @@ def _key(vk, up=False):
     _user32.keybd_event(vk, 0, _KEYUP if up else 0, 0)
 
 
-def paste_text(text: str, restore_clipboard: bool = True, restore_delay: float = 0.5):
+def paste_text(text: str, restore_clipboard: bool = True, restore_delay: float = 0.5,
+               *, destination_check=None):
     """Copy text to the clipboard and inject Ctrl+V into the focused window.
 
     If restore_clipboard is True, the user's previous clipboard content is
@@ -39,6 +40,8 @@ def paste_text(text: str, restore_clipboard: bool = True, restore_delay: float =
         previous, sequence = clipboard.write_text(text, preserve=restore_clipboard)
         try:
             time.sleep(0.05)
+            if destination_check is not None and not destination_check():
+                return False
             for vk in _STRAY_MODS:
                 _key(vk, up=True)
             try:
@@ -54,3 +57,4 @@ def paste_text(text: str, restore_clipboard: bool = True, restore_delay: float =
                     clipboard.restore(previous, sequence)
                 except OSError:
                     log.warning("Clipboard restore failed; dictation remains available in history")
+    return True

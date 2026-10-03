@@ -23,5 +23,8 @@
   "clipboard_paused": false,
   "highlight_unknown": true,
   "bidi_isolate": true,
-  "theme": "dark"
+  "theme": "dark",
+  "chatgpt_enabled": false,
+  "chatgpt_model": "",
+  "chatgpt_browser": "system"
 }

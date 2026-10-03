@@ -38,6 +38,10 @@ DEFAULTS = {
     "highlight_unknown": True,
     "bidi_isolate": True,
     "theme": "dark",
+    # Sign-in alone never opts a user into sending dictated text to OpenAI.
+    "chatgpt_enabled": False,
+    "chatgpt_model": "",
+    "chatgpt_browser": "system",
 }
 
 # Invalid values recover per key; unknown keys are preserved for compatibility.
@@ -47,6 +51,7 @@ _RANGES = {
     "sound_volume": (0, 1), "clipboard_restore_delay": (0, 30),
 }
 _CHOICES = {
+    "chatgpt_browser": {"system", "chrome", "edge", "firefox", "brave", "opera", "vivaldi"},
     "device": {"cuda", "cpu", "auto"}, "theme": {"dark", "light"},
     "compute_type": {"default", "auto", "int8", "int8_float16", "int8_float32",
                      "int8_bfloat16", "int16", "float16", "bfloat16", "float32"},

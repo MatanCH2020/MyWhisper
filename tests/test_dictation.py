@@ -4,7 +4,7 @@ from pathlib import Path
 import sys
 import tempfile
 import unittest
-from unittest.mock import Mock, patch
+from unittest.mock import ANY, Mock, patch
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "app"))
@@ -27,11 +27,12 @@ class DictationPipelineTest(unittest.TestCase):
              patch.object(main.corrections, "english_terms", return_value=[]), \
              patch.object(main.corrections, "apply", return_value="טקסט מתוקן") as correct, \
              patch.object(main.history, "add") as history, \
+             patch.object(main, "same_destination", return_value=True), \
              patch.object(main, "paste_text") as paste:
             app._worker([0])
         correct.assert_called_once_with("תמלול מקומי")
         history.assert_called_once_with("טקסט מתוקן")
-        paste.assert_called_once_with("טקסט מתוקן", False, 0.5)
+        paste.assert_called_once_with("טקסט מתוקן", False, 0.5, destination_check=ANY)
 
     def test_retired_config_keys_are_removed_but_future_keys_survive(self):
         with tempfile.TemporaryDirectory() as folder, \

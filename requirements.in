@@ -6,5 +6,8 @@ pyperclip>=1.8.2
 PySide6-Essentials>=6.6
 # Offline Hebrew word-frequency lexicon, used to flag unknown/mis-transcribed words.
 wordfreq>=3.0
+# Optional ChatGPT OAuth/Responses transport and verified RSA ID tokens.
+httpx>=0.28.1
+PyJWT[crypto]>=2.15.1
 # CUDA runtime libs live in requirements-cuda.txt — setup.ps1 installs them
 # only when an NVIDIA GPU is detected (they are a ~2GB+ download).

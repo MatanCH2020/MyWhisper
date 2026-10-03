@@ -34,7 +34,9 @@ DOCS = Path(__file__).resolve().parent.parent / "docs"
 
 DEMO_HISTORY = [
     {"id": "d1", "time": "2026-07-18 09:42",
-     "text": "שלום, זה תמלול לדוגמה שנכתב עם MyWhisper — בלי לגעת במקלדת!"},
+     "text": "שלום, זה תמלול לדוגמה שנכתב עם MyWhisper — בלי לגעת במקלדת!",
+     "original_text": "שלום שלום, אממ, זה תמלול לדוגמה שנכתב עם MyWhisper — בלי לגעת במקלדת!",
+     "edit_status": "edited"},
     {"id": "d2", "time": "2026-07-18 09:40",
      "text": "צריך להוסיף thumbnail לסרטון החדש, ואז לעשות render לפרויקט."},
     {"id": "d3", "time": "2026-07-18 09:37",
@@ -95,8 +97,24 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--overlay-only", action="store_true",
                         help="Refresh only the recording HUD screenshot")
+    parser.add_argument("--chatgpt-states", action="store_true",
+                        help="Render connected and failed-sign-in examples with synthetic account data")
     args = parser.parse_args()
     DOCS.mkdir(exist_ok=True)
+    if args.chatgpt_states:
+        for name, status in (
+            ("connected", {"active": "demo", "connected": True, "eligible": True,
+                           "email": "demo@example.test", "enabled": False, "model": "gpt-6-luna",
+                           "accounts": [{"key": "demo", "label": "demo@example.test"}],
+                           "models": [{"slug": "gpt-6-luna", "display_name": "GPT-6 Luna"}]}),
+            ("timeout", {"connected": False, "enabled": False, "sign_in_error": "timeout"}),
+        ):
+            win = build("dark")
+            win.ui.chatgpt_status = lambda status=status: status
+            win._refresh_cloud()
+            shoot(win, 2, DOCS / f"app-chatgpt-{name}-dark.png")
+            win.close()
+        return
     if args.overlay_only:
         shoot_overlay()
         return

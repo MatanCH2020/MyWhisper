@@ -8,10 +8,13 @@ __pycache__/
 
 # User data (personal — must not be published)
 history.json
+history_scan_undo.json
 corrections.json
 dictionary.json
 english_terms.json
 config.json
+# OAuth credentials are normally outside the project; never publish a local copy.
+*.dpapi
 # Clipboard history: literally everything the user has copied. Never commit.
 clips.json
 clip_images/

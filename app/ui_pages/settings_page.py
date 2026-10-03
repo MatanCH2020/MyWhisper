@@ -40,6 +40,7 @@ class SettingsPageMixin:
         self._status_timer = QTimer(self)
         self._status_timer.timeout.connect(self._refresh_model_status)
         self._refresh_model_status()
+        v.addWidget(self._chatgpt_card())
 
         # hotkey — one of the first things users need when dictation feels
         # "stuck", so keep it above the lower tuning/maintenance sections.
@@ -235,6 +236,255 @@ class SettingsPageMixin:
         area.setWidget(w)
         return area
 
+
+    def _chatgpt_card(self):
+        card = Card()
+        card.vbox.addWidget(self._section("שיפור הטקסט עם ChatGPT"))
+        card.vbox.addWidget(self._hint(
+            "תמלול מקומי כברירת מחדל. עריכת טקסט בענן — לבחירתך. "
+            "התוספת מסירה חזרות מקריות והיסוסים ומשפרת ניסוח ופיסוק. "
+            "היא אינה מבטיחה תיקון של כל טעות בזיהוי הדיבור."))
+        self._cloud_busy = False
+        self._cloud_connection = QLabel()
+        self._cloud_connection.setObjectName("connectionstatus")
+        self._cloud_connection.setTextFormat(Qt.PlainText)
+        self._cloud_connection.setWordWrap(True)
+        self._cloud_connection.setAccessibleName("מצב החיבור לחשבון ChatGPT")
+        card.vbox.addWidget(self._cloud_connection)
+        self._cloud_connection_detail = QLabel()
+        self._cloud_connection_detail.setTextFormat(Qt.PlainText)
+        self._cloud_connection_detail.setObjectName("fieldlabel")
+        self._cloud_connection_detail.setWordWrap(True)
+        card.vbox.addWidget(self._cloud_connection_detail)
+        self._cloud_account = QComboBox()
+        self._cloud_account.setAccessibleName("חשבון ChatGPT פעיל")
+        self._cloud_account.currentIndexChanged.connect(self._cloud_account_changed)
+        card.vbox.addWidget(self._cloud_account)
+        browser_row = QHBoxLayout()
+        browser_row.addWidget(self._plain("דפדפן להתחברות"))
+        self._cloud_browser = QComboBox()
+        self._cloud_browser.setAccessibleName("דפדפן חיצוני להתחברות ChatGPT")
+        for browser in self.ui.chatgpt_browsers():
+            self._cloud_browser.addItem(browser["name"], browser["slug"])
+        self._cloud_browser.setCurrentIndex(max(0, self._cloud_browser.findData(self.ui.config.get("chatgpt_browser", "system"))))
+        self._cloud_browser.currentIndexChanged.connect(lambda: self.ui.chatgpt_action("browser", self._cloud_browser.currentData()))
+        browser_row.addWidget(self._cloud_browser, 1)
+        card.vbox.addLayout(browser_row)
+        card.vbox.addWidget(self._hint("ההתחברות נפתחת בדפדפן החיצוני שנבחר, עם פרופיל הדפדפן הרגיל שלך. "
+                                      "בחר את הדפדפן שבו כבר התחברת לחשבון ChatGPT."))
+        row = QHBoxLayout()
+        self._cloud_login = QPushButton("Continue with ChatGPT")
+        self._cloud_login.setAccessibleName("התחברות עם ChatGPT")
+        self._cloud_login.clicked.connect(lambda: self._cloud_async("login"))
+        row.addWidget(self._cloud_login)
+        self._cloud_relogin = QPushButton("חדש התחברות")
+        self._cloud_relogin.clicked.connect(lambda: self._cloud_async("relogin"))
+        row.addWidget(self._cloud_relogin)
+        self._cloud_logout = QPushButton("ניתוק")
+        self._cloud_logout.clicked.connect(lambda: self._cloud_async("disconnect"))
+        row.addWidget(self._cloud_logout)
+        self._cloud_cancel = QPushButton("בטל התחברות")
+        self._cloud_cancel.clicked.connect(lambda: self.ui.chatgpt_action("cancel"))
+        self._cloud_cancel.hide()
+        row.addWidget(self._cloud_cancel)
+        card.vbox.addLayout(row)
+        row = QHBoxLayout()
+        row.addWidget(self._plain("מודל עריכת טקסט"))
+        self._cloud_model = QComboBox()
+        self._cloud_model.setAccessibleName("מודל עריכת ChatGPT")
+        self._cloud_model.currentIndexChanged.connect(self._cloud_model_changed)
+        row.addWidget(self._cloud_model, 1)
+        self._cloud_refresh = QPushButton("רענן מודלים")
+        self._cloud_refresh.clicked.connect(lambda: self._cloud_async("catalog"))
+        row.addWidget(self._cloud_refresh)
+        card.vbox.addLayout(row)
+        card.vbox.addWidget(self._hint(
+            "טקסט ההכתבה יישלח ל־OpenAI לעריכה. האודיו והתמלול נשארים במחשב. "
+            "השימוש כפוף לזכאות ולמכסת החשבון. התחברות לבדה אינה מפעילה עריכה. "
+            "בכשל או בעיכוב מעל שתי שניות יישמר ויודבק התמלול המקומי."
+            " כשעוברים לחלון אחר בזמן העיבוד, התוצאה תמתין בהיסטוריה."))
+        row = QHBoxLayout()
+        row.addWidget(self._plain("הפעל עריכה בענן"))
+        row.addStretch(1)
+        self._cloud_switch = ToggleSwitch(self.p, checked=False)
+        self._cloud_switch.setAccessibleName("הפעל שיפור טקסט עם ChatGPT")
+        self._cloud_switch.toggled.connect(self._cloud_toggle)
+        row.addWidget(self._cloud_switch)
+        card.vbox.addLayout(row)
+        self._cloud_status = QLabel()
+        self._cloud_status.setWordWrap(True)
+        self._cloud_status.setTextFormat(Qt.PlainText)
+        self._cloud_status.setObjectName("fieldlabel")
+        self._cloud_status.setAccessibleName("מצב עריכת הטקסט בענן")
+        card.vbox.addWidget(self._cloud_status)
+        usage = QPushButton("ניהול שימוש והרשאות ב-ChatGPT")
+        usage.clicked.connect(lambda: self.ui.chatgpt_action("usage"))
+        card.vbox.addWidget(usage)
+        self._cloud_timer = QTimer(self)
+        self._cloud_timer.timeout.connect(self._refresh_cloud)
+        self._cloud_timer.start(1500)
+        self._refresh_cloud()
+        return card
+
+    def _refresh_cloud(self, status=None):
+        self._refresh_scan_controls()
+        if self._cloud_busy:
+            return
+        st = status or self.ui.chatgpt_status()
+        for combo, items, current in (
+            (self._cloud_account, [("בחר חשבון", "")] + [(a["label"], a["key"]) for a in st.get("accounts", [])], st.get("active", "")),
+            (self._cloud_model, [("בחר מודל זמין בחשבון", "")] + [(m["display_name"], m["slug"]) for m in st.get("models", [])], st.get("model", ""))):
+            existing = [(combo.itemText(i), combo.itemData(i)) for i in range(combo.count())]
+            combo.blockSignals(True)
+            if existing != items:
+                combo.clear()
+                for label, key in items:
+                    combo.addItem(label, key)
+            if combo.currentData() != current:
+                combo.setCurrentIndex(max(0, combo.findData(current)))
+            combo.blockSignals(False)
+        connected = st.get("connected", False)
+        error = st.get("error")
+        reconnect = error in ("authorization", "identity") or (bool(st.get("active")) and not connected)
+        self._cloud_account.setVisible(bool(st.get("accounts")))
+        self._cloud_relogin.setVisible(reconnect or (connected and not st.get("eligible")))
+        self._cloud_relogin.setEnabled(bool(st.get("active")))
+        self._cloud_logout.setVisible(connected)
+        self._cloud_logout.setEnabled(connected)
+        self._cloud_model.setEnabled(connected and st.get("eligible", False))
+        self._cloud_refresh.setEnabled(connected)
+        model_ready = st.get("model") in {m["slug"] for m in st.get("models", [])}
+        ready = (connected and st.get("eligible", False) and model_ready
+                 and error not in ("authorization", "identity", "permission", "ineligible", "storage"))
+        self._cloud_switch.setEnabled(bool(ready) or st.get("enabled") is True)
+        self._cloud_switch.blockSignals(True)
+        self._cloud_switch.setChecked(st.get("enabled") is True)
+        self._cloud_switch.blockSignals(False)
+        if error == "storage":
+            connection = "מצב חיבור: לא ניתן לקרוא או לשמור הרשאות"
+            detail = "ההרשאות המוצפנות אינן זמינות. התמלול ממשיך מקומית."
+        elif reconnect:
+            connection = "מצב חיבור: נדרשת התחברות מחדש"
+            detail = "ההרשאה לחשבון אינה פעילה. לחץ על ‘חדש התחברות’ ואשר בדפדפן."
+        elif connected:
+            connection = "מצב חיבור: מחובר ל־ChatGPT"
+            detail = "חשבון פעיל: " + (st.get("email") or "ChatGPT")
+        else:
+            connection = "מצב חיבור: לא מחובר ל־ChatGPT"
+            detail = "לחץ על Continue with ChatGPT והשלם את האישור בדפדפן. כניסה לדפדפן לבדה אינה מחברת את MyWhisper."
+        signin_error = st.get("sign_in_error")
+        if signin_error:
+            failure = {
+                "timeout": "האישור לא התקבל בזמן. לחץ על ההתחברות ופתח ניסיון חדש בדפדפן.",
+                "cancelled": "ניסיון ההתחברות בוטל. אפשר להתחבר שוב כשתרצה.",
+                "permission": "ההרשאה לא אושרה. נסה שוב ואשר את החיבור בדפדפן.",
+                "identity": "אימות זהות החשבון נכשל. נסה להתחבר מחדש.",
+                "authorization": "ההרשאה נדחתה או פגה. נסה להתחבר מחדש.",
+                "browser": "הדפדפן לא נפתח. בחר דפדפן מותקן ונסה שוב.",
+                "storage": "לא ניתן לשמור את הרשאות החיבור במחשב.",
+            }.get(signin_error, "החיבור לא הושלם. בדוק את האינטרנט ונסה שוב.")
+            if connected:
+                detail += "\nהניסיון האחרון לא הושלם: " + failure
+            else:
+                detail = failure
+        if st.get("signing_in"):
+            connection = "מצב חיבור: ממתין לאישור בדפדפן…"
+            detail = "השלם את ההתחברות והאישור בדפדפן. החיבור יופיע כאן לאחר שהאישור יתקבל."
+        self._cloud_connection.setText(connection)
+        self._cloud_connection_detail.setText(detail)
+        self._cloud_switch.setToolTip("" if ready else "יש לחבר חשבון זכאי ולבחור מודל זמין לפני הפעלה.")
+        text = ("עריכת הטקסט: פעילה" if st.get("enabled") else "עריכת הטקסט: כבויה — התמלול נשאר מקומי")
+        if connected and not st.get("eligible", False):
+            text += "\nהחשבון מחובר, אך לא אושרה הרשאת עריכה או שהחשבון אינו זכאי."
+        elif error:
+            text += "\n" + {"quota": "המכסה אינה זמינה. העריכה כובתה; בדוק ניהול שימוש לפני הפעלה מחדש.",
+                    "ineligible": "החשבון אינו זכאי לעריכה. התמלול ממשיך מקומית.",
+                    "storage": "שמירת ההרשאות המוצפנות אינה זמינה; התמלול ממשיך מקומית.",
+                    "unsupported": "המודל או האפשרות שנבחרו אינם נתמכים; בחר מודל אחר."}.get(
+                        error, "נדרש חיבור מחדש לחשבון ChatGPT; התמלול ממשיך מקומית.")
+        elif connected and not model_ready:
+            text += "\nבחר מודל זמין ואז הפעל עריכה בנפרד."
+        elif connected and not st.get("enabled"):
+            text += "\nהחשבון מחובר. להפעלת השיפור יש להפעיל את המתג ולאשר שליחת טקסט."
+        self._cloud_status.setText(text)
+        self._cloud_login.setToolTip("הוסף חשבון ChatGPT" if st.get("accounts") else "התחבר עם חשבון ChatGPT אישי")
+
+    def _cloud_toggle(self, on):
+        if on:
+            box = QMessageBox(self)
+            box.setWindowTitle("הפעלת עריכת טקסט בענן")
+            box.setText("טקסט ההכתבה יישלח ל־OpenAI לעריכה. האודיו והתמלול נשארים במחשב. "
+                        "השימוש כפוף לזכאות ולמכסת החשבון.")
+            approve = box.addButton("הפעל עריכה בענן", QMessageBox.AcceptRole)
+            cancel = box.addButton("ביטול", QMessageBox.RejectRole)
+            box.setDefaultButton(cancel)
+            box.setEscapeButton(cancel)
+            box.exec()
+            on = box.clickedButton() is approve
+        result = self.ui.chatgpt_action("enable", bool(on))
+        self._refresh_cloud(result)
+        if result.get("message"):
+            self._toast.show_message(result["message"], msec=5000)
+
+    def _cloud_model_changed(self):
+        model = self._cloud_model.currentData()
+        if model:
+            self._refresh_cloud(self.ui.chatgpt_action("model", model))
+
+    def _cloud_account_changed(self):
+        key = self._cloud_account.currentData()
+        if key and key != self.ui.chatgpt_status().get("active"):
+            self._cloud_async("select", key)
+        else:
+            self._refresh_cloud()
+
+    def _cloud_async(self, action, value=None):
+        if self._cloud_busy:
+            return
+        # Disabling is synchronous and cancels any edit/refresh immediately.
+        if action != "catalog":
+            self.ui.chatgpt_action("enable", False)
+        self._cloud_busy = True
+        for widget in (self._cloud_login, self._cloud_relogin, self._cloud_logout,
+                       self._cloud_account, self._cloud_model, self._cloud_refresh, self._cloud_switch):
+            widget.setEnabled(False)
+        self._cloud_switch.setEnabled(action == "catalog" and self.ui.chatgpt_status().get("enabled", False))
+        self._cloud_browser.setEnabled(False)
+        if action in ("login", "relogin"):
+            self._cloud_connection.setText("מצב חיבור: ממתין לאישור בדפדפן…")
+            self._cloud_connection_detail.setText("השלם את ההתחברות והאישור בדפדפן. החיבור יופיע כאן לאחר שהאישור יתקבל.")
+        self._cloud_cancel.setVisible(action in ("login", "relogin"))
+        self._cloud_status.setText("השלם התחברות ואישור בדפדפן…" if action in ("login", "relogin") else "מעבד…")
+        def work():
+            try:
+                result = self.ui.chatgpt_action(action, value)
+            except Exception:
+                result = {**self.ui.chatgpt_status(), "message": "החיבור לא הושלם. אפשר לנסות שוב."}
+            self._cloud_result.emit(result)
+        threading.Thread(target=work, daemon=True).start()
+
+    def _on_cloud_result(self, result):
+        self._cloud_busy = False
+        self._cloud_cancel.hide()
+        self._cloud_browser.setEnabled(True)
+        for widget in (self._cloud_login, self._cloud_relogin, self._cloud_logout,
+                       self._cloud_account, self._cloud_model, self._cloud_refresh, self._cloud_switch):
+            widget.setEnabled(True)
+        self._refresh_cloud(result)
+        message = result.get("message", "")
+        if message:
+            # Successful sign-in acknowledges ChatGPT plan use explicitly while
+            # keeping the separate opt-in switch off.
+            if result.get("connected") and result.get("needs_welcome") and message.startswith("החשבון מחובר"):
+                box = QMessageBox(self)
+                box.setWindowTitle("החשבון מחובר ל-MyWhisper")
+                box.setText(message)
+                got_it = box.addButton("הבנתי", QMessageBox.AcceptRole)
+                box.exec()
+                if box.clickedButton() is got_it:
+                    self.ui.chatgpt_action("welcome")
+            else:
+                self._toast.show_message(message, msec=7000)
 
     def _collapsible_card(self, title, summary="", expanded=False):
         card = Card()

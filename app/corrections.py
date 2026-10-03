@@ -272,6 +272,44 @@ def list_corrections() -> dict:
         return dict(_load_corrections())
 
 
+def learn_scan(pairs, terms):
+    """Add AI rules without replacing manual rules. Return exactly what was added.
+
+    Targets are already known via the correction map, so no separate dictionary
+    approval is needed; this also makes undo precise.
+    """
+    with _lock:
+        current = dict(_load_corrections())
+        added = {wrong: right for wrong, right in pairs.items() if wrong not in current}
+        saved = True
+        if added and not _save_corrections({**current, **added}):
+            added = {}
+            saved = False
+        existing = list(_load_english_terms())
+        lower = {term.lower() for term in existing}
+        new_terms = []
+        for term in terms:
+            if term.lower() not in lower:
+                lower.add(term.lower())
+                new_terms.append(term)
+        if new_terms and not _save_english_terms(existing + new_terms):
+            new_terms = []
+            saved = False
+        return added, new_terms, saved
+
+
+def undo_scan_learning(pairs, terms):
+    """Remove the scan's additions only if their values have not been changed."""
+    with _lock:
+        current = dict(_load_corrections())
+        removed = {wrong for wrong, right in pairs.items() if current.get(wrong) == right}
+        if removed and not _save_corrections({k: v for k, v in current.items() if k not in removed}):
+            return False
+        existing = list(_load_english_terms())
+        kept = [term for term in existing if term not in terms]
+        return _save_english_terms(kept) if kept != existing else True
+
+
 def remove_correction(wrong: str):
     """Forget a learned correction."""
     with _lock:
