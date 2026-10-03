@@ -4,7 +4,7 @@ import html
 
 from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import QFont
-from PySide6.QtWidgets import QApplication, QFrame, QHBoxLayout, QLabel, QLineEdit, QMessageBox, QPushButton, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QApplication, QDialog, QFrame, QHBoxLayout, QLabel, QLineEdit, QMessageBox, QPlainTextEdit, QPushButton, QSizeGrip, QVBoxLayout, QWidget
 
 import icons
 import theme
@@ -59,7 +59,7 @@ class HistoryPageMixin:
                 self._hist_box.addWidget(
                     HistoryCard(self, e.get("id", ""),
                                 (e.get("text", "") or "").strip(),
-                                self._fmt_time(e.get("time", ""))))
+                                self._fmt_time(e.get("time", "")), e.get("original_text")))
             if not matches:
                 self._hist_box.addWidget(
                     self._muted(f"לא נמצאו תוצאות עבור “{self.search.text().strip()}”")
@@ -126,7 +126,7 @@ class HistoryPageMixin:
             v.addSpacing(8)
 
         v.addSpacing(6)
-        tip = QLabel("הכול רץ מקומית על המחשב שלך — בלי אינטרנט ובלי חשבון.")
+        tip = QLabel("תמלול מקומי כברירת מחדל. עריכת טקסט בענן — לבחירתך.")
         tip.setAlignment(Qt.AlignCenter)
         tip.setWordWrap(True)
         tip.setObjectName("hint")
@@ -181,7 +181,7 @@ class HistoryPageMixin:
             self._hist_box.addStretch(1)
         self._hist_box.insertWidget(
             0, HistoryCard(self, e.get("id", ""), text,
-                           self._fmt_time(e.get("time", ""))))
+                           self._fmt_time(e.get("time", "")), e.get("original_text")))
         cards = [i for i in range(self._hist_box.count())
                  if isinstance(self._hist_box.itemAt(i).widget(), HistoryCard)]
         for i in reversed(cards[self._page_limit:]):
@@ -194,6 +194,30 @@ class HistoryPageMixin:
             if remaining > 0:
                 self._more_ref.setText(f"הצג עוד  ({remaining} נוספים)")
 
+
+    def show_original(self, entry_id):
+        entry = next((e for e in self.ui.get_history() if e.get("id") == entry_id), {})
+        source = entry.get("original_text")
+        if not isinstance(source, str):
+            return
+        dialog = QDialog(self)
+        dialog.setWindowTitle("התמלול המקומי — לפני עריכת OpenAI")
+        dialog.resize(640, 420)
+        box = QVBoxLayout(dialog)
+        box.addWidget(self._hint("התמלול לאחר מילון התיקונים, לפני העריכה בענן."))
+        editor = QPlainTextEdit(source)
+        editor.setReadOnly(True)
+        box.addWidget(editor, 1)
+        row = QHBoxLayout()
+        copy = QPushButton("העתק מקור")
+        copy.clicked.connect(lambda: self.copy_text(source))
+        row.addWidget(copy)
+        close = QPushButton("סגור")
+        close.clicked.connect(dialog.accept)
+        row.addWidget(close)
+        row.addWidget(QSizeGrip(dialog))
+        box.addLayout(row)
+        dialog.exec()
 
     def card_html(self, entry_id, text):
         highlight = self.ui.config.get("highlight_unknown", True)

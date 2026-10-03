@@ -34,7 +34,9 @@ DOCS = Path(__file__).resolve().parent.parent / "docs"
 
 DEMO_HISTORY = [
     {"id": "d1", "time": "2026-07-18 09:42",
-     "text": "שלום, זה תמלול לדוגמה שנכתב עם MyWhisper — בלי לגעת במקלדת!"},
+     "text": "שלום, זה תמלול לדוגמה שנכתב עם MyWhisper — בלי לגעת במקלדת!",
+     "original_text": "שלום שלום, אממ, זה תמלול לדוגמה שנכתב עם MyWhisper — בלי לגעת במקלדת!",
+     "edit_status": "edited"},
     {"id": "d2", "time": "2026-07-18 09:40",
      "text": "צריך להוסיף thumbnail לסרטון החדש, ואז לעשות render לפרויקט."},
     {"id": "d3", "time": "2026-07-18 09:37",

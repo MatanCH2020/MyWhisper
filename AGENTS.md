@@ -53,10 +53,10 @@ No linter is configured. `app/check_gpu.py` is the manual smoke test for the tra
 3. Second press: `Recorder.stop()` returns samples; transcription runs on a worker thread (`_worker`) so the UI stays responsive.
 4. `Transcriber.transcribe()` (`transcriber.py`) runs `faster-whisper` on GPU (`cuda`/`float16`, falls back to CPU/`int8`; CPU uses `beam_size_cpu` greedy for speed). It takes two bias inputs: `hotwords=corrections.bias_terms()` and `glossary=corrections.english_terms()` (folded into `initial_prompt` by `_effective_prompt`, capped at 30 terms, gated by config `glossary_prompt`). The model loads lazily (`load`/`ensure_loaded`) and can be freed (`unload`) — `main._resource_poll` (a 5s GUI-thread `QTimer`) releases it after `idle_release_minutes` idle or while a fullscreen app is foreground (`fullscreen.foreground_is_fullscreen`), reloading transparently on next use. `transcriber._add_cuda_dll_dirs()` injects the pip CUDA DLL folders into the DLL search path before importing `faster_whisper` — required or GPU load fails.
 5. Post-processing in `_worker` produces the **logical** text, then the **display** text — keep these distinct:
-   - `raw = corrections.apply(text)` — deterministic learned fixes (see below).
-   - `logical = corrections.apply(text)`; local-LLM polish was removed in 1.12.0.
+   - `logical = corrections.apply(text)` — deterministic learned fixes (see below).
+   - Optional, explicit `chatgpt_enabled` pass through `TextEditor` after corrections, with a two-second total deadline. Preserve the pre-edit text as optional `original_text` history metadata. Local-LLM/Ollama polish was removed in 1.12.0.
    - The chosen logical text goes to `history.add()` **as-is**. Only the pasted copy runs through `corrections.format_bidi()` (config `bidi_isolate`), which wraps Latin runs in U+2066/U+2069 isolates so English stays LTR inside Hebrew. Never store isolate characters in history or corrections — they would leak into the learning layer.
-   - `paste_text()` (`paste.py`: clipboard + `Ctrl+V` via native `keybd_event`, with optional clipboard restore).
+   - `DestinationGuard` observes foreground changes on the GUI thread; a switch away/back also blocks delivery. Save and notify instead of pasting into a different window. `paste_text()` checks the destination again immediately before native `Ctrl+V`, with optional clipboard restore.
 
 Single-instance guard: a named Windows mutex acquired at the top of `main.py` (before the heavy ML imports); a duplicate launch exits instantly.
 
@@ -90,6 +90,16 @@ The accuracy-learning feature. State lives in three JSON files in the project ro
 
 If `wordfreq` is unavailable, detection degrades gracefully (nothing is flagged); the rest still works.
 
+## Optional ChatGPT editing (`chatgpt_auth.py`, `cloud_http.py`, `text_editor.py`)
+
+OFF by default on installation and upgrade. Login does not enable editing. Use the official public-client OAuth/PKCE loopback flow and Responses endpoint, never another app's credentials or a shared API key. Each issued client ID + verified subject has a separate DPAPI-encrypted record under `%LOCALAPPDATA%/MatanDigital/MyWhisper/chatgpt.dpapi`, outside the repository. UI receives callbacks/status only.
+
+Verify ID-token RSA signature/JWKS, issuer/audience/expiry/nonce and granted direct-use scopes. Preserve the host ID and issued registration on logout. Refresh tokens only while enabled, serialized; discard/cancel work on disable or account change. Fetch account model catalogs only on explicit login/switch/refresh. Prefer available `gpt-6-luna` with reasoning `none`; otherwise require model selection.
+
+Use the persistent HTTP pool, one text-only Responses request with `store=false`, `stream=true`, no tools/history/retries. Only `response.completed` and completed assistant text qualify for delivery; timeout, partial/late/error results fall back to the corrected local text. Never log dictated text, tokens or hinted authorization URLs. Quota/terminal permission errors stop further edit requests and remain on the local path; never switch to paid API billing.
+
+`tests/test_chatgpt.py` covers these contracts without live accounts. `scripts/benchmark_chatgpt.py` measures 20 synthetic texts only after the user explicitly enables the feature; real latency/quality cannot be claimed from mocks. `scripts/check_dictation_delivery.py` checks native Windows paste and foreground guarding without personal data; close the normal app first to prevent its watcher recording the test.
+
 ## Clipboard history (`clips.py`, `clipwatch.py`, `clipui.py`)
 
 A clipboard manager that is **independent of dictation**: `history.py` records what MyWhisper produced, `clips.py` records what the user copied from anywhere. Opened with its own hotkey (`clipboard_hotkey`, default `` ctrl+` ``), which lists every clip with search and a full text/image preview; selecting a row previews it, while the copy button, Enter or double-click puts it back on the clipboard for the user to paste themselves (it does **not** auto-paste — that was the explicit product decision).
@@ -111,6 +121,7 @@ Keys by group:
 - *Resources*: `idle_release_minutes`, `release_on_fullscreen` (both drive `_resource_poll`'s model unload).
 - *Clipboard history*: `clipboard_history` (master switch — when off, no watcher and no second hotkey are created at all), `clipboard_hotkey`, `clipboard_paused`.
 - *UI*: `theme`, `sounds`, `sound_volume`, `highlight_unknown`, `bidi_isolate`.
+- *ChatGPT*: `chatgpt_enabled` (strict boolean, default false), `chatgpt_model` (account-catalog slug, default empty). Never store credentials in config.
 
 ## Distribution & updates
 

@@ -98,7 +98,7 @@ class Overlay(QWidget):
 
     def set_state(self, state):
         previous = self.state
-        self.state = state if state in ("recording", "transcribing") else "idle"
+        self.state = state if state in ("recording", "transcribing", "polishing") else "idle"
         if self.state == "idle":
             self._timer.stop()
             self._entrance.stop()
@@ -128,7 +128,8 @@ class Overlay(QWidget):
             self.raise_()
             if self._motion:
                 self._entrance.start()
-        self.setAccessibleName("מקליט" if self.state == "recording" else "מתמלל")
+        self.setAccessibleName({"recording": "מקליט", "transcribing": "מתמלל",
+                                "polishing": "מסדר טקסט…"}[self.state])
         self._timer.start(33 if self._motion else 100)
         self.update()
 
@@ -198,12 +199,14 @@ class Overlay(QWidget):
             p.drawArc(QRectF(s + 205, s + 15, 16, 16), angle * 16, 265 * 16)
         # Top row: timer | 12px gap | title | 12px gap | icon.
         self._text(p, QRectF(s + 100, s + 10, 88, 26),
-                   "מקליט" if recording else "מתמלל", 15, "#F5F6FA", rtl=True, bold=True)
+                   "מקליט" if recording else "מסדר טקסט…" if self.state == "polishing" else "מתמלל",
+                   15, "#F5F6FA", rtl=True, bold=True)
         self._text(p, QRectF(s + 14, s + 10, 74, 26),
                    f"{self._elapsed // 60:02d}:{self._elapsed % 60:02d}", 16, accent)
         # Bottom row has a separate 94px waveform and a 106px Hebrew hint.
         self._text(p, QRectF(s + 120, s + 48, 106, 18),
-                   "\u2066Esc\u2069 לביטול" if recording else "מעבד את ההקלטה",
+                   "\u2066Esc\u2069 לביטול" if recording else
+                   "עריכת OpenAI" if self.state == "polishing" else "מעבד את ההקלטה",
                    12, "#B9BFCE", rtl=True)
         p.setPen(Qt.NoPen)
         p.setBrush(accent)

@@ -12,6 +12,8 @@ corrections.json
 dictionary.json
 english_terms.json
 config.json
+# OAuth credentials are normally outside the project; never publish a local copy.
+*.dpapi
 # Clipboard history: literally everything the user has copied. Never commit.
 clips.json
 clip_images/

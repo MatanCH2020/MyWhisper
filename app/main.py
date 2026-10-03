@@ -68,6 +68,10 @@ from hotkey import HotkeyManager, TempHotkey
 from ui import AppUI
 from paste import paste_text
 from tray import Tray
+from cloud_http import CloudHTTP
+from chatgpt_auth import ChatGPTAuth, AuthError, DEFAULT_MODEL
+from text_editor import TextEditor
+from delivery import foreground_window, same_destination, DestinationGuard
 
 
 class State(enum.Enum):
@@ -94,6 +98,14 @@ class Mywishper(QObject):
         self._load_finished.connect(self._finish_load)
         self._storage_error.connect(self._show_storage_error)
         self.config = load_config()
+        self.cloud_http = CloudHTTP()
+        self.chatgpt = ChatGPTAuth(self.cloud_http)
+        self.text_editor = TextEditor(self.chatgpt, self.cloud_http)
+        self._set_chatgpt_enabled(self.config.get("chatgpt_enabled") is True)
+        self._cloud_timer = QTimer(self)
+        self._cloud_timer.timeout.connect(self.chatgpt.schedule_refresh)
+        self._cloud_timer.start(30000)
+        self.chatgpt.schedule_refresh()
         self._apply_sound_config()
 
         self.recorder = Recorder(self.config.get("input_device") or None)
@@ -157,6 +169,8 @@ class Mywishper(QObject):
         self.ui.model_status = self._model_status
         self.ui.check_update = self._check_update
         self.ui.do_update = self._do_update
+        self.ui.chatgpt_status = self._chatgpt_status
+        self.ui.chatgpt_action = self._chatgpt_action
 
         self._lock = threading.Lock()
         self._state = State.IDLE
@@ -172,6 +186,88 @@ class Mywishper(QObject):
             enabled=self.config.get("sounds", True),
             volume=self.config.get("sound_volume", 0.25),
         )
+
+    def _chatgpt_status(self):
+        status = self.chatgpt.status()
+        status["model"] = self.config.get("chatgpt_model", "")
+        return status
+
+    def _set_chatgpt_enabled(self, enabled):
+        status = self.chatgpt.status()
+        allowed = (status["connected"] and status["eligible"] and not status["error"]
+                   and self.config.get("chatgpt_model") in {m["slug"] for m in status["models"]})
+        enabled = enabled is True and bool(allowed)
+        self.chatgpt.set_enabled(enabled)
+        self.text_editor.cancel()
+        self.config["chatgpt_enabled"] = enabled
+        if not save_config(self.config):
+            self.chatgpt.set_enabled(False)
+            self.config["chatgpt_enabled"] = False
+            enabled = False
+        if enabled:
+            self.chatgpt.schedule_refresh()
+        return enabled
+
+    def _chatgpt_action(self, action, value=None):
+        """Injected callback. Network actions are invoked on a UI worker thread."""
+        message = ""
+        try:
+            if action == "enable":
+                if value is True and self.chatgpt.error in ("quota", "unsupported"):
+                    self.chatgpt.error = ""
+                if not self._set_chatgpt_enabled(value) and value is True:
+                    message = "העריכה כבויה. יש לחבר חשבון זכאי ולבחור מודל זמין."
+            elif action == "model":
+                self._set_chatgpt_enabled(False)
+                if value in {m["slug"] for m in self.chatgpt.status()["models"]}:
+                    self.config["chatgpt_model"] = value
+                    save_config(self.config)
+            elif action in ("login", "relogin", "select", "disconnect"):
+                self._set_chatgpt_enabled(False)
+                if action in ("login", "relogin"):
+                    self.chatgpt.sign_in(returning=action == "relogin")
+                    message = ("החשבון מחובר. השימוש במסגרת חשבון ChatGPT ובכפוף למכסתו. "
+                               "העריכה עדיין כבויה; אפשר להפעיל אותה בנפרד.")
+                    if not self.chatgpt.status()["eligible"]:
+                        message = "החשבון מחובר, אך לא אושר שימוש במסגרת ChatGPT או שאינו זכאי. התמלול ממשיך מקומית."
+                elif action == "select":
+                    self.chatgpt.select(value)
+                    if self.chatgpt.status()["connected"]:
+                        self.chatgpt.catalog()
+                else:
+                    if not self.chatgpt.disconnect():
+                        message = ("נותקת במחשב. ביטול ההרשאה בשרת לא אושר; "
+                                   "אפשר לנתק את MyWhisper בהגדרות ChatGPT.")
+                models = {m["slug"] for m in self.chatgpt.status()["models"]}
+                self.config["chatgpt_model"] = DEFAULT_MODEL if DEFAULT_MODEL in models else ""
+                save_config(self.config)
+            elif action == "welcome":
+                with self.chatgpt.lock:
+                    self.chatgpt.data["welcome_seen"] = True
+                    self.chatgpt.store.save(self.chatgpt.data)
+            elif action == "catalog":
+                self.chatgpt.catalog()
+                if self.config.get("chatgpt_model") not in {m["slug"] for m in self.chatgpt.status()["models"]}:
+                    self._set_chatgpt_enabled(False)
+                    self.config["chatgpt_model"] = ""
+                    save_config(self.config)
+            elif action == "cancel":
+                self.chatgpt._signin_cancel.set()
+        except AuthError as error:
+            message = {
+                "permission": "החשבון לא אישר שימוש במסגרת ChatGPT או אינו זכאי. התמלול ממשיך מקומית.",
+                "identity": "אימות זהות החשבון נכשל. יש להתחבר מחדש.",
+                "authorization": "ההרשאה פגה או נדחתה. יש להתחבר מחדש.",
+                "storage": "לא ניתן לקרוא או לשמור את ההרשאות המוצפנות. העריכה נשארת כבויה.",
+                "timeout": "ההתחברות לא הושלמה בזמן. אפשר לנסות שוב.",
+                "cancelled": "ההתחברות בוטלה.",
+                "browser": "לא ניתן לפתוח את הדפדפן להתחברות.",
+            }.get(str(error), "החיבור לא הושלם. אפשר לנסות שוב; התמלול ממשיך מקומית.")
+        except Exception:
+            message = "החיבור לא הושלם. בדוק את האינטרנט ונסה שוב; התמלול ממשיך מקומית."
+        status = self._chatgpt_status()
+        return {**status, "message": message,
+                "needs_welcome": status["eligible"] and not self.chatgpt.data.get("welcome_seen", False)}
 
     def _on_settings_change(self, config):
         """Called from the settings UI when sound options change: apply + persist."""
@@ -374,6 +470,10 @@ class Mywishper(QObject):
                 self._recover_from_error()
 
     def _recover_from_error(self):
+        guard = getattr(self, "_destination_guard", None)
+        if guard is not None:
+            guard.close()
+            self._destination_guard = None
         self._end_recording_hooks()
         try:
             self.recorder.stop()
@@ -448,6 +548,8 @@ class Mywishper(QObject):
                 self._recover_from_error()
 
     def _stop_and_transcribe(self):
+        self._destination_guard = DestinationGuard().start()
+        destination = self._destination_guard
         self._state = State.TRANSCRIBING
         self._end_recording_hooks()
         audio = self.recorder.stop()
@@ -455,20 +557,43 @@ class Mywishper(QObject):
         self.tray.set_state("transcribing", "MyWhisper — מתמלל...")
         self.ui.set_overlay_state("transcribing")
         # Run the heavy work off the hotkey thread so the UI stays responsive.
-        threading.Thread(target=self._worker, args=(audio,), daemon=True).start()
+        threading.Thread(target=self._worker, args=(audio, destination), daemon=True).start()
 
-    def _worker(self, audio):
+    def _worker(self, audio, destination=None):
+        if destination is None:
+            destination = foreground_window()
         try:
             text = self.transcriber.transcribe(
                 audio, hotwords=corrections.bias_terms(),
                 glossary=corrections.english_terms())
             if text:
                 logical = corrections.apply(text)
-
-                history.add(logical)  # store what was actually delivered
+                original = logical
+                edit = None
+                if self.config.get("chatgpt_enabled") is True:
+                    self.ui.set_overlay_state("polishing")
+                    edit = self.text_editor.edit(logical, self.config.get("chatgpt_model", ""))
+                    logical = edit.text
+                    if edit.status in ("quota", "ineligible", "authorization", "unsupported"):
+                        self.chatgpt.error = edit.status
+                        self._set_chatgpt_enabled(False)
+                    if edit.status not in ("edited", "unchanged", "disabled"):
+                        hint = {"timeout": "העריכה התעכבה", "quota": "מכסת ChatGPT אינה זמינה; העריכה כובתה",
+                                "ineligible": "החשבון אינו זכאי; העריכה כובתה",
+                                "authorization": "נדרש חיבור מחדש לחשבון ChatGPT; העריכה כובתה"}.get(
+                                    edit.status, "העריכה לא הושלמה")
+                        self.tray.notify("MyWhisper", hint + " — נשמר התמלול המקומי.", duration_ms=3500)
+                history.add(logical, **({"original_text": original, "edit_status": edit.status,
+                                        "edit_ms": edit.elapsed_ms, "edit_model": edit.model} if edit else {}))
                 # Refresh an open history page so the new card appears on its
                 # own (no-op when the window is closed / hidden).
                 self.ui.notify_transcription()
+                destination_check = (destination.unchanged if isinstance(destination, DestinationGuard)
+                                     else lambda: same_destination(destination))
+                if not destination_check():
+                    self.tray.notify("MyWhisper — הטקסט מוכן",
+                                     "החלון הפעיל השתנה. הטקסט נשמר בהיסטוריה ומוכן להעתקה.")
+                    return
                 out = logical
                 if self.config.get("bidi_isolate", True):
                     out = corrections.format_bidi(logical)  # keep English LTR in RTL
@@ -478,9 +603,14 @@ class Mywishper(QObject):
                 if self.clipwatch:
                     self.clipwatch.suppress(
                         2.0 + float(self.config.get("clipboard_restore_delay", 0.5)))
-                paste_text(out, self.config.get("restore_clipboard", True),
-                           self.config.get("clipboard_restore_delay", 0.5))
-                log.info("Transcription delivered (%d characters)", len(logical))
+                delivered = paste_text(out, self.config.get("restore_clipboard", True),
+                           self.config.get("clipboard_restore_delay", 0.5),
+                           destination_check=destination_check)
+                if delivered is False:
+                    self.tray.notify("MyWhisper — הטקסט מוכן", "החלון הפעיל השתנה. הטקסט ממתין בהיסטוריה.")
+                    log.info("Transcription saved; destination changed before paste")
+                else:
+                    log.info("Transcription delivered (%d characters)", len(logical))
             else:
                 log.info("(empty transcription)")
                 sounds.error()
@@ -498,6 +628,10 @@ class Mywishper(QObject):
 
     @Slot()
     def _finish_transcription(self):
+        guard = getattr(self, "_destination_guard", None)
+        if guard is not None:
+            guard.close()
+            self._destination_guard = None
         self._state = State.IDLE
         self._mark_used()
         if not self._closing:
@@ -631,6 +765,10 @@ class Mywishper(QObject):
             self.tray.notify("MyWhisper", "יש להמתין לסיום הפעולה לפני יציאה או עדכון.")
             return
         self._closing = True
+        self._cloud_timer.stop()
+        self.chatgpt.close()
+        self.text_editor.cancel()
+        self.cloud_http.close()
         if self.recorder.recording:
             self.cancel_recording()
         self.mic_monitor.stop()

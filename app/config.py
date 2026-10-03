@@ -38,6 +38,9 @@ DEFAULTS = {
     "highlight_unknown": True,
     "bidi_isolate": True,
     "theme": "dark",
+    # Sign-in alone never opts a user into sending dictated text to OpenAI.
+    "chatgpt_enabled": False,
+    "chatgpt_model": "",
 }
 
 # Invalid values recover per key; unknown keys are preserved for compatibility.

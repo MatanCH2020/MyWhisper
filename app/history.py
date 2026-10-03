@@ -55,16 +55,24 @@ def load():
         return entries
 
 
-def add(text: str):
+def add(text: str, *, original_text=None, edit_status=None, edit_ms=None, edit_model=None):
     """Prepend a transcription with a local timestamp; cap the list length."""
     text = (text or "").strip()
     if not text:
         return
     with _lock:
         entries = _read()
-        entries.insert(0, {"id": _new_id(),
-                           "time": datetime.now().strftime("%Y-%m-%d %H:%M"),
-                           "text": text})
+        entry = {"id": _new_id(), "time": datetime.now().strftime("%Y-%m-%d %H:%M"),
+                 "text": text}
+        if isinstance(original_text, str):
+            entry["original_text"] = original_text
+        if isinstance(edit_status, str):
+            entry["edit_status"] = edit_status
+        if isinstance(edit_ms, int):
+            entry["edit_ms"] = edit_ms
+        if isinstance(edit_model, str) and edit_model:
+            entry["edit_model"] = edit_model
+        entries.insert(0, entry)
         del entries[MAX_ENTRIES:]
         return _write(entries)
 

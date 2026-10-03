@@ -449,7 +449,7 @@ class HistoryCard(QFrame):
     always present but dimmed, and come to full strength under the cursor.
     """
 
-    def __init__(self, win, entry_id, text, time_str):
+    def __init__(self, win, entry_id, text, time_str, original_text=None):
         super().__init__()
         self.setObjectName("card")
         p = win.p
@@ -462,6 +462,11 @@ class HistoryCard(QFrame):
         ts.setObjectName("hint")
         top.addWidget(ts)
         top.addStretch(1)
+        if isinstance(original_text, str):
+            source = QPushButton("הצג מקור")
+            source.setCursor(Qt.PointingHandCursor)
+            source.clicked.connect(lambda: win.show_original(entry_id))
+            top.addWidget(source)
         self._actions = QWidget()
         ah = QHBoxLayout(self._actions)
         ah.setContentsMargins(0, 0, 0, 0)
@@ -574,6 +579,7 @@ class MainWindow(HistoryPageMixin, DictionaryPageMixin, SettingsPageMixin, Frame
     """The branded shell: title bar + nav rail + stacked pages."""
 
     _update_result = Signal(object)  # latest version string (or None), off-thread
+    _cloud_result = Signal(object)
 
     def __init__(self, ui, palette):
         super().__init__()
@@ -581,6 +587,7 @@ class MainWindow(HistoryPageMixin, DictionaryPageMixin, SettingsPageMixin, Frame
         self.p = palette
         self._force_close = False  # tests can close instead of hiding to tray
         self._update_result.connect(self._on_update_result)
+        self._cloud_result.connect(self._on_cloud_result)
         # Rendering a history card costs a flag_tokens() pass (wordfreq lookups
         # per Hebrew word), so the built HTML is cached per entry. Anything that
         # changes the dictionary must clear it — see _invalidate_cards().
@@ -861,6 +868,8 @@ class AppUI(QObject):
         self.model_status = lambda: None            # wired by main
         self.check_update = lambda: None            # wired by main
         self.do_update = lambda: False
+        self.chatgpt_status = lambda: {"accounts": [], "models": [], "enabled": False}
+        self.chatgpt_action = lambda action, value=None: self.chatgpt_status()
         self._minimize_hint_shown = False
         # Transcriptions that landed while the window was hidden; the history
         # page is rebuilt on the way back in instead of on every dictation.
