@@ -580,7 +580,7 @@ class MainWindow(HistoryPageMixin, DictionaryPageMixin, SettingsPageMixin, Frame
 
     _update_result = Signal(object)  # latest version string (or None), off-thread
     _cloud_result = Signal(object)
-    _scan_progress = Signal(int, int)
+    _scan_progress = Signal(object)
     _scan_result = Signal(object)
 
     def __init__(self, ui, palette):
@@ -875,10 +875,12 @@ class AppUI(QObject):
         self.chatgpt_status = lambda: {"accounts": [], "models": [], "enabled": False}
         self.chatgpt_action = lambda action, value=None: self.chatgpt_status()
         self.chatgpt_browsers = lambda: [{"slug": "system", "name": "דפדפן ברירת המחדל — חיצוני"}]
-        self.scan_history = lambda progress: None
+        self.scan_history = lambda progress, ticket=None: None
         self.cancel_history_scan = lambda: None
         self.undo_history_scan = lambda: None
         self.can_undo_history_scan = lambda: False
+        self.history_scan_report = lambda: {}
+        self.prepare_history_scan = lambda: None
         self._minimize_hint_shown = False
         # Transcriptions that landed while the window was hidden; the history
         # page is rebuilt on the way back in instead of on every dictation.

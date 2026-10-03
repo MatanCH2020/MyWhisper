@@ -284,6 +284,10 @@ QScrollBar:horizontal {{ height: 0; }}
 #hint {{ color: {p['text_muted']}; font-size: {FS['hint']}px; }}
 #fieldlabel {{ color: {p['text']}; font-size: {FS['body']}px; }}
 #connectionstatus {{ color: {p['text']}; font-size: {FS['title']}px; font-weight: 600; }}
+#scanstatus {{ color: {p['text']}; font-size: {FS['title']}px; font-weight: 600; }}
+#scanprogress {{ background: {p['surface_alt']}; color: {p['text']};
+    border: 1px solid {p['border']}; border-radius: 5px; text-align: center; min-height: 20px; }}
+#scanprogress::chunk {{ background: {p['accent']}; border-radius: 4px; }}
 #cardtext {{ color: {p['text']}; font-size: {FS['read']}px; }}
 #statusok {{ color: #2ea043; font-size: {FS['hint']}px; font-weight: bold; }}
 #toast {{ background: {p['surface_alt']}; border: 1px solid {p['border']};

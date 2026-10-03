@@ -555,6 +555,68 @@ class CloudSettingsTests(unittest.TestCase):
         self.win._on_scan_result(ScanResult("invalid"))
         self.assertIn("לא נשמרו שינויים", self.win._scan_status.text())
 
+    def test_scan_progress_shows_live_wait_and_cancel_does_not_get_overwritten(self):
+        self.win._scan_busy = True
+        self.win._scan_cancelling = False
+        self.win._scan_started = time.monotonic() - 15
+        self.win._scan_phase_started = self.win._scan_started
+        update = {"phase": "analyzing", "batch": 2, "batches": 25, "checked": 12,
+                  "total": 300, "found": 4, "rejected": 1, "deadline": 45}
+        self.win._scan_progress_state = update
+        self.win._update_scan_activity()
+        self.assertIn("2 מתוך 25", self.win._scan_status.text())
+        self.assertIn("12 מתוך 300", self.win._scan_activity.text())
+        self.assertIn("15 שניות", self.win._scan_activity.text())
+        self.assertIn("עדיין לא נשמרו", self.win._scan_note.text())
+        self.ui.cancel_history_scan = Mock()
+        self.win._cancel_history_scan()
+        self.win._on_scan_progress(update)
+        self.assertIn("מבטל", self.win._scan_status.text())
+        self.assertFalse(self.win._scan_cancel.isEnabled())
+
+    def test_zero_changes_rejections_and_errors_remain_explicit_after_polling(self):
+        self.win._on_scan_result({"status": "completed", "scanned": 300, "total": 300, "corrected": 0,
+                                 "rejected": 2, "reasons": {"ambiguous": 2}})
+        self.assertIn("ללא שינוי", self.win._scan_note.text())
+        self.assertIn("נדחו 2", self.win._scan_note.text())
+        self.assertIn("יותר מפעם אחת", self.win._scan_note.text())
+        self.win._refresh_cloud()
+        self.assertIn("תוקנו 0", self.win._scan_status.text())
+        self.win._on_scan_result({"status": "timeout", "scanned": 12, "total": 300})
+        self.assertIn("12 מתוך 300", self.win._scan_note.text())
+        self.assertIn("לא נשמרו", self.win._scan_status.text())
+        self.assertTrue(self.win._scan_details.isEnabled())
+
+    def test_persistent_report_restored_without_running_or_notifying(self):
+        from ui import MainWindow
+        self.ui.history_scan_report = lambda: {"status": "completed", "scanned": 20, "total": 20,
+            "corrected": 3, "learned": 2, "english": 1, "model": "demo-model",
+            "details": [{"before": "גיטהאב", "after": "GitHub", "kind": "english", "learned": True}]}
+        self.ui.scan_history = Mock()
+        self.ui.notify = Mock()
+        window = MainWindow(self.ui, self.ui.p)
+        self.addCleanup(window.deleteLater)
+        self.assertIn("תוקנו 3", window._scan_status.text())
+        self.assertIn("demo-model", window._scan_activity.text())
+        self.assertEqual(window._scan_report["details"][0]["after"], "GitHub")
+        self.assertTrue(window._scan_details.isEnabled())
+        self.ui.scan_history.assert_not_called()
+        self.ui.notify.assert_not_called()
+
+    def test_scan_details_table_shows_exact_words_and_new_learning_status(self):
+        from PySide6.QtWidgets import QTableWidget
+        self.win._on_scan_result({"status": "completed", "scanned": 2, "corrected": 2,
+            "details": [{"before": "גיטהאב", "after": "GitHub", "kind": "english", "learned": True},
+                        {"before": "המסמך החדשה", "after": "המסמך החדש", "kind": "context", "learned": False}]}, notify=False)
+        dialog = self.win._scan_details_dialog()
+        self.addCleanup(dialog.deleteLater)
+        table = dialog.findChild(QTableWidget)
+        self.assertEqual(table.rowCount(), 2)
+        self.assertEqual(table.item(0, 0).text(), "גיטהאב")
+        self.assertEqual(table.item(0, 1).text(), "GitHub")
+        self.assertEqual(table.item(0, 3).text(), "נלמד במילון")
+        self.assertEqual(table.item(1, 3).text(), "ללא כלל חדש")
+
     def test_connection_and_editing_states_are_independent_and_controls_are_gated(self):
         base = {"accounts": [], "models": [{"slug": "luna", "display_name": "Luna"}], "enabled": False}
         cases = [

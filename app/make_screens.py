@@ -9,6 +9,7 @@ import argparse
 import os
 import re
 import sys
+import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -99,8 +100,41 @@ def main():
                         help="Refresh only the recording HUD screenshot")
     parser.add_argument("--chatgpt-states", action="store_true",
                         help="Render connected and failed-sign-in examples with synthetic account data")
+    parser.add_argument("--scan-states", action="store_true", help="Render synthetic scan progress and persistent results")
     args = parser.parse_args()
     DOCS.mkdir(exist_ok=True)
+    if args.scan_states:
+        for palette in ("dark", "light"):
+            win = build(palette)
+            win.resize(1020, 760)
+            win.ui.chatgpt_status = lambda: {"connected": True, "eligible": True, "enabled": True,
+                "model": "demo-model", "models": [{"slug": "demo-model", "display_name": "Demo"}]}
+            win._scan_busy = True
+            win._scan_cancelling = False
+            win._scan_started = time.monotonic()-35
+            win._scan_phase_started = time.monotonic()-12
+            win._scan_progress_state = {"phase": "analyzing", "checked": 12, "total": 60,
+                "batch": 2, "batches": 5, "found": 4, "rejected": 1, "deadline": 45}
+            win._on_scan_progress(win._scan_progress_state)
+            win._scan_bar.show()
+            win._refresh_scan_controls()
+            shoot(win, 1, DOCS / f"app-scan-progress-{palette}.png")
+            win.ui.can_undo_history_scan = lambda: True
+            win._on_scan_result({"status": "completed", "scanned": 60, "total": 60, "corrected": 8,
+                "learned": 2, "english": 1, "rejected": 2, "reasons": {"ambiguous": 1, "protected": 1},
+                "finished_at": "2026-10-03 18:00", "model": "demo-model", "elapsed_ms": 42000,
+                "details": [{"before": "גיטהאב", "after": "GitHub", "kind": "english", "learned": True},
+                            {"before": "שגיעות", "after": "שגיאות", "kind": "spelling", "learned": True},
+                            {"before": "המסמך החדשה", "after": "המסמך החדש", "kind": "context", "learned": False}]},
+                notify=False, refresh=False)
+            shoot(win, 1, DOCS / f"app-scan-results-{palette}.png")
+            dialog = win._scan_details_dialog()
+            dialog.show()
+            app.processEvents()
+            dialog.grab().save(str(DOCS / f"app-scan-details-{palette}.png"), "PNG")
+            dialog.close()
+            win.close()
+        return
     if args.chatgpt_states:
         for name, status in (
             ("connected", {"active": "demo", "connected": True, "eligible": True,

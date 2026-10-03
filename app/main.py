@@ -12,6 +12,7 @@ import subprocess
 import sys
 import threading
 import time
+from dataclasses import asdict
 from pathlib import Path
 
 # Allow running as `python app/main.py` from the project root.
@@ -179,6 +180,8 @@ class Mywishper(QObject):
         self.ui.cancel_history_scan = self.history_scanner.cancel
         self.ui.undo_history_scan = self.history_scanner.undo
         self.ui.can_undo_history_scan = self.history_scanner.can_undo
+        self.ui.history_scan_report = self.history_scanner.report
+        self.ui.prepare_history_scan = self.history_scanner.prepare
 
         self._lock = threading.Lock()
         self._state = State.IDLE
@@ -218,14 +221,14 @@ class Mywishper(QObject):
             self.chatgpt.schedule_refresh()
         return enabled
 
-    def _scan_history(self, progress):
-        result = self.history_scanner.scan(self.config.get("chatgpt_model", ""), progress)
+    def _scan_history(self, progress, ticket=None):
+        result = self.history_scanner.scan(self.config.get("chatgpt_model", ""), detail=progress, ticket=ticket)
         if result.status in ("quota", "authorization", "ineligible"):
             self.chatgpt.error = result.status
             self._set_chatgpt_enabled(False)
         log.info("History scan status=%s scanned=%d corrected=%d learned=%d english=%d",
                  result.status, result.scanned, result.corrected, result.learned, result.english)
-        return result
+        return asdict(result)
 
     def _chatgpt_action(self, action, value=None):
         """Injected callback. Network actions are invoked on a UI worker thread."""

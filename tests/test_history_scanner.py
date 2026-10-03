@@ -13,7 +13,7 @@ import history
 import httpx
 from cloud_http import CloudHTTP
 from chatgpt_auth import ChatGPTAuth
-from history_scanner import HistoryScanner, validate_changes
+from history_scanner import HistoryScanner, filter_changes, validate_changes
 from tests.test_chatgpt import MemoryStore, connected, completed, event, SlowStream
 
 
@@ -127,7 +127,7 @@ class ScannerTests(unittest.TestCase):
         self.assertEqual(history.load()[0]["original_text"], "מקור מוקדם")
 
     def test_invalid_or_partial_output_never_changes_history(self):
-        for content, status in ((completed('{"changes":[{"id":"invented"}]}'), "invalid"),
+        for content, status in ((completed('{"unexpected":[]}'), "invalid"),
                                 (event("response.output_text.delta", delta="partial"), "incomplete")):
             with self.subTest(status=status):
                 _, scanner = self.setup_scanner(lambda request, content=content: httpx.Response(200, content=content))
@@ -210,3 +210,72 @@ class ScannerTests(unittest.TestCase):
         self.assertEqual(restarted.undo().corrected, 1)
         self.assertEqual(history.load(), original)
         self.assertEqual(corrections.list_corrections(), {})
+
+    def test_bad_proposal_does_not_discard_valid_corrections_or_later_batches(self):
+        for _ in range(12):
+            history.add("תמלול נוסף.")
+        def response(request):
+            if len(self.requests) == 1:
+                return httpx.Response(200, content=completed(json.dumps({"changes": [proposal("missing")]})))
+            return httpx.Response(200, content=completed(json.dumps({"changes": [proposal(self.key),
+                proposal(self.key, "298", "299", "context")]})))
+        _, scanner = self.setup_scanner(response)
+        updates = []
+        result = scanner.scan("gpt-6-luna", detail=updates.append)
+        self.assertEqual((result.status, result.scanned, result.total, result.corrected, result.rejected),
+                         ("completed", 13, 13, 1, 2))
+        self.assertEqual(result.reasons, {"format": 1, "protected": 1})
+        self.assertEqual(result.details[0]["before"], "גיטהאב")
+        self.assertTrue(result.details[0]["learned"])
+        self.assertEqual([u["phase"] for u in updates].count("analyzing"), 2)
+        self.assertEqual(updates[-1]["checked"], 13)
+        self.assertEqual(scanner.report()["rejected"], 2)
+        self.assertEqual(HistoryScanner(scanner.auth, scanner.editor.http).report()["corrected"], 1)
+        scanner.undo()
+        self.assertEqual(scanner.report()["status"], "undone")
+
+    def test_overlap_rejects_both_alternatives_not_the_first_one_only(self):
+        entries = [{"id": "a", "text": "לא שולח 298 קבצים דרך גיטהאב"}]
+        patches = [proposal("a", "298 קבצים", "298 files", "context"),
+                   proposal("a", "קבצים", "documents"), proposal("a")]
+        accepted, rejected = filter_changes(json.dumps({"changes": patches}), entries)
+        self.assertEqual([p["after"] for p in accepted], ["GitHub"])
+        self.assertEqual(rejected, {"overlap": 2})
+
+    def test_cancel_before_worker_starts_does_not_get_cleared(self):
+        _, scanner = self.setup_scanner()
+        ticket = scanner.prepare()
+        scanner.cancel()
+        result = scanner.scan("gpt-6-luna", ticket=ticket)
+        self.assertEqual(result.status, "cancelled")
+        self.assertEqual(self.requests, [])
+
+    def test_no_changes_and_rejected_only_have_distinct_persistent_results(self):
+        _, scanner = self.setup_scanner(lambda request: httpx.Response(200, content=completed('{"changes":[]}')))
+        result = scanner.scan("gpt-6-luna")
+        self.assertEqual((result.status, result.scanned, result.corrected, result.rejected), ("completed", 1, 0, 0))
+        self.assertEqual(scanner.report()["details"], [])
+        _, scanner = self.setup_scanner(lambda request: httpx.Response(200, content=completed(json.dumps({
+            "changes": [proposal(self.key, "298", "299", "context")]}))))
+        result = scanner.scan("gpt-6-luna")
+        self.assertEqual((result.status, result.scanned, result.corrected, result.rejected), ("completed", 1, 0, 1))
+        self.assertEqual(scanner.report()["reasons"], {"protected": 1})
+
+    def test_report_persistence_failure_does_not_hide_committed_result(self):
+        _, scanner = self.setup_scanner()
+        from safe_json import atomic_save
+        with patch("history_scanner.atomic_save", side_effect=lambda path, value:
+                   False if path == scanner.report_path else atomic_save(path, value)):
+            result = scanner.scan("gpt-6-luna")
+        self.assertEqual((result.status, result.corrected, result.report_saved), ("completed", 1, False))
+
+    def test_long_entry_progress_counts_records_not_context_windows(self):
+        history.update(self.key, "a " * 6000)
+        _, scanner = self.setup_scanner(lambda request: httpx.Response(200, content=completed('{"changes":[]}')))
+        updates = []
+        result = scanner.scan("gpt-6-luna", detail=updates.append)
+        self.assertEqual((result.scanned, result.total), (1, 1))
+        waiting = [u for u in updates if u["phase"] == "analyzing"]
+        self.assertEqual(len(waiting), 2)
+        self.assertEqual([u["checked"] for u in waiting], [0, 0])
+        self.assertEqual(updates[-1]["checked"], 1)
