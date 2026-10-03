@@ -7,6 +7,7 @@ so the images are safe to publish. Re-run after UI changes:
 """
 import argparse
 import os
+import re
 import sys
 from pathlib import Path
 
@@ -43,6 +44,12 @@ DEMO_CORRECTIONS = {"תאמנל": "thumbnail", "וייס פר": "Whisper", "רנ
 DEMO_TERMS = ["GitHub", "WhatsApp", "thumbnail", "render"]
 
 
+def demo_tokens(text):
+    """Render Hebrew links without consulting personal dictionaries."""
+    return [{"text": part, "word": bool(re.fullmatch("[א-ת]+", part)),
+             "unknown": False} for part in re.split("([א-ת]+)", text) if part]
+
+
 def build(theme_name):
     cfg = dict(DEFAULTS)
     cfg["theme"] = theme_name
@@ -52,7 +59,7 @@ def build(theme_name):
         clear_history=lambda: None,
         test_sound=lambda n: None,
         import_sound=lambda n, p: False,
-        flag_tokens=corrections.flag_tokens,
+        flag_tokens=demo_tokens,
         list_corrections=lambda: DEMO_CORRECTIONS,
         english_terms=lambda: DEMO_TERMS,
         format_bidi=corrections.format_bidi,
@@ -103,12 +110,35 @@ def main():
     shoot(win, 2, DOCS / "app-settings-light.png")
     win.close()
 
+    shoot_clipboard()
     shoot_overlay()
 
     # Icon as PNG for the README header.
     from make_icon import draw
     draw(128).save(str(DOCS / "icon.png"), "PNG")
     print(f"wrote {DOCS / 'icon.png'}")
+
+
+def shoot_clipboard():
+    from clipui import ClipPicker
+    app.setStyleSheet(ui_mod.theme.build_qss(ui_mod.theme.DARK))
+    picker = ClipPicker(ui_mod.theme.DARK, on_pick=lambda entry: None)
+    picker._force_foreground = lambda: None
+    picker._centre = lambda: picker.move(-4000, 200)
+    picker.show_for([
+        {"id": "demo-long", "kind": "text", "time": "2026-10-03 10:00",
+         "text": "תכנון היום עם MyWhisper\n\n"
+                 "אפשר לקרוא כאן את כל הטקסט, גם כשמדובר בהעתקה ארוכה.\n\n"
+                 "1. לעבור על המשימות ולסדר את סדר העדיפויות.\n"
+                 "2. להכין את התוכן לפרסום ב-WhatsApp וב-GitHub.\n"
+                 "3. לבדוק את התוצאה ולהעתיק אותה לשדה הרצוי.\n\n"
+                 "בחירה ברשימה מציגה תצוגה מלאה. כפתור ההעתקה מחזיר את הפריט ללוח."},
+        {"id": "demo-short", "kind": "text", "time": "2026-10-03 09:50",
+         "text": "להכין thumbnail ולעשות render לפרויקט."},
+    ])
+    app.processEvents()
+    picker.grab().save(str(DOCS / "app-clipboard-dark.png"), "PNG")
+    picker.close()
 
 
 def shoot_overlay():

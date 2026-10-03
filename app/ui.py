@@ -12,7 +12,7 @@ from version import __version__ as APP_VERSION
 
 from PySide6.QtCore import QObject, Qt, QTimer, Signal
 from PySide6.QtGui import QColor, QFont, QKeySequence, QPainter, QShortcut
-from PySide6.QtWidgets import QApplication, QDialog, QFrame, QHBoxLayout, QLabel, QLineEdit, QPushButton, QScrollArea, QStackedWidget, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QApplication, QDialog, QFrame, QHBoxLayout, QLabel, QLineEdit, QPushButton, QScrollArea, QSizeGrip, QStackedWidget, QVBoxLayout, QWidget
 
 import icons
 import theme
@@ -33,7 +33,7 @@ class CorrectionDialog(QDialog):
                  suggestions=None):
         super().__init__(parent)
         self.setWindowTitle("תיקון מילה")
-        self.setStyleSheet(f"QDialog{{background:{palette['bg']};}}")
+        theme.bind_style(self, lambda _theme_palette: f"QDialog{{background:{_theme_palette['bg']};}}", palette)
         self.resize(380, 260)
         self._word, self._on_save, self._on_approve = word, on_save, on_approve
         p = palette
@@ -51,9 +51,7 @@ class CorrectionDialog(QDialog):
         # --- Suggestion chips from Hebrew dictionary ---
         if suggestions:
             sug_label = QLabel("הצעות מהמילון:")
-            sug_label.setStyleSheet(
-                f"color:{p['text_muted']}; font-size:12px; margin-top:4px;"
-            )
+            theme.bind_style(sug_label, lambda _theme_palette: f"color:{_theme_palette['text_muted']}; font-size:12px; margin-top:4px;", p)
             lay.addWidget(sug_label)
             chips_row = QHBoxLayout()
             chips_row.setContentsMargins(0, 0, 0, 0)
@@ -61,20 +59,18 @@ class CorrectionDialog(QDialog):
             for sug in suggestions:
                 chip = QPushButton(sug)
                 chip.setCursor(Qt.PointingHandCursor)
-                chip.setStyleSheet(
-                    f"QPushButton{{"
-                    f"  background:{p['surface']};"
-                    f"  color:{p['accent']};"
-                    f"  border:1px solid {p['accent']};"
+                theme.bind_style(chip, lambda _theme_palette: f"QPushButton{{"
+                    f"  background:{_theme_palette['surface']};"
+                    f"  color:{_theme_palette['accent']};"
+                    f"  border:1px solid {_theme_palette['accent']};"
                     f"  border-radius:12px;"
                     f"  padding:3px 12px;"
                     f"  font-size:13px;"
                     f"}}"
                     f"QPushButton:hover{{"
-                    f"  background:{p['accent']};"
-                    f"  color:{p['on_accent']};"
-                    f"}}"
-                )
+                    f"  background:{_theme_palette['accent']};"
+                    f"  color:{_theme_palette['on_accent']};"
+                    f"}}", p)
                 chip.clicked.connect(lambda _, s=sug: self._use_suggestion(s))
                 chips_row.addWidget(chip)
             chips_row.addStretch(1)
@@ -128,7 +124,7 @@ class ChangelogDialog(QDialog):
         super().__init__(parent)
         self.p = palette
         self.setWindowTitle("מה חדש ב-MyWhisper")
-        self.setStyleSheet(f"QDialog{{background:{palette['bg']};}}")
+        theme.bind_style(self, lambda _theme_palette: f"QDialog{{background:{_theme_palette['bg']};}}", palette)
         self.resize(620, 560)
 
         lay = QVBoxLayout(self)
@@ -143,21 +139,20 @@ class ChangelogDialog(QDialog):
         hl.setSpacing(5)
         title = QLabel("מה חדש ב-MyWhisper")
         title.setFont(QFont(theme.pick_font(), 18, QFont.Bold))
-        title.setStyleSheet(f"color:{palette['text']};background:transparent;")
+        theme.bind_style(title, lambda _theme_palette: f"color:{_theme_palette['text']};background:transparent;", palette)
         hl.addWidget(title)
         intro = self._read_intro()
         if intro:
             sub = QLabel(intro)
             sub.setWordWrap(True)
-            sub.setStyleSheet(
-                f"color:{palette['text_muted']};font-size:13px;background:transparent;")
+            theme.bind_style(sub, lambda _theme_palette: f"color:{_theme_palette['text_muted']};font-size:13px;background:transparent;", palette)
             hl.addWidget(sub)
         lay.addWidget(header)
 
         # --- divider ---
         divider = QFrame()
         divider.setFixedHeight(1)
-        divider.setStyleSheet(f"background:{palette['border']};border:none;")
+        theme.bind_style(divider, lambda _theme_palette: f"background:{_theme_palette['border']};border:none;", palette)
         lay.addWidget(divider)
 
         # --- scrollable list of version cards ---
@@ -241,13 +236,11 @@ class ChangelogDialog(QDialog):
             card.setObjectName("clcard")
             if is_current:
                 bg = _blend(p["accent"], p["surface"], 0.10)
-                card.setStyleSheet(
-                    f"#clcard{{background:{bg};border:2px solid {p['accent']};"
-                    f"border-radius:14px;}}")
+                theme.bind_style(card, lambda _theme_palette: f"#clcard{{background:{bg};border:2px solid {_theme_palette['accent']};"
+                    f"border-radius:14px;}}", p)
             else:
-                card.setStyleSheet(
-                    f"#clcard{{background:{p['surface']};"
-                    f"border:1px solid {p['border']};border-radius:14px;}}")
+                theme.bind_style(card, lambda _theme_palette: f"#clcard{{background:{_theme_palette['surface']};"
+                    f"border:1px solid {_theme_palette['border']};border-radius:14px;}}", p)
             cl = QVBoxLayout(card)
             cl.setContentsMargins(18, 15, 18, 16)
             cl.setSpacing(11)
@@ -255,10 +248,9 @@ class ChangelogDialog(QDialog):
             hr = QHBoxLayout()
             hr.setSpacing(8)
             badge = QLabel(("v" + v["ver"]) if v["ver"] else v["head"])
-            badge.setStyleSheet(
-                f"background:{p['accent'] if is_current else p['surface_alt']};"
-                f"color:{p['on_accent'] if is_current else p['text']};"
-                f"border-radius:8px;padding:3px 11px;font-weight:800;font-size:13px;")
+            theme.bind_style(badge, lambda _theme_palette: f"background:{_theme_palette['accent'] if is_current else _theme_palette['surface_alt']};"
+                f"color:{_theme_palette['on_accent'] if is_current else _theme_palette['text']};"
+                f"border-radius:8px;padding:3px 11px;font-weight:800;font-size:13px;", p)
             hr.addWidget(badge)
             if is_current:
                 pill = QLabel("✓ הגרסה שלך")
@@ -581,17 +573,14 @@ from ui_pages.settings_page import SettingsPageMixin
 class MainWindow(HistoryPageMixin, DictionaryPageMixin, SettingsPageMixin, FramelessWindow):
     """The branded shell: title bar + nav rail + stacked pages."""
 
-    _llm_result = Signal(object)
     _update_result = Signal(object)  # latest version string (or None), off-thread
 
     def __init__(self, ui, palette):
         super().__init__()
         self.ui = ui
         self.p = palette
-        self._force_close = False  # set by AppUI._rebuild for a real close
+        self._force_close = False  # tests can close instead of hiding to tray
         self._update_result.connect(self._on_update_result)
-        self._llm_loading = False
-        self._llm_result.connect(self._on_llm_models)
         # Rendering a history card costs a flag_tokens() pass (wordfreq lookups
         # per Hebrew word), so the built HTML is cached per entry. Anything that
         # changes the dictionary must clear it — see _invalidate_cards().
@@ -603,10 +592,10 @@ class MainWindow(HistoryPageMixin, DictionaryPageMixin, SettingsPageMixin, Frame
         self.setWindowTitle("MyWhisper — Matan Digital")
         self.setMinimumSize(720, 560)
         self.resize(900, 680)
-        self.container.setStyleSheet(f"#container{{background:{palette['bg']};border-radius:14px;}}")
+        theme.bind_style(self.container, lambda _theme_palette: f"#container{{background:{_theme_palette['bg']};border-radius:14px;}}", palette)
 
         self.body.addWidget(TitleBar(palette, ui.toggle_theme,
-                                     self.showMinimized, self.close))
+                                     self.showMinimized, self.close, on_max=self.toggle_max))
 
         mid = QWidget()
         midl = QHBoxLayout(mid)
@@ -619,13 +608,16 @@ class MainWindow(HistoryPageMixin, DictionaryPageMixin, SettingsPageMixin, Frame
         self.nav.selected.connect(self._goto)
         self.stack = QStackedWidget()
         page_wrap = QFrame()
-        page_wrap.setStyleSheet(f"background:{palette['surface']};")
+        theme.bind_style(page_wrap, lambda _theme_palette: f"background:{_theme_palette['surface']};", palette)
         pw = QVBoxLayout(page_wrap)
         pw.setContentsMargins(0, 0, 0, 0)
         pw.addWidget(self.stack)
         midl.addWidget(self.nav)
         midl.addWidget(page_wrap, 1)
         self.body.addWidget(mid, 1)
+        grip = QSizeGrip(self)
+        grip.setToolTip("גרור לשינוי גודל החלון")
+        self.body.addWidget(grip, 0, Qt.AlignLeft)
 
         self.stack.addWidget(self._history_page())
         self.stack.addWidget(self._dict_page())
@@ -636,6 +628,44 @@ class MainWindow(HistoryPageMixin, DictionaryPageMixin, SettingsPageMixin, Frame
         self.refresh_history()
         self.refresh_dict()
         self.search.setFocus()
+
+    def set_palette(self, palette):
+        """Repaint existing controls without replacing the native window."""
+        areas = self.findChildren(QScrollArea)
+        offsets = [(area, area.verticalScrollBar().value()) for area in areas]
+        focus = QApplication.focusWidget()
+        self.setUpdatesEnabled(False)
+        try:
+            self.p = palette
+            theme.apply_palette(self, palette)
+            for button in self.findChildren(QPushButton):
+                binding = getattr(button, "_theme_icon", None)
+                if binding:
+                    name, role, size = binding
+                    button.setIcon(icons.icon(name, palette[role], size))
+            for edit in self.findChildren(QLineEdit):
+                for action in edit.actions():
+                    if not action.icon().isNull():
+                        action.setIcon(icons.icon("search", palette["text_muted"], 16))
+            self._theme_sw.blockSignals(True)
+            self._theme_sw.setChecked(palette["name"] == "dark")
+            self._theme_sw.blockSignals(False)
+            self._invalidate_cards()
+            self.refresh_history()
+            self.refresh_dict()
+            self._refresh_model_status()
+            for area, offset in offsets:
+                area.verticalScrollBar().setValue(offset)
+            if focus is not None and focus.isVisible():
+                focus.setFocus()
+        finally:
+            self.setUpdatesEnabled(True)
+        QTimer.singleShot(0, lambda: self._restore_theme_offsets(offsets))
+
+    @staticmethod
+    def _restore_theme_offsets(offsets):
+        for area, offset in offsets:
+            area.verticalScrollBar().setValue(offset)
 
     def resizeEvent(self, e):
         super().resizeEvent(e)
@@ -715,6 +745,7 @@ class MainWindow(HistoryPageMixin, DictionaryPageMixin, SettingsPageMixin, Frame
         b = QPushButton(f" {text}")
         if danger:
             b.setProperty("variant", "danger")
+        b._theme_icon = (icon_name, "danger" if danger else "text_muted", 16)
         b.setIcon(icons.icon(icon_name, self.p["danger"] if danger else self.p["text_muted"], 16))
         b.setMinimumHeight(34)
         b.setCursor(Qt.PointingHandCursor)
@@ -793,7 +824,7 @@ class AppUI(QObject):
                  apply_corrections=None, format_bidi=None, update_history=None,
                  delete_history=None, restore_history=None, suggest_similar=None,
                  english_terms=None, add_english_term=None,
-                 remove_english_term=None, llm_list_models=None):
+                 remove_english_term=None):
         super().__init__()
         self.config = config
         self.level_provider = level_provider
@@ -816,7 +847,6 @@ class AppUI(QObject):
         self.english_terms = english_terms or (lambda: [])
         self.add_english_term = add_english_term or (lambda t: None)
         self.remove_english_term = remove_english_term or (lambda t: None)
-        self.llm_list_models = llm_list_models or (lambda: [])
         self.notify = lambda *a, **k: None  # wired to Tray.notify by main
         self.set_hotkey = lambda h: True    # wired to Mywishper._set_hotkey by main
         self.list_input_devices = lambda: []       # wired by main
@@ -860,13 +890,13 @@ class AppUI(QObject):
             w.refresh_history()  # catch up on dictations made while hidden
         self._history_dirty = False
         w.setWindowState((w.windowState() & ~Qt.WindowMinimized) | Qt.WindowActive)
-        w.showNormal()
+        w.showMaximized() if w.isMaximized() else w.showNormal()
         w.raise_()
         w.activateWindow()
         try:
             import ctypes
             hwnd = int(w.winId())
-            ctypes.windll.user32.ShowWindow(hwnd, 5)
+            ctypes.windll.user32.ShowWindow(hwnd, 3 if w.isMaximized() else 5)
             ctypes.windll.user32.SetForegroundWindow(hwnd)
         except Exception:
             pass
@@ -879,48 +909,10 @@ class AppUI(QObject):
             return
         self.config["theme"] = name
         self.on_change(self.config)
-        QTimer.singleShot(0, self._rebuild)
-
-    @staticmethod
-    def _scroll_of(page):
-        """The QScrollArea inside a stack page, if it has one."""
-        if page is None:
-            return None
-        return page if isinstance(page, QScrollArea) else page.findChild(QScrollArea)
-
-    def _rebuild(self):
-        idx = self._win.stack.currentIndex() if self._win else 0
-        geo = self._win.geometry() if self._win else None
-        # Preserve how far down the page the user was. Without this, switching
-        # theme silently jumped every page back to the top, so the control they
-        # were looking at moved out from under the cursor.
-        offset = 0
-        if self._win is not None:
-            area = self._scroll_of(self._win.stack.currentWidget())
-            if area is not None:
-                offset = area.verticalScrollBar().value()
-            self._win._force_close = True  # real close, not minimize-to-tray
-            self._win.close()
-            self._win.deleteLater()
-            self._win = None
-        self.p = theme.palette(self.config.get("theme", "dark"))
+        self.p = theme.palette(name)
         self._apply_global_style()
-        self._win = MainWindow(self, self.p)
-        if geo is not None:
-            self._win.setGeometry(geo)
-        self._win.nav.set_index(idx)
-        self._win._goto(idx)
-        self._show_window()
-        if offset:
-            # After the layout settles, or the scrollbar range is still 0.
-            QTimer.singleShot(0, lambda: self._restore_scroll(idx, offset))
-
-    def _restore_scroll(self, idx, offset):
-        if self._win is None:
-            return
-        area = self._scroll_of(self._win.stack.widget(idx))
-        if area is not None:
-            area.verticalScrollBar().setValue(offset)
+        if self._win is not None:
+            self._win.set_palette(self.p)
 
     def notify_minimized(self):
         """One-time balloon so the user knows X hid the window, not the app."""

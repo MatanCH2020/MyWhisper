@@ -21,12 +21,6 @@
   "clipboard_history": true,
   "clipboard_hotkey": "ctrl+`",
   "clipboard_paused": false,
-  "llm_polish": false,
-  "llm_compare": false,
-  "llm_style": "correct",
-  "llm_model": "",
-  "llm_url": "http://localhost:11434",
-  "llm_timeout": 20,
   "highlight_unknown": true,
   "bidi_isolate": true,
   "theme": "dark"

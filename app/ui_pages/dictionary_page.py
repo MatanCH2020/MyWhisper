@@ -1,5 +1,6 @@
 """Dictionary page behavior for the Qt shell; backends are injected."""
 import html
+import theme
 
 
 from PySide6.QtCore import Qt
@@ -60,25 +61,21 @@ class DictionaryPageMixin:
     def _line_edit(self, placeholder):
         e = QLineEdit()
         e.setPlaceholderText(placeholder)
-        e.setStyleSheet(
-            f"QLineEdit{{background:{self.p['surface']}; color:{self.p['text']};"
-            f" border:1px solid {self.p['border']}; border-radius:8px;"
+        theme.bind_style(e, lambda _theme_palette: f"QLineEdit{{background:{_theme_palette['surface']}; color:{_theme_palette['text']};"
+            f" border:1px solid {_theme_palette['border']}; border-radius:8px;"
             f" padding:6px 10px; font-size:13px;}}"
-            f"QLineEdit:focus{{border-color:{self.p['accent']};}}"
-        )
+            f"QLineEdit:focus{{border-color:{_theme_palette['accent']};}}", self.p)
         return e
 
 
     def _accent_btn(self, text, cb):
         b = QPushButton(text)
         b.setCursor(Qt.PointingHandCursor)
-        b.setStyleSheet(
-            f"QPushButton{{background:{self.p['accent']}; color:{self.p['on_accent']};"
+        theme.bind_style(b, lambda _theme_palette: f"QPushButton{{background:{_theme_palette['accent']}; color:{_theme_palette['on_accent']};"
             f" border:none; border-radius:8px; padding:6px 16px;"
             f" font-size:13px; font-weight:600;}}"
-            f"QPushButton:hover{{background:{self.p['accent_hover']};}}"
-            f"QPushButton:focus{{border:2px solid {self.p['on_accent']};padding:4px 14px;}}"
-        )
+            f"QPushButton:hover{{background:{_theme_palette['accent_hover']};}}"
+            f"QPushButton:focus{{border:2px solid {_theme_palette['on_accent']};padding:4px 14px;}}", self.p)
         b.clicked.connect(lambda: cb())
         return b
 
@@ -103,7 +100,7 @@ class DictionaryPageMixin:
         h.addWidget(self._delete_icon_btn(on_delete))
         h.addStretch(1)
         lbl = QLabel(text)
-        lbl.setStyleSheet(f"color:{self.p['text']}; font-size:14px;")
+        theme.bind_style(lbl, lambda _theme_palette: f"color:{_theme_palette['text']}; font-size:14px;", self.p)
         lbl.setTextInteractionFlags(Qt.TextSelectableByMouse)
         h.addWidget(lbl)
         return card
@@ -121,7 +118,7 @@ class DictionaryPageMixin:
         val = QLabel(f"<span dir=\"auto\">{html.escape(value)}</span>")
         val.setTextFormat(Qt.RichText)
         val.setTextInteractionFlags(Qt.TextSelectableByMouse)
-        val.setStyleSheet(f"color:{self.p['text']}; font-size:14px; font-weight:600;")
+        theme.bind_style(val, lambda _theme_palette: f"color:{_theme_palette['text']}; font-size:14px; font-weight:600;", self.p)
         v.addWidget(val)
         return w
 
@@ -136,8 +133,7 @@ class DictionaryPageMixin:
         h.addStretch(1)
         h.addWidget(self._corr_value("נשמע", wrong), 1)
         arrow = QLabel("←")
-        arrow.setStyleSheet(
-            f"color:{self.p['text_muted']}; font-size:18px; font-weight:700;")
+        theme.bind_style(arrow, lambda _theme_palette: f"color:{_theme_palette['text_muted']}; font-size:18px; font-weight:700;", self.p)
         h.addWidget(arrow)
         h.addWidget(self._corr_value("ייכתב", right), 1)
         return card

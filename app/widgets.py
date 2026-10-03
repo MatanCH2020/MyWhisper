@@ -69,7 +69,7 @@ class FramelessWindow(QWidget):
             edges |= Qt.TopEdge
         if p.y() >= h - g:
             edges |= Qt.BottomEdge
-        return edges if int(edges) else None
+        return edges if edges.value else None
 
     def _apply_cursor(self, edges):
         if not edges:
@@ -102,7 +102,8 @@ class FramelessWindow(QWidget):
 class TitleBar(QWidget):
     """Branded, draggable title bar with theme toggle + minimize/close."""
 
-    def __init__(self, palette, on_theme, on_min, on_close):
+    def __init__(self, palette, on_theme, on_min, on_close, on_max=None,
+                 title_text="MyWhisper", close_tip="סגור למגש"):
         super().__init__()
         self.setObjectName("titlebar")
         self.setFixedHeight(48)
@@ -113,12 +114,13 @@ class TitleBar(QWidget):
         lay.setContentsMargins(14, 0, 8, 0)
         lay.setSpacing(8)
 
-        logo = QLabel()
+        self._buttons = []
+        logo = self._logo = QLabel()
         logo.setPixmap(icons.pixmap("mic", p["accent"], 20))
         lay.addWidget(logo)
-        title = QLabel("MyWhisper")
+        title = self._title = QLabel(title_text)
         title.setFont(QFont(theme.pick_font(), 12, QFont.Bold))
-        title.setStyleSheet(f"color:{p['text']};")
+        theme.bind_style(title, lambda _theme_palette: f"color:{_theme_palette['text']};", p)
         lay.addWidget(title)
         sub = QLabel("· Matan Digital")
         sub.setObjectName("muted")
@@ -127,9 +129,13 @@ class TitleBar(QWidget):
 
         self._theme_btn = self._icon_btn("moon" if p["name"] == "light" else "sun",
                                          p["text_muted"], on_theme, "החלף מצב תצוגה")
-        for w in (self._theme_btn,
-                  self._icon_btn("minimize", p["text_muted"], on_min, "מזער"),
-                  self._icon_btn("close", p["text_muted"], on_close, "סגור למגש")):
+        buttons = [self._theme_btn,
+                   self._icon_btn("minimize", p["text_muted"], on_min, "מזער")]
+        if on_max is not None:
+            buttons.append(self._icon_btn("maximize", p["text_muted"], on_max,
+                                          "הגדל / שחזר גודל"))
+        buttons.append(self._icon_btn("close", p["text_muted"], on_close, close_tip))
+        for w in buttons:
             lay.addWidget(w)
 
     def _icon_btn(self, name, color, cb, tip):
@@ -138,9 +144,19 @@ class TitleBar(QWidget):
         b.setFixedSize(38, 34)
         b.setIcon(icons.icon(name, color, 18))
         b.setToolTip(tip)
+        b.setAccessibleName(tip)
+        b._icon_name = name
+        self._buttons.append(b)
         b.setCursor(Qt.PointingHandCursor)
         b.clicked.connect(lambda: cb())
         return b
+
+    def set_palette(self, palette):
+        self._logo.setPixmap(icons.pixmap("mic", palette["accent"], 20))
+        theme.bind_style(self._title, lambda _theme_palette: f"color:{_theme_palette['text']};", palette)
+        self._theme_btn._icon_name = "moon" if palette["name"] == "light" else "sun"
+        for button in self._buttons:
+            button.setIcon(icons.icon(button._icon_name, palette["text_muted"], 18))
 
     def mousePressEvent(self, e):
         if e.button() == Qt.LeftButton and self.window().windowHandle():
@@ -164,6 +180,7 @@ class NavRail(QWidget):
         lay.setContentsMargins(10, 12, 10, 12)
         lay.setSpacing(4)
         self._btns = []
+        self._items = items
         for i, (name, label) in enumerate(items):
             b = QPushButton(f"  {label}")
             b.setObjectName("navitem")
@@ -181,6 +198,10 @@ class NavRail(QWidget):
     def set_index(self, i):
         if 0 <= i < len(self._btns):
             self._btns[i].setChecked(True)
+
+    def set_palette(self, palette):
+        for button, (name, _) in zip(self._btns, self._items):
+            button.setIcon(icons.icon(name, palette["text_muted"], 18))
 
     def set_tooltips(self, tips):
         """Attach a hint per item (used to surface the Ctrl+N shortcuts)."""
@@ -209,6 +230,10 @@ class ToggleSwitch(QCheckBox):
         as a toggle that only works "sometimes".
         """
         return self.rect().contains(pos)
+
+    def set_palette(self, palette):
+        self._p = palette
+        self.update()
 
     def paintEvent(self, _e):
         p = QPainter(self)

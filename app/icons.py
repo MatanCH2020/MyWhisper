@@ -145,11 +145,16 @@ def _close(p, s, color):
     p.drawLine(QPointF(s - m, m), QPointF(m, s - m))
 
 
+def _maximize(p, s, color):
+    _pen(p, color, s)
+    p.drawRect(QRectF(s * 0.25, s * 0.25, s * 0.5, s * 0.5))
+
+
 _DRAW = {
     "history": _clock, "clock": _clock, "dictionary": _book, "book": _book,
     "settings": _sliders, "copy": _copy, "trash": _trash, "refresh": _refresh,
     "search": _search, "mic": _mic, "sun": _sun, "moon": _moon,
-    "minimize": _minimize, "close": _close,
+    "minimize": _minimize, "close": _close, "maximize": _maximize,
 }
 
 

@@ -99,7 +99,7 @@ class HistoryPageMixin:
         title = QLabel("עוד לא הכתבת כלום")
         title.setAlignment(Qt.AlignCenter)
         title.setFont(QFont(theme.pick_font(), 15, QFont.Bold))
-        title.setStyleSheet(f"color:{p['text']};")
+        theme.bind_style(title, lambda _theme_palette: f"color:{_theme_palette['text']};", p)
         v.addWidget(title)
         v.addSpacing(6)
 
@@ -107,7 +107,7 @@ class HistoryPageMixin:
         sub = QLabel(f"הקיצור שלך: <b style='color:{p['accent']}'>{html.escape(hk)}</b>")
         sub.setTextFormat(Qt.RichText)
         sub.setAlignment(Qt.AlignCenter)
-        sub.setStyleSheet(f"color:{p['text_muted']}; font-size:13px;")
+        theme.bind_style(sub, lambda _theme_palette: f"color:{_theme_palette['text_muted']}; font-size:13px;", p)
         v.addWidget(sub)
         v.addSpacing(20)
 

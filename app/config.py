@@ -2,7 +2,6 @@
 import json
 import logging
 import math
-from urllib.parse import urlsplit
 from pathlib import Path
 
 from safe_json import atomic_save, read_json, report_error
@@ -36,13 +35,6 @@ DEFAULTS = {
     "clipboard_history": True,
     "clipboard_hotkey": "ctrl+`",     # opens the picker
     "clipboard_paused": False,        # user-toggled pause (survives a restart)
-    # Optional local-LLM polish via Ollama (off by default; opt-in, needs Ollama)
-    "llm_polish": False,
-    "llm_compare": False,             # paste BOTH the LLM and raw versions (A/B)
-    "llm_style": "correct",           # "correct" = fix errors only; "rewrite" = professional rephrase close to original
-    "llm_model": "",                  # Ollama model name, e.g. "qwen3:14b"
-    "llm_url": "http://localhost:11434",
-    "llm_timeout": 20,                # seconds; falls back to raw text on timeout
     "highlight_unknown": True,
     "bidi_isolate": True,
     "theme": "dark",
@@ -52,11 +44,10 @@ DEFAULTS = {
 _RANGES = {
     "beam_size": (1, 100), "beam_size_cpu": (1, 100), "cpu_threads": (0, 256),
     "max_record_seconds": (0, 86400), "idle_release_minutes": (0, 10080),
-    "sound_volume": (0, 1), "clipboard_restore_delay": (0, 30), "llm_timeout": (1, 600),
+    "sound_volume": (0, 1), "clipboard_restore_delay": (0, 30),
 }
 _CHOICES = {
     "device": {"cuda", "cpu", "auto"}, "theme": {"dark", "light"},
-    "llm_style": {"correct", "rewrite"},
     "compute_type": {"default", "auto", "int8", "int8_float16", "int8_float32",
                      "int8_bfloat16", "int16", "float16", "bfloat16", "float32"},
 }
@@ -81,12 +72,6 @@ def _validate(key, value):
             ok = value in _CHOICES[key]
         if ok and key in ("model", "language", "hotkey", "clipboard_hotkey"):
             ok = bool(value.strip())
-        if ok and key == "llm_url":
-            try:
-                parsed = urlsplit(value)
-                ok = parsed.scheme in ("http", "https") and bool(parsed.hostname)
-            except ValueError:
-                ok = False
     if not ok:
         report_error(CONFIG_PATH, f"הערך של {key} אינו תקין; נבחרה ברירת מחדל")
         return default
@@ -96,11 +81,12 @@ def _validate(key, value):
 def load_config():
     cfg = dict(DEFAULTS)
     cfg.update(read_json(CONFIG_PATH, {}, lambda d: isinstance(d, dict)))
-    return {key: _validate(key, value) for key, value in cfg.items()}
+    return {key: _validate(key, value) for key, value in cfg.items()
+            if not key.startswith("llm_")}
 
 
 def save_config(cfg: dict) -> bool:
     if not isinstance(cfg, dict):
         report_error(CONFIG_PATH)
         return False
-    return atomic_save(CONFIG_PATH, {k: _validate(k, v) for k, v in cfg.items()})
+    return atomic_save(CONFIG_PATH, {k: _validate(k, v) for k, v in cfg.items() if not k.startswith("llm_")})

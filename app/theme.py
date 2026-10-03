@@ -5,6 +5,23 @@ A palette is a flat dict of color tokens; build_qss() turns the active palette
 into one app-wide stylesheet so every control looks consistent.
 """
 from PySide6.QtGui import QFontDatabase
+from PySide6.QtWidgets import QWidget
+
+
+def bind_style(widget, builder, palette):
+    """Keep the palette recipe so an existing widget can change theme in place."""
+    widget._palette_style = builder
+    widget.setStyleSheet(builder(palette))
+
+
+def apply_palette(root, palette):
+    for widget in [root, *root.findChildren(QWidget)]:
+        builder = getattr(widget, "_palette_style", None)
+        if builder is not None:
+            widget.setStyleSheet(builder(palette))
+        setter = getattr(widget, "set_palette", None)
+        if setter is not None and widget is not root:
+            setter(palette)
 
 LIGHT = {
     "name": "light",
@@ -80,9 +97,21 @@ def pick_font() -> str:
     return "Segoe UI"
 
 
+def menu_qss(p):
+    return f"""
+QMenu {{ background: {p['surface']}; color: {p['text']};
+    border: 1px solid {p['border']}; padding: 6px; }}
+QMenu::item {{ background: transparent; color: {p['text']};
+    padding: 8px 24px; border-radius: 5px; }}
+QMenu::item:selected {{ background: {p['accent']}; color: {p['on_accent']}; }}
+QMenu::item:disabled {{ color: {p['text_muted']}; }}
+QMenu::separator {{ height: 1px; background: {p['border']}; margin: 4px 8px; }}
+"""
+
+
 def build_qss(p: dict) -> str:
     """App-wide stylesheet derived from the active palette."""
-    return f"""
+    return menu_qss(p) + f"""
 * {{
     font-family: "{pick_font()}";
     color: {p['text']};
@@ -171,6 +200,12 @@ QLineEdit {{
     selection-color: {p['on_accent']};
 }}
 QLineEdit:focus {{ border: 1px solid {p['accent']}; }}
+
+QPlainTextEdit {{ background: {p['surface']}; color: {p['text']};
+    border: 1px solid {p['border']}; border-radius: 8px; padding: 12px;
+    font-size: 15px; selection-background-color: {p['accent']};
+    selection-color: {p['on_accent']}; }}
+QSplitter::handle {{ background: {p['border']}; width: 6px; }}
 
 QComboBox {{
     background: {p['surface_alt']};

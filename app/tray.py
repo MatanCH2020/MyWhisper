@@ -6,6 +6,7 @@ from worker threads, so it marshals to the main thread via a queued signal.
 from PySide6.QtCore import QObject, QPointF, QRectF, Signal, Qt
 from PySide6.QtGui import QIcon, QPixmap, QPainter, QPen, QColor
 from PySide6.QtWidgets import QSystemTrayIcon, QMenu
+import theme
 
 COLORS = {
     "loading": "#4c82f7",     # brand blue — model loading at startup
@@ -44,7 +45,7 @@ class Tray(QObject):
     _state_sig = Signal(str, str)        # (state, tooltip)
     _notify_sig = Signal(str, str, str, int)  # title, message, level, duration
 
-    def __init__(self, on_quit, on_settings=None, hotkey="ctrl+space"):
+    def __init__(self, on_quit, on_settings=None, hotkey="ctrl+space", palette=None):
         super().__init__()
         self._icons = {s: _make_icon(c) for s, c in COLORS.items()}
         on_settings = on_settings or (lambda: None)
@@ -52,7 +53,8 @@ class Tray(QObject):
         self._tray = QSystemTrayIcon(self._icons["idle"])
         self._tray.setToolTip("MyWhisper — מוכן")
 
-        menu = QMenu()
+        menu = self._menu = QMenu()
+        self.set_palette(palette or theme.DARK)
         menu.setLayoutDirection(Qt.RightToLeft)
         menu.addAction("הגדרות", lambda: on_settings())
         self._act_hotkey = menu.addAction(f"קיצור: {hotkey}")
@@ -69,6 +71,9 @@ class Tray(QObject):
         self._state_sig.connect(self._apply_state)
         self._notify_sig.connect(self._show_message)
         self._tray.show()
+
+    def set_palette(self, palette):
+        self._menu.setStyleSheet(theme.menu_qss(palette))
 
     def set_hotkey_label(self, hotkey: str):
         """Update the disabled 'קיצור: …' menu row after a live rebind."""

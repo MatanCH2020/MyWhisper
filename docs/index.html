@@ -784,10 +784,10 @@ footer a{color:var(--muted);transition:color 0.2s}footer a:hover{color:var(--tex
 
     <div class="stage">
       <div class="halo" aria-hidden="true"></div>
-      <img class="overlay-float" src="app-overlay.png?v=1.11.2" alt="מחוון ההקלטה הצף">
+      <img class="overlay-float" src="app-overlay.png?v=1.12.0" alt="מחוון ההקלטה הצף">
       <div class="window">
         <div class="winbar"><span class="d r"></span><span class="d y"></span><span class="d g"></span><span>MyWhisper — Matan Digital</span></div>
-        <img class="shot" src="app-history-dark.png?v=1.11.2" alt="חלון ההיסטוריה של MyWhisper עם תמלולים בעברית">
+        <img class="shot" src="app-history-dark.png?v=1.12.0" alt="חלון ההיסטוריה של MyWhisper עם תמלולים בעברית">
       </div>
     </div>
   </div>
@@ -892,26 +892,41 @@ footer a{color:var(--muted);transition:color 0.2s}footer a:hover{color:var(--tex
       <div class="pt"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg><span>המודל מקבל את המילה כרמז ומפיק אותה נכון מראש</span></div>
       <div class="pt"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg><span>מילים באנגלית נשארות LTR בתוך העברית — בלי בלגן כיווניות</span></div>
     </div>
-    <div class="media"><img class="shot" src="app-dictionary-dark.png?v=1.11.2" alt="מילון התיקונים הנלמדים של MyWhisper"></div>
+    <div class="media"><img class="shot" src="app-dictionary-dark.png?v=1.12.0" alt="מילון התיקונים הנלמדים של MyWhisper"></div>
+  </div>
+</section>
+
+<section id="clipboard">
+  <div class="wrap split">
+    <div>
+      <span class="eyebrow" style="text-align:right">היסטוריית העתקות</span>
+      <h2>כל הטקסט. תמונות בגודל ברור.</h2>
+      <p>פתחו עם <bdi>Ctrl+`</bdi> ובחרו פריט ברשימה כדי לקרוא את הטקסט המלא או לצפות בתמונה עם הגדלה. אפשר לגרור את החלון, לשנות את גודלו ולהגדיל למסך מלא.</p>
+      <p>כפתור ההעתקה, Enter או לחיצה כפולה מחזירים את הפריט ללוח. Esc סוגר את החלון.</p>
+    </div>
+    <div class="media"><img class="shot" src="app-clipboard-dark.png?v=1.12.0" alt="היסטוריית העתקות עם תצוגת הטקסט המלא לצד הרשימה"></div>
   </div>
 </section>
 
 <!-- release:start -->
-<section id="updates" data-release-version="1.11.2">
+<section id="updates" data-release-version="1.12.0">
   <div class="wrap">
     <span class="eyebrow">מה חדש</span>
-    <h2 class="h2">הגרסה העדכנית: <bdi>v1.11.2</bdi></h2>
+    <h2 class="h2">הגרסה העדכנית: <bdi>v1.12.0</bdi></h2>
     <p class="sub">העדכונים האחרונים מתוך יומן השינויים של התוכנה.</p>
     <div class="release-notes">
       <ul>
-        <li><strong>חלונית הקלטה קומפקטית</strong>: כרטיס בגודל 240×72 עם אייקון קטן, זמן הקלטה נפרד וגל קול עדין שמגיב לדיבור.</li>
-        <li><strong>טקסט וטיימר ללא חפיפה</strong>: אזורי תצוגה נפרדים וכיווניות מפורשת לעברית ולזמן ההקלטה, עם רמז Esc לביטול בשורה התחתונה.</li>
-        <li><strong>תצוגת תמלול עקבית</strong>: החלונית שומרת על גודלה ומיקומה בזמן העיבוד, עם זמן ההקלטה הסופי ומחוון התקדמות, בלי לקחת את הפוקוס משדה ההקלדה.</li>
+        <li><strong>מעבר רציף בין בהיר לכהה</strong>: הצבעים והאייקונים מתעדכנים באותו חלון, בלי סגירה ופתיחה מחדש, תוך שמירת החיפוש, הטיוטות והגלילה.</li>
+        <li><strong>חלונות ניתנים לשינוי גודל</strong>: תוקנה גרירת הקצוות ונוספו כפתור הגדלה ושחזור וידית שינוי גודל בחלון הראשי ובחלון ההעתקות.</li>
+        <li><strong>היסטוריית העתקות נוחה יותר</strong>: חלון עם כותרת ניתנת לגרירה וכפתורי סגירה ומזעור. בחירה ברשימה מציגה את התוכן; כפתור העתקה, Enter או לחיצה כפולה מעתיקים ללוח וסוגרים.</li>
+        <li><strong>טקסט מלא ותמונות גדולות</strong>: תצוגה נגללת לכל הטקסט, תמונות ממוזערות גדולות יותר ותצוגת תמונה עם הגדלה, הקטנה והתאמה לחלון. ניקוי מלא דורש אישור.</li>
+        <li><strong>תפריט מגש קריא</strong>: תפריט המיקרופון ליד השעון מתאים לערכת הנושא ומציג טקסט ברור במצב בהיר ובמצב כהה.</li>
+        <li><strong>הסרת עיבוד Ollama</strong>: הוסרו העיבוד החכם, מצב ההשוואה והגדרות מודלי השפה. התמלול המקומי ממשיך להשתמש במילון התיקונים ובמונחים האישיים.</li>
       </ul>
     </div>
     <div class="cta-row">
-      <a class="btn btn-lg btn-primary" href="https://github.com/MatanCH2020/MyWhisper/releases/download/v1.11.2/MyWhisper-Setup.cmd">הורדת המתקין</a>
-      <a class="btn btn-lg btn-ghost" href="https://github.com/MatanCH2020/MyWhisper/releases/tag/v1.11.2">כל פרטי הגרסה</a>
+      <a class="btn btn-lg btn-primary" href="https://github.com/MatanCH2020/MyWhisper/releases/download/v1.12.0/MyWhisper-Setup.cmd">הורדת המתקין</a>
+      <a class="btn btn-lg btn-ghost" href="https://github.com/MatanCH2020/MyWhisper/releases/tag/v1.12.0">כל פרטי הגרסה</a>
     </div>
   </div>
 </section>

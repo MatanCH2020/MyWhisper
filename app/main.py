@@ -57,9 +57,9 @@ from PySide6.QtWidgets import QApplication
 import clips
 import corrections
 import history
-import llm
 import sounds
 import safe_json
+import theme
 from config import load_config, save_config
 from recorder import Recorder, has_input_device, list_input_devices, MicMonitor
 from transcriber import Transcriber
@@ -123,12 +123,12 @@ class Mywishper(QObject):
             english_terms=corrections.english_terms,
             add_english_term=corrections.add_english_term,
             remove_english_term=corrections.remove_english_term,
-            llm_list_models=lambda: llm.list_models(self.config.get("llm_url", llm.DEFAULT_URL)),
         )
         self.tray = Tray(
             on_quit=self.quit,
             on_settings=self.ui.open_settings,
             hotkey=self.config.get("hotkey"),
+            palette=self.ui.p,
         )
         self.ui.notify = self.tray.notify  # balloon hints (minimize-to-tray etc.)
         safe_json.set_error_handler(self._storage_error.emit)
@@ -177,6 +177,10 @@ class Mywishper(QObject):
         """Called from the settings UI when sound options change: apply + persist."""
         self.config = config
         self._apply_sound_config()
+        palette = theme.palette(self.config.get("theme", "dark"))
+        self.tray.set_palette(palette)
+        if self._clip_picker is not None:
+            self._clip_picker.set_palette(palette)
         return save_config(self.config)
 
     @Slot(str)
@@ -235,7 +239,7 @@ class Mywishper(QObject):
             self._clip_picker = ClipPicker(
                 self.ui.p, on_pick=self._use_clip,
                 on_delete=lambda cid: clips.delete(cid),
-                on_clear=self.ui.clear_clips)
+                on_clear=self.ui.clear_clips, on_theme=self.ui.toggle_theme)
         if self._clip_picker.isVisible():
             self._clip_picker.hide()   # same key closes it again
             return
@@ -453,40 +457,13 @@ class Mywishper(QObject):
         # Run the heavy work off the hotkey thread so the UI stays responsive.
         threading.Thread(target=self._worker, args=(audio,), daemon=True).start()
 
-    @staticmethod
-    def _compare_text(polished, raw):
-        """Two labeled blocks for A/B compare mode. If the LLM changed nothing,
-        say so instead of pasting the identical text twice."""
-        if polished.strip() == raw.strip():
-            return f"[עם LLM — ללא שינוי]\n{raw}"
-        return f"[עם LLM]\n{polished}\n\n[מקורי]\n{raw}"
-
     def _worker(self, audio):
         try:
             text = self.transcriber.transcribe(
                 audio, hotwords=corrections.bias_terms(),
                 glossary=corrections.english_terms())
             if text:
-                model = self.config.get("llm_model")
-                have_llm = bool(model)
-                # The deterministic "raw" version (Hebrew model + learned fixes).
-                raw = corrections.apply(text)
-
-                def _polished():
-                    # The LLM phrases on its own — the manual dictionary is NOT
-                    # applied here, so its output is independent of learned fixes.
-                    return llm.polish(
-                        text, model, self.config.get("llm_url", llm.DEFAULT_URL),
-                        self.config.get("llm_timeout", 20),
-                        style=self.config.get("llm_style", "correct"))
-
-                if self.config.get("llm_compare") and have_llm:
-                    # A/B mode: paste both versions labeled for live comparison.
-                    logical = self._compare_text(_polished(), raw)
-                elif self.config.get("llm_polish") and have_llm:
-                    logical = _polished()
-                else:
-                    logical = raw
+                logical = corrections.apply(text)
 
                 history.add(logical)  # store what was actually delivered
                 # Refresh an open history page so the new card appears on its

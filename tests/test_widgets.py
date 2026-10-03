@@ -18,7 +18,7 @@ from PySide6.QtTest import QTest
 from PySide6.QtWidgets import QApplication
 
 import theme
-from widgets import NavRail, ToggleSwitch
+from widgets import FramelessWindow, NavRail, ToggleSwitch
 
 _app = QApplication.instance() or QApplication([])
 
@@ -78,6 +78,17 @@ class NavRailTestCase(unittest.TestCase):
         rail = NavRail(theme.DARK, [("history", "א"), ("dictionary", "ב")])
         rail.set_tooltips(["Ctrl+1"])  # must not raise
         self.assertEqual(rail._btns[0].toolTip(), "Ctrl+1")
+
+
+class WindowResizeTestCase(unittest.TestCase):
+    def test_corners_and_edges_are_usable_with_current_qt(self):
+        window = FramelessWindow()
+        window.resize(900, 680)
+        self.assertEqual(window._edges_at(QPoint(1, 1)), Qt.LeftEdge | Qt.TopEdge)
+        self.assertEqual(window._edges_at(QPoint(899, 679)), Qt.RightEdge | Qt.BottomEdge)
+        self.assertEqual(window._edges_at(QPoint(1, 340)), Qt.LeftEdge)
+        self.assertIsNone(window._edges_at(QPoint(450, 340)))
+        window.close()
 
 
 if __name__ == "__main__":

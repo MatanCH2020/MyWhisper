@@ -1,6 +1,8 @@
 """Settings page behavior for the Qt shell; backends are injected."""
 import threading
 
+import theme
+
 from version import __version__ as APP_VERSION
 
 from PySide6.QtCore import Qt, QTimer
@@ -24,7 +26,7 @@ class SettingsPageMixin:
         stc.vbox.addWidget(self._section("מנוע התמלול"))
         srow = QHBoxLayout()
         self._status_dot = QLabel("●")
-        self._status_dot.setStyleSheet(f"color:{self.p['text_muted']}; font-size:15px;")
+        theme.bind_style(self._status_dot, lambda _theme_palette: f"color:{_theme_palette['text_muted']}; font-size:15px;", self.p)
         srow.addWidget(self._status_dot)
         self._status_lbl = self._plain("בודק…")
         srow.addWidget(self._status_lbl)
@@ -73,7 +75,7 @@ class SettingsPageMixin:
         mrow.addStretch(1)
         self._mic_combo = QComboBox()
         self._mic_combo.setMinimumWidth(240)
-        self._mic_combo.setStyleSheet(_combo_qss(self.p))
+        theme.bind_style(self._mic_combo, lambda _theme_palette: _combo_qss(_theme_palette), self.p)
         self._mic_combo.currentIndexChanged.connect(self._on_mic_changed)
         mrow.addWidget(self._mic_combo)
         mrow.addWidget(self._tool_btn("refresh", "רענן", self._populate_mics))
@@ -93,9 +95,8 @@ class SettingsPageMixin:
         self._mic_level.setRange(0, 100)
         self._mic_level.setTextVisible(False)
         self._mic_level.setFixedHeight(12)
-        self._mic_level.setStyleSheet(
-            f"QProgressBar{{background:{self.p['surface_alt']};border:none;border-radius:6px;}}"
-            f"QProgressBar::chunk{{background:{self.p['accent']};border-radius:6px;}}")
+        theme.bind_style(self._mic_level, lambda _theme_palette: f"QProgressBar{{background:{_theme_palette['surface_alt']};border:none;border-radius:6px;}}"
+            f"QProgressBar::chunk{{background:{_theme_palette['accent']};border-radius:6px;}}", self.p)
         trow.addWidget(self._mic_level, 1)
         mc.vbox.addLayout(trow)
         self._mic_status = QLabel("")
@@ -115,6 +116,7 @@ class SettingsPageMixin:
         row.addWidget(self._plain("מצב כהה"))
         row.addStretch(1)
         self._theme_sw = ToggleSwitch(self.p, checked=(self.p["name"] == "dark"))
+        self._theme_sw.setAccessibleName("מצב כהה")
         self._theme_sw.toggled.connect(
             lambda on: self.ui.set_theme("dark" if on else "light"))
         row.addWidget(self._theme_sw)
@@ -128,6 +130,7 @@ class SettingsPageMixin:
         r1.addWidget(self._plain("הפעל צלילים"))
         r1.addStretch(1)
         self._snd_sw = ToggleSwitch(self.p, checked=self.ui.config.get("sounds", True))
+        self._snd_sw.setAccessibleName("הפעל צלילים")
         self._snd_sw.toggled.connect(self._on_sound_toggle)
         r1.addWidget(self._snd_sw)
         sc.vbox.addLayout(r1)
@@ -158,60 +161,6 @@ class SettingsPageMixin:
         sc.vbox.addLayout(r3)
         v.addWidget(sc)
 
-        # smart processing — optional local LLM polish via Ollama (opt-in)
-        lc, lbox = self._collapsible_card(
-            "עיבוד חכם",
-            "LLM מקומי ניסיוני לשיפור ניסוח אחרי התמלול",
-            expanded=False)
-        lrow = QHBoxLayout()
-        lrow.addWidget(self._plain("שיפור לשוני עם Ollama"))
-        lrow.addStretch(1)
-        self._llm_sw = ToggleSwitch(self.p, checked=self.ui.config.get("llm_polish", False))
-        self._llm_sw.toggled.connect(self._on_llm_toggle)
-        lrow.addWidget(self._llm_sw)
-        lbox.addLayout(lrow)
-        lmrow = QHBoxLayout()
-        lmrow.addWidget(self._plain("מודל"))
-        lmrow.addStretch(1)
-        self._llm_combo = QComboBox()
-        self._llm_combo.setMinimumWidth(240)
-        self._llm_combo.setStyleSheet(_combo_qss(self.p))
-        self._llm_combo.currentIndexChanged.connect(self._on_llm_model_changed)
-        lmrow.addWidget(self._llm_combo)
-        lmrow.addWidget(self._tool_btn("refresh", "רענן", self._populate_llm_models))
-        lbox.addLayout(lmrow)
-        cmprow = QHBoxLayout()
-        cmprow_lbl = self._plain("מצב השוואה (הדבק את שתי הגרסאות)")
-        cmprow.addWidget(cmprow_lbl)
-        cmprow.addStretch(1)
-        self._llm_cmp_sw = ToggleSwitch(self.p, checked=self.ui.config.get("llm_compare", False))
-        self._llm_cmp_sw.toggled.connect(self._on_llm_compare_toggle)
-        cmprow.addWidget(self._llm_cmp_sw)
-        lbox.addLayout(cmprow)
-        styrow = QHBoxLayout()
-        styrow.addWidget(self._plain("ניסוח מקצועי (שכתוב קרוב למקור)"))
-        styrow.addStretch(1)
-        self._llm_style_sw = ToggleSwitch(
-            self.p, checked=self.ui.config.get("llm_style", "correct") == "rewrite")
-        self._llm_style_sw.toggled.connect(self._on_llm_style_toggle)
-        styrow.addWidget(self._llm_style_sw)
-        lbox.addLayout(styrow)
-        self._llm_status = QLabel("")
-        self._llm_status.setObjectName("hint")
-        lbox.addWidget(self._llm_status)
-        llm_hint = QLabel(
-            "מריץ מודל שפה מקומי (Ollama) לשיפור הטקסט אחרי התמלול — הכול נשאר "
-            "במחשב, והמודל מנסח בעצמו בלי להשתמש במילון הידני. כשמצב “ניסוח "
-            "מקצועי” כבוי המודל מתקן רק שגיאות כתיב ופיסוק; כשהוא דלוק המודל "
-            "משכתב את המשפט בצורה מקצועית יותר תוך שמירה קרובה למקור. ⚠️ ניסיוני: "
-            "מוסיף כמה שניות לכל תמלול (בעיקר בפעם הראשונה). אם משהו משתבש — התמלול "
-            "המקורי נשמר. דורש GPU חזק.")
-        llm_hint.setWordWrap(True)
-        llm_hint.setObjectName("hint")
-        lbox.addWidget(llm_hint)
-        v.addWidget(lc)
-        self._populate_llm_models()
-
         # clipboard history
         cc, cbox = self._collapsible_card(
             "היסטוריית העתקות",
@@ -229,6 +178,7 @@ class SettingsPageMixin:
         prow.addWidget(self._plain("השהה שמירה"))
         prow.addStretch(1)
         self._clip_pause_sw = ToggleSwitch(self.p, checked=self.ui.clip_paused())
+        self._clip_pause_sw.setAccessibleName("השהה שמירת העתקות")
         self._clip_pause_sw.toggled.connect(self._on_clip_pause_toggle)
         prow.addWidget(self._clip_pause_sw)
         cbox.addLayout(prow)
@@ -268,7 +218,7 @@ class SettingsPageMixin:
         self._upd_status.setObjectName("hint")
         ubox.addWidget(self._upd_status)
         self._upd_now_btn = QPushButton("עדכן עכשיו")
-        self._upd_now_btn.setStyleSheet(_primary_btn_qss(self.p))
+        theme.bind_style(self._upd_now_btn, lambda _theme_palette: _primary_btn_qss(_theme_palette), self.p)
         self._upd_now_btn.setCursor(Qt.PointingHandCursor)
         self._upd_now_btn.clicked.connect(self._on_update_now)
         self._upd_now_btn.setVisible(False)
@@ -499,72 +449,6 @@ class SettingsPageMixin:
 
     def _on_sound_toggle(self, on):
         self.ui.config["sounds"] = bool(on)
-        self.ui.on_change(self.ui.config)
-
-
-    def _populate_llm_models(self):
-        if self._llm_loading:
-            return
-        self._llm_loading = True
-        self._llm_status.setText("בודק מודלים מקומיים…")
-        callback, signal = self.ui.llm_list_models, self._llm_result
-        def fetch():
-            try:
-                models = callback()
-            except Exception:
-                models = []
-            try:
-                signal.emit(models)
-            except RuntimeError:
-                pass  # window rebuilt while the query was in flight
-        threading.Thread(target=fetch, daemon=True).start()
-
-
-    def _on_llm_models(self, models):
-        self._llm_loading = False
-        self._llm_combo.blockSignals(True)
-        self._llm_combo.clear()
-        if models:
-            for m in models:
-                self._llm_combo.addItem(m, m)
-            idx = self._llm_combo.findData(self.ui.config.get("llm_model", ""))
-            self._llm_combo.setCurrentIndex(idx if idx >= 0 else 0)
-            self._llm_combo.setEnabled(True)
-            self._llm_status.setText(f"Ollama זוהה · {len(models)} מודלים מותקנים")
-        else:
-            self._llm_combo.addItem("— לא זוהה Ollama —", "")
-            self._llm_combo.setEnabled(False)
-            self._llm_status.setText(
-                "Ollama לא זוהה. התקן והפעל אותו (ollama.com), הורד מודל, ולחץ רענן.")
-        self._llm_combo.blockSignals(False)
-
-
-    def _on_llm_toggle(self, on):
-        self.ui.config["llm_polish"] = bool(on)
-        # Adopt the currently shown model if none is saved yet, so enabling it
-        # actually does something without a second click.
-        if on and not self.ui.config.get("llm_model") and self._llm_combo.currentData():
-            self.ui.config["llm_model"] = self._llm_combo.currentData()
-        self.ui.on_change(self.ui.config)
-
-
-    def _on_llm_model_changed(self, _idx):
-        self.ui.config["llm_model"] = self._llm_combo.currentData() or ""
-        self.ui.on_change(self.ui.config)
-
-
-    def _on_llm_compare_toggle(self, on):
-        self.ui.config["llm_compare"] = bool(on)
-        # Comparison needs a model; adopt the shown one if none saved yet.
-        if on and not self.ui.config.get("llm_model") and self._llm_combo.currentData():
-            self.ui.config["llm_model"] = self._llm_combo.currentData()
-        self.ui.on_change(self.ui.config)
-
-
-    def _on_llm_style_toggle(self, on):
-        # Off = "correct" (fix errors only); On = "rewrite" (professional
-        # rephrase kept close to the original).
-        self.ui.config["llm_style"] = "rewrite" if on else "correct"
         self.ui.on_change(self.ui.config)
 
 

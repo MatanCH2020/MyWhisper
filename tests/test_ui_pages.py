@@ -2,8 +2,6 @@
 import os
 from pathlib import Path
 import sys
-import threading
-import time
 import unittest
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
@@ -23,12 +21,12 @@ if os.environ.get("QT_QPA_PLATFORM") == "offscreen":
             QFontDatabase.addApplicationFont(str(path))
 
 
-def controller(name="dark", models=lambda: []):
+def controller(name="dark"):
     return AppUI(dict(DEFAULTS, theme=name), lambda: 0, lambda c: True,
                  lambda: [{"id": "sample", "time": "2026-09-06 10:00", "text": "בדיקת עברית עם Windows"}],
                  lambda: True, lambda s: None, lambda *a: None,
                  list_corrections=lambda: {"טעות": "תיקון"},
-                 english_terms=lambda: ["Windows", "WhatsApp"], llm_list_models=models)
+                 english_terms=lambda: ["Windows", "WhatsApp"])
 
 
 class PagesTest(unittest.TestCase):
@@ -66,25 +64,42 @@ class PagesTest(unittest.TestCase):
                 window.close()
                 ui._overlay.close()
 
-    def test_ollama_query_returns_after_window_is_constructed(self):
-        entered, release = threading.Event(), threading.Event()
-        def models():
-            entered.set()
-            release.wait(5)
-            return ["local-test"]
-        ui = controller(models=models)
+    def test_theme_changes_keep_native_window_search_and_draft(self):
+        ui = controller()
+        ui._win = window = MainWindow(ui, theme.DARK)
+        try:
+            window.show()
+            window.search.setText("Windows")
+            window._corr_wrong.setText("טיוטה")
+            window._goto(1, from_nav=False)
+            qapp.processEvents()
+            handle = int(window.winId())
+            geometry = window.geometry()
+            for name in ("light", "dark", "light"):
+                ui.set_theme(name)
+                qapp.processEvents()
+                self.assertIs(ui._win, window)
+                self.assertEqual(int(window.winId()), handle)
+                self.assertTrue(window.isVisible())
+                self.assertEqual(window.geometry(), geometry)
+                self.assertEqual(window.stack.currentIndex(), 1)
+                self.assertEqual(window.search.text(), "Windows")
+                self.assertEqual(window._corr_wrong.text(), "טיוטה")
+                self.assertEqual(window._theme_sw._p["name"], name)
+        finally:
+            window._force_close = True
+            window.close()
+            ui._overlay.close()
+
+    def test_settings_have_no_ollama_controls_and_window_can_grow(self):
+        ui = controller()
         window = MainWindow(ui, theme.DARK)
         try:
-            self.assertTrue(entered.wait(1))
-            self.assertTrue(window._llm_loading)
-            release.set()
-            deadline = time.monotonic() + 2
-            while window._llm_loading and time.monotonic() < deadline:
-                qapp.processEvents()
-                time.sleep(0.01)
-            self.assertEqual(window._llm_combo.currentText(), "local-test")
+            self.assertFalse(hasattr(window, "_llm_combo"))
+            window.resize(1200, 850)
+            self.assertEqual(window.width(), 1200)
+            self.assertEqual(window.height(), 850)
         finally:
-            release.set()
             window._force_close = True
             window.close()
             ui._overlay.close()
