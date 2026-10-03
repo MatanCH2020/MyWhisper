@@ -245,6 +245,17 @@ class SettingsPageMixin:
             "התוספת מסירה חזרות מקריות והיסוסים ומשפרת ניסוח ופיסוק. "
             "היא אינה מבטיחה תיקון של כל טעות בזיהוי הדיבור."))
         self._cloud_busy = False
+        self._cloud_connection = QLabel()
+        self._cloud_connection.setObjectName("connectionstatus")
+        self._cloud_connection.setTextFormat(Qt.PlainText)
+        self._cloud_connection.setWordWrap(True)
+        self._cloud_connection.setAccessibleName("מצב החיבור לחשבון ChatGPT")
+        card.vbox.addWidget(self._cloud_connection)
+        self._cloud_connection_detail = QLabel()
+        self._cloud_connection_detail.setTextFormat(Qt.PlainText)
+        self._cloud_connection_detail.setObjectName("fieldlabel")
+        self._cloud_connection_detail.setWordWrap(True)
+        card.vbox.addWidget(self._cloud_connection_detail)
         self._cloud_account = QComboBox()
         self._cloud_account.setAccessibleName("חשבון ChatGPT פעיל")
         self._cloud_account.currentIndexChanged.connect(self._cloud_account_changed)
@@ -302,7 +313,9 @@ class SettingsPageMixin:
         card.vbox.addLayout(row)
         self._cloud_status = QLabel()
         self._cloud_status.setWordWrap(True)
-        self._cloud_status.setObjectName("hint")
+        self._cloud_status.setTextFormat(Qt.PlainText)
+        self._cloud_status.setObjectName("fieldlabel")
+        self._cloud_status.setAccessibleName("מצב עריכת הטקסט בענן")
         card.vbox.addWidget(self._cloud_status)
         usage = QPushButton("ניהול שימוש והרשאות ב-ChatGPT")
         usage.clicked.connect(lambda: self.ui.chatgpt_action("usage"))
@@ -318,7 +331,7 @@ class SettingsPageMixin:
             return
         st = status or self.ui.chatgpt_status()
         for combo, items, current in (
-            (self._cloud_account, [("לא מחובר", "")] + [(a["label"], a["key"]) for a in st.get("accounts", [])], st.get("active", "")),
+            (self._cloud_account, [("בחר חשבון", "")] + [(a["label"], a["key"]) for a in st.get("accounts", [])], st.get("active", "")),
             (self._cloud_model, [("בחר מודל זמין בחשבון", "")] + [(m["display_name"], m["slug"]) for m in st.get("models", [])], st.get("model", ""))):
             existing = [(combo.itemText(i), combo.itemData(i)) for i in range(combo.count())]
             combo.blockSignals(True)
@@ -330,25 +343,68 @@ class SettingsPageMixin:
                 combo.setCurrentIndex(max(0, combo.findData(current)))
             combo.blockSignals(False)
         connected = st.get("connected", False)
+        error = st.get("error")
+        reconnect = error in ("authorization", "identity") or (bool(st.get("active")) and not connected)
+        self._cloud_account.setVisible(bool(st.get("accounts")))
+        self._cloud_relogin.setVisible(reconnect or (connected and not st.get("eligible")))
         self._cloud_relogin.setEnabled(bool(st.get("active")))
+        self._cloud_logout.setVisible(connected)
         self._cloud_logout.setEnabled(connected)
+        self._cloud_model.setEnabled(connected and st.get("eligible", False))
         self._cloud_refresh.setEnabled(connected)
+        model_ready = st.get("model") in {m["slug"] for m in st.get("models", [])}
+        ready = (connected and st.get("eligible", False) and model_ready
+                 and error not in ("authorization", "identity", "permission", "ineligible", "storage"))
+        self._cloud_switch.setEnabled(bool(ready) or st.get("enabled") is True)
         self._cloud_switch.blockSignals(True)
         self._cloud_switch.setChecked(st.get("enabled") is True)
         self._cloud_switch.blockSignals(False)
-        error = st.get("error")
-        text = ("העריכה פעילה בחשבון " + st.get("email", "ChatGPT") if st.get("enabled") else
-                "החשבון מחובר; העריכה כבויה." if connected else "העריכה כבויה. אין צורך בחשבון לתמלול מקומי.")
+        if error == "storage":
+            connection = "מצב חיבור: לא ניתן לקרוא או לשמור הרשאות"
+            detail = "ההרשאות המוצפנות אינן זמינות. התמלול ממשיך מקומית."
+        elif reconnect:
+            connection = "מצב חיבור: נדרשת התחברות מחדש"
+            detail = "ההרשאה לחשבון אינה פעילה. לחץ על ‘חדש התחברות’ ואשר בדפדפן."
+        elif connected:
+            connection = "מצב חיבור: מחובר ל־ChatGPT"
+            detail = "חשבון פעיל: " + (st.get("email") or "ChatGPT")
+        else:
+            connection = "מצב חיבור: לא מחובר ל־ChatGPT"
+            detail = "לחץ על Continue with ChatGPT והשלם את האישור בדפדפן. כניסה לדפדפן לבדה אינה מחברת את MyWhisper."
+        signin_error = st.get("sign_in_error")
+        if signin_error:
+            failure = {
+                "timeout": "האישור לא התקבל בזמן. לחץ על ההתחברות ופתח ניסיון חדש בדפדפן.",
+                "cancelled": "ניסיון ההתחברות בוטל. אפשר להתחבר שוב כשתרצה.",
+                "permission": "ההרשאה לא אושרה. נסה שוב ואשר את החיבור בדפדפן.",
+                "identity": "אימות זהות החשבון נכשל. נסה להתחבר מחדש.",
+                "authorization": "ההרשאה נדחתה או פגה. נסה להתחבר מחדש.",
+                "browser": "הדפדפן לא נפתח. בחר דפדפן מותקן ונסה שוב.",
+                "storage": "לא ניתן לשמור את הרשאות החיבור במחשב.",
+            }.get(signin_error, "החיבור לא הושלם. בדוק את האינטרנט ונסה שוב.")
+            if connected:
+                detail += "\nהניסיון האחרון לא הושלם: " + failure
+            else:
+                detail = failure
+        if st.get("signing_in"):
+            connection = "מצב חיבור: ממתין לאישור בדפדפן…"
+            detail = "השלם את ההתחברות והאישור בדפדפן. החיבור יופיע כאן לאחר שהאישור יתקבל."
+        self._cloud_connection.setText(connection)
+        self._cloud_connection_detail.setText(detail)
+        self._cloud_switch.setToolTip("" if ready else "יש לחבר חשבון זכאי ולבחור מודל זמין לפני הפעלה.")
+        text = ("עריכת הטקסט: פעילה" if st.get("enabled") else "עריכת הטקסט: כבויה — התמלול נשאר מקומי")
         if connected and not st.get("eligible", False):
-            text = "החשבון לא אישר שימוש במסגרת ChatGPT או אינו זכאי; התמלול ממשיך מקומית."
+            text += "\nהחשבון מחובר, אך לא אושרה הרשאת עריכה או שהחשבון אינו זכאי."
         elif error:
-            text = {"quota": "המכסה אינה זמינה. העריכה כובתה; בדוק ניהול שימוש לפני הפעלה מחדש.",
+            text += "\n" + {"quota": "המכסה אינה זמינה. העריכה כובתה; בדוק ניהול שימוש לפני הפעלה מחדש.",
                     "ineligible": "החשבון אינו זכאי לעריכה. התמלול ממשיך מקומית.",
                     "storage": "שמירת ההרשאות המוצפנות אינה זמינה; התמלול ממשיך מקומית.",
                     "unsupported": "המודל או האפשרות שנבחרו אינם נתמכים; בחר מודל אחר."}.get(
                         error, "נדרש חיבור מחדש לחשבון ChatGPT; התמלול ממשיך מקומית.")
-        elif connected and not st.get("model"):
-            text = "יש לבחור מודל זמין בחשבון לפני הפעלת העריכה."
+        elif connected and not model_ready:
+            text += "\nבחר מודל זמין ואז הפעל עריכה בנפרד."
+        elif connected and not st.get("enabled"):
+            text += "\nהחשבון מחובר. להפעלת השיפור יש להפעיל את המתג ולאשר שליחת טקסט."
         self._cloud_status.setText(text)
         self._cloud_login.setToolTip("הוסף חשבון ChatGPT" if st.get("accounts") else "התחבר עם חשבון ChatGPT אישי")
 
@@ -393,6 +449,9 @@ class SettingsPageMixin:
             widget.setEnabled(False)
         self._cloud_switch.setEnabled(action == "catalog" and self.ui.chatgpt_status().get("enabled", False))
         self._cloud_browser.setEnabled(False)
+        if action in ("login", "relogin"):
+            self._cloud_connection.setText("מצב חיבור: ממתין לאישור בדפדפן…")
+            self._cloud_connection_detail.setText("השלם את ההתחברות והאישור בדפדפן. החיבור יופיע כאן לאחר שהאישור יתקבל.")
         self._cloud_cancel.setVisible(action in ("login", "relogin"))
         self._cloud_status.setText("השלם התחברות ואישור בדפדפן…" if action in ("login", "relogin") else "מעבד…")
         def work():

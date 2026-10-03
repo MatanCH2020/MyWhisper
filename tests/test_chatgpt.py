@@ -204,6 +204,7 @@ class OAuthTests(unittest.TestCase):
         self.addCleanup(http.close)
         auth = ChatGPTAuth(http, MemoryStore())
         def browser(url):
+            self.assertTrue(auth.status()["signing_in"])
             self.params.update({k: v[0] for k, v in parse_qs(urlsplit(url).query).items()})
             query = {"state": self.params["state"], "client_id": "oaiapp_test", "code": "code"}
             query.update(callback_changes or {})
@@ -222,6 +223,8 @@ class OAuthTests(unittest.TestCase):
         status = auth.sign_in(browser=browser, timeout=1)
         self.assertTrue(status["connected"])
         self.assertFalse(status["enabled"])
+        self.assertFalse(status["signing_in"])
+        self.assertEqual(status["sign_in_error"], "")
         self.assertTrue(status["eligible"])
         self.assertEqual(status["models"][0]["slug"], "gpt-6-luna")
         self.assertEqual(self.params["client_id"], "dynamic_agent_client")
@@ -249,6 +252,18 @@ class OAuthTests(unittest.TestCase):
         with self.assertRaises(AuthError):
             auth.sign_in(browser=browser, timeout=.06)
         self.assertEqual(self.calls, [])
+        self.assertFalse(auth.status()["signing_in"])
+        self.assertEqual(auth.status()["sign_in_error"], "timeout")
+
+    def test_failed_new_login_keeps_existing_connection_and_retry_clears_failure(self):
+        auth, browser = self.setup_auth()
+        connected(auth)
+        with self.assertRaises(AuthError):
+            auth.sign_in(browser=lambda _: False)
+        self.assertTrue(auth.status()["connected"])
+        self.assertEqual(auth.status()["sign_in_error"], "browser")
+        auth.sign_in(browser=browser, timeout=1)
+        self.assertEqual(auth.status()["sign_in_error"], "")
 
     def test_invalid_signature_is_rejected(self):
         auth, _ = self.setup_auth()
@@ -442,6 +457,38 @@ class CloudSettingsTests(unittest.TestCase):
     def test_construct_and_refresh_settings_perform_no_auth_actions(self):
         self.win._refresh_cloud()
         self.assertFalse(self.win._cloud_switch.isChecked())
+        self.ui.chatgpt_action.assert_not_called()
+
+    def test_connection_and_editing_states_are_independent_and_controls_are_gated(self):
+        base = {"accounts": [], "models": [{"slug": "luna", "display_name": "Luna"}], "enabled": False}
+        cases = [
+            ({}, "לא מחובר", "כבויה", False),
+            ({"connected": True, "eligible": True, "email": "owner@example.test", "model": "luna"}, "מחובר ל־ChatGPT", "כבויה", True),
+            ({"connected": True, "eligible": True, "enabled": True, "model": "luna"}, "מחובר ל־ChatGPT", "פעילה", True),
+            ({"connected": True, "eligible": True}, "מחובר ל־ChatGPT", "בחר מודל", False),
+            ({"connected": True, "eligible": True, "model": "luna", "models": []}, "מחובר ל־ChatGPT", "בחר מודל", False),
+            ({"connected": True, "eligible": False, "active": "a"}, "מחובר ל־ChatGPT", "אינו זכאי", False),
+            ({"connected": False, "active": "a", "error": "authorization"}, "נדרשת התחברות מחדש", "כבויה", False),
+            ({"signing_in": True}, "ממתין לאישור", "כבויה", False),
+        ]
+        for changes, connection, editing, ready in cases:
+            with self.subTest(changes=changes):
+                self.win._refresh_cloud({**base, **changes})
+                self.assertIn(connection, self.win._cloud_connection.text())
+                self.assertIn(editing, self.win._cloud_status.text())
+                self.assertEqual(self.win._cloud_switch.isEnabled(), ready)
+        self.ui.chatgpt_action.assert_not_called()
+
+    def test_login_failure_stays_visible_after_polling_without_hiding_existing_account(self):
+        for connected_now in (False, True):
+            status = {"connected": connected_now, "sign_in_error": "timeout", "email": "owner@example.test"}
+            self.ui.chatgpt_status = lambda: status
+            for _ in range(3):
+                self.win._refresh_cloud()
+                self.assertIn("האישור לא התקבל בזמן", self.win._cloud_connection_detail.text())
+                self.assertIn("מחובר ל־ChatGPT" if connected_now else "לא מחובר", self.win._cloud_connection.text())
+            if connected_now:
+                self.assertIn("owner@example.test", self.win._cloud_connection_detail.text())
         self.ui.chatgpt_action.assert_not_called()
 
     def test_cancel_activation_does_not_opt_in(self):

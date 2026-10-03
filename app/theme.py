@@ -283,6 +283,7 @@ QScrollBar:horizontal {{ height: 0; }}
    setStyleSheet at each call site. Set with setObjectName(). */
 #hint {{ color: {p['text_muted']}; font-size: {FS['hint']}px; }}
 #fieldlabel {{ color: {p['text']}; font-size: {FS['body']}px; }}
+#connectionstatus {{ color: {p['text']}; font-size: {FS['title']}px; font-weight: 600; }}
 #cardtext {{ color: {p['text']}; font-size: {FS['read']}px; }}
 #statusok {{ color: #2ea043; font-size: {FS['hint']}px; font-weight: bold; }}
 #toast {{ background: {p['surface_alt']}; border: 1px solid {p['border']};

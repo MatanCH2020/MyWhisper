@@ -138,6 +138,8 @@ class ChatGPTAuth:
         self._signin_cancel = threading.Event()
         self._signin_lock = threading.Lock()
         self.error = ""
+        self.signing_in = False
+        self.sign_in_error = ""
         try:
             self.data = self.store.load()
         except AuthError:
@@ -154,6 +156,7 @@ class ChatGPTAuth:
                     "connected": bool(account.get("refresh_token")),
                     "eligible": REQUIRED_SCOPES <= set(account.get("scopes", [])),
                     "email": account.get("email", ""), "error": self.error,
+                    "signing_in": self.signing_in, "sign_in_error": self.sign_in_error,
                     "models": list(account.get("models", [])),
                     "accounts": [{"key": key, "label": (a.get("email") or "ChatGPT")
                                   + " · " + key[-6:]} for key, a in self.data["accounts"].items()]}
@@ -183,6 +186,7 @@ class ChatGPTAuth:
             self.data["active"] = key
             self.store.save(self.data)
             self.error = ""
+            self.sign_in_error = ""
 
     async def _json(self, method, url, **kwargs):
         response = await self.http.client.request(method, url, **kwargs)
@@ -236,10 +240,24 @@ class ChatGPTAuth:
     def sign_in(self, returning=False, browser=open_external_browser, timeout=180):
         if not self._signin_lock.acquire(blocking=False):
             raise AuthError("busy")
+        with self.lock:
+            self.signing_in = True
+            self.sign_in_error = ""
         try:
-            return self._sign_in(returning, browser, timeout)
+            self._sign_in(returning, browser, timeout)
+        except AuthError as error:
+            with self.lock:
+                self.sign_in_error = str(error)
+            raise
+        except Exception:
+            with self.lock:
+                self.sign_in_error = "connection"
+            raise
         finally:
+            with self.lock:
+                self.signing_in = False
             self._signin_lock.release()
+        return self.status()
 
     def _sign_in(self, returning, browser, timeout):
         self._signin_cancel.clear()
@@ -415,6 +433,7 @@ class ChatGPTAuth:
                 self._active().pop(name, None)
             self.store.save(self.data)
             self.error = ""
+            self.sign_in_error = ""
         async def revoke():
             metadata = await self._json("GET", AUTH + "/.well-known/openid-configuration")
             endpoint = metadata.get("revocation_endpoint")

@@ -264,6 +264,7 @@ class Mywishper(QObject):
             elif action == "cancel":
                 self.chatgpt._signin_cancel.set()
         except AuthError as error:
+            log.info("ChatGPT action %s did not complete (%s)", action, str(error))
             message = {
                 "permission": "החשבון לא אישר שימוש במסגרת ChatGPT או אינו זכאי. התמלול ממשיך מקומית.",
                 "identity": "אימות זהות החשבון נכשל. יש להתחבר מחדש.",
@@ -274,6 +275,7 @@ class Mywishper(QObject):
                 "browser": "לא ניתן לפתוח את הדפדפן להתחברות.",
             }.get(str(error), "החיבור לא הושלם. אפשר לנסות שוב; התמלול ממשיך מקומית.")
         except Exception:
+            log.info("ChatGPT action %s did not complete", action)
             message = "החיבור לא הושלם. בדוק את האינטרנט ונסה שוב; התמלול ממשיך מקומית."
         status = self._chatgpt_status()
         return {**status, "message": message,
