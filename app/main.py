@@ -194,6 +194,7 @@ class Mywishper(QObject):
         self._esc_hook = None   # Esc-to-cancel, registered only while recording
         self._max_timer = None  # auto-stop for a forgotten recording
         self._loading = False           # model load in progress
+        self._fullscreen_paused = False
         self._model_ever_ready = False  # first successful load happened
         self._last_used = time.monotonic()
         self._resource_timer = None     # idle / fullscreen release poll
@@ -345,7 +346,7 @@ class Mywishper(QObject):
                 log.exception("Could not restore the previous hotkey binding")
             return False
         self.tray.set_hotkey_label(new_hotkey)
-        self._hotkey_ready = True
+        self._hotkey_ready = not getattr(self, "_fullscreen_paused", False)
         log.info("Hotkey changed to '%s'.", new_hotkey)
         return True
 
@@ -423,7 +424,7 @@ class Mywishper(QObject):
         else:
             state = "released"
         return {
-            "state": state,
+            "state": "paused" if getattr(self, "_fullscreen_paused", False) else state,
             "device": self.transcriber.device or "",
             "model": self.config.get("model", ""),
             "fallback": self.transcriber.fallback_reason,
@@ -483,6 +484,8 @@ class Mywishper(QObject):
 
     def toggle(self):
         if self._closing or self._updating:
+            return
+        if self._sync_fullscreen():
             return
         log.info("Hotkey toggle triggered.")
         self._mark_used()
@@ -593,15 +596,16 @@ class Mywishper(QObject):
                 log.exception("Microphone failed during automatic stop")
                 self._recover_from_error()
 
-    def _stop_and_transcribe(self):
-        self._destination_guard = DestinationGuard().start()
-        destination = self._destination_guard
+    def _stop_and_transcribe(self, background=False):
+        self._destination_guard = None if background else DestinationGuard().start()
+        destination = 0 if background else self._destination_guard
         self._state = State.TRANSCRIBING
         self._end_recording_hooks()
         audio = self.recorder.stop()
-        sounds.stop_recording()
-        self.tray.set_state("transcribing", "MyWhisper — מתמלל...")
-        self.ui.set_overlay_state("transcribing")
+        if not background:
+            sounds.stop_recording()
+            self.tray.set_state("transcribing", "MyWhisper — מתמלל...")
+            self.ui.set_overlay_state("transcribing")
         # Run the heavy work off the hotkey thread so the UI stays responsive.
         threading.Thread(target=self._worker, args=(audio, destination), daemon=True).start()
 
@@ -617,7 +621,8 @@ class Mywishper(QObject):
                 original = logical
                 edit = None
                 if self.config.get("chatgpt_enabled") is True:
-                    self.ui.set_overlay_state("polishing")
+                    if not getattr(self, "_fullscreen_paused", False):
+                        self.ui.set_overlay_state("polishing")
                     edit = self.text_editor.edit(logical, self.config.get("chatgpt_model", ""))
                     logical = edit.text
                     if edit.status in ("quota", "ineligible", "authorization", "unsupported"):
@@ -628,7 +633,7 @@ class Mywishper(QObject):
                                 "ineligible": "החשבון אינו זכאי; העריכה כובתה",
                                 "authorization": "נדרש חיבור מחדש לחשבון ChatGPT; העריכה כובתה"}.get(
                                     edit.status, "העריכה לא הושלמה")
-                        self.tray.notify("MyWhisper", hint + " — נשמר התמלול המקומי.", duration_ms=3500)
+                        self._dictation_notice("MyWhisper", hint + " — נשמר התמלול המקומי.", duration_ms=3500)
                 history.add(logical, **({"original_text": original, "edit_status": edit.status,
                                         "edit_ms": edit.elapsed_ms, "edit_model": edit.model} if edit else {}))
                 # Refresh an open history page so the new card appears on its
@@ -637,11 +642,15 @@ class Mywishper(QObject):
                 if self.config.get("clipboard_history", True):
                     if clips.add_text(logical) is not None:
                         self._clips_changed.emit()
-                destination_check = (destination.unchanged if isinstance(destination, DestinationGuard)
-                                     else lambda: same_destination(destination))
-                if not destination_check():
-                    self.tray.notify("MyWhisper — הטקסט מוכן",
-                                     "החלון הפעיל השתנה. הטקסט נשמר בהיסטוריה ומוכן להעתקה.")
+                original_check = (destination.unchanged if isinstance(destination, DestinationGuard)
+                                  else lambda: same_destination(destination))
+                def destination_check():
+                    return (not (self.config.get("release_on_fullscreen", True)
+                                 and foreground_is_fullscreen()) and original_check())
+                if getattr(self, "_fullscreen_paused", False) or not destination_check():
+                    if not getattr(self, "_fullscreen_paused", False):
+                        self._dictation_notice("MyWhisper — הטקסט מוכן",
+                                         "החלון הפעיל השתנה. הטקסט נשמר בהיסטוריה ומוכן להעתקה.")
                     return
                 out = logical
                 if self.config.get("bidi_isolate", True):
@@ -655,27 +664,35 @@ class Mywishper(QObject):
                            self.config.get("clipboard_restore_delay", 0.5),
                            destination_check=destination_check)
                 if delivered is False:
-                    self.tray.notify("MyWhisper — הטקסט מוכן", "החלון הפעיל השתנה. הטקסט ממתין בהיסטוריה.")
+                    self._dictation_notice("MyWhisper — הטקסט מוכן", "החלון הפעיל השתנה. הטקסט ממתין בהיסטוריה.")
                     log.info("Transcription saved; destination changed before paste")
                 else:
                     log.info("Transcription delivered (%d characters)", len(logical))
             else:
                 log.info("(empty transcription)")
-                sounds.error()
+                if not getattr(self, "_fullscreen_paused", False):
+                    sounds.error()
                 diagnostic = getattr(self.transcriber, "last_diagnostics", {})
                 silent = isinstance(diagnostic, dict) and diagnostic.get("silent", False)
-                self.tray.notify(
+                self._dictation_notice(
                     "MyWhisper — קלט שקט" if silent else "MyWhisper — לא זוהה דיבור",
                     ("לא התקבל קול מהמיקרופון. בדוק חיבור, השתקה ובחירת מיקרופון בהגדרות."
                      if silent else "התקבל אודיו אך לא התקבל טקסט מזוהה. בדוק את מד העוצמה "
                      "בהגדרות המיקרופון ונסה שוב."), "warning")
         except Exception:
             log.exception("Transcription failed")
-            sounds.error()
-            self.tray.notify("MyWhisper — התמלול לא הושלם",
+            if not getattr(self, "_fullscreen_paused", False):
+                sounds.error()
+            self._dictation_notice("MyWhisper — התמלול לא הושלם",
                              "אפשר לנסות שוב. אם הטקסט כבר נשמר, הוא זמין בהיסטוריה.", "warning")
         finally:
             self._worker_finished.emit()
+
+    def _dictation_notice(self, *args, **kwargs):
+        if (not getattr(self, "_fullscreen_paused", False)
+                and not (self.config.get("release_on_fullscreen", True)
+                         and foreground_is_fullscreen())):
+            self.tray.notify(*args, **kwargs)
 
     @Slot()
     def _finish_transcription(self):
@@ -686,13 +703,16 @@ class Mywishper(QObject):
         self._state = State.IDLE
         self._mark_used()
         if not self._closing:
-            self.tray.set_state("idle", "MyWhisper — מוכן")
             self.ui.set_overlay_state("idle")
+            self._resource_poll()
+            if not self._fullscreen_paused:
+                self.tray.set_state("idle", "MyWhisper — מוכן")
 
     def start(self):
+        self._sync_fullscreen()
         try:
             self.hotkeys.start()
-            self._hotkey_ready = True
+            self._hotkey_ready = not self._fullscreen_paused
         except Exception:
             self._hotkey_ready = False
             log.exception("Hotkey registration failed")
@@ -726,10 +746,12 @@ class Mywishper(QObject):
         # Poll for idle / fullscreen to release the model (runs on the GUI thread).
         self._resource_timer = QTimer()
         self._resource_timer.timeout.connect(self._resource_poll)
-        self._resource_timer.start(5000)
+        self._resource_timer.start(1000)
 
     def _start_load_async(self):
         """Load (or reload) the model in the background if not already loading."""
+        if self._sync_fullscreen():
+            return
         if self._loading or self.transcriber.is_loaded():
             return
         self._loading = True
@@ -737,6 +759,8 @@ class Mywishper(QObject):
         threading.Thread(target=self._load_model, daemon=True).start()
 
     def _loading_hint(self):
+        if getattr(self, "_fullscreen_paused", False):
+            return
         if not self.transcriber.is_loaded():
             self.tray.notify(
                 "MyWhisper — טוען מודל",
@@ -756,6 +780,10 @@ class Mywishper(QObject):
     def _finish_load(self, succeeded):
         self._loading = False
         if self._closing:
+            return
+        if self._sync_fullscreen():
+            if self._state == State.IDLE and self.transcriber.is_loaded():
+                self._release_model("fullscreen app")
             return
         if not succeeded:
             self.tray.set_state("idle", "MyWhisper — שגיאה בטעינת המודל")
@@ -795,19 +823,55 @@ class Mywishper(QObject):
     def _resource_poll(self):
         """On the GUI thread every few seconds: free the model when the app has
         been idle or a fullscreen game/video is in the foreground."""
+        paused = self._sync_fullscreen()
         if (self._state != State.IDLE or self._loading
                 or not self.transcriber.is_loaded()):
+            return
+        if paused:
+            self._release_model("fullscreen app")
             return
         mins = self.config.get("idle_release_minutes", 10)
         if mins and (time.monotonic() - self._last_used) >= mins * 60:
             self._release_model("idle")
             return
-        if self.config.get("release_on_fullscreen", True) and foreground_is_fullscreen():
-            self._release_model("fullscreen app")
+
+    def _sync_fullscreen(self):
+        """GUI-thread transition: release the recording shortcut to the game."""
+        paused = bool(self.config.get("release_on_fullscreen", True)
+                      and foreground_is_fullscreen())
+        if paused == getattr(self, "_fullscreen_paused", False):
+            return paused
+        self._fullscreen_paused = paused
+        if paused:
+            self.hotkeys.pause()
+            self._hotkey_ready = False
+            self.ui.set_overlay_state("idle")
+            self.tray.set_state("paused", "MyWhisper — מושהה במסך מלא (הקלטה כבויה)")
+            if self.recorder.recording:
+                try:
+                    self._stop_and_transcribe(background=True)
+                except Exception:
+                    log.exception("Could not finish capture on fullscreen entry")
+                    self._end_recording_hooks()
+                    self._state = State.IDLE
+            log.info("Fullscreen: dictation shortcut paused")
+        else:
+            try:
+                self.hotkeys.resume()
+                self._hotkey_ready = True
+            except (OSError, ValueError):
+                self._hotkey_ready = False
+                log.exception("Could not restore dictation shortcut")
+                self.tray.notify("MyWhisper — הקיצור תפוס",
+                                 "קיצור ההקלטה נתפס בתוכנה אחרת בזמן ההשהיה. בחר קיצור בהגדרות.", "warning")
+            self.tray.set_state("idle", "MyWhisper — מוכן (המודל ייטען לפי הצורך)")
+            log.info("Fullscreen ended: dictation shortcut resumed; model stays unloaded")
+        return paused
 
     def _release_model(self, reason):
         self.transcriber.unload()
-        self.tray.set_state("idle", "MyWhisper — במצב חיסכון (לחץ קיצור להעיר)")
+        if not getattr(self, "_fullscreen_paused", False):
+            self.tray.set_state("idle", "MyWhisper — במצב חיסכון (לחץ קיצור להעיר)")
         log.info("Model released to free resources (%s).", reason)
 
     def quit(self):

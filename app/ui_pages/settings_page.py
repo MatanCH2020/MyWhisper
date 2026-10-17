@@ -576,7 +576,10 @@ class SettingsPageMixin:
         ok = "#2ea043"
         state = st.get("state")
         dev = (st.get("device") or "").lower()
-        if state == "ready":
+        if state == "paused":
+            color, text = self.p["text_muted"], "מושהה — מסך מלא"
+            sub = "קיצור ההקלטה כבוי. המודל משתחרר בסיום עבודה פעילה; הקיצור יחזור ביציאה ממסך מלא."
+        elif state == "ready":
             where = "על ה-GPU" if dev == "cuda" else "על המעבד (CPU)"
             color, text = ok, f"טעון ומוכן — רץ {where}"
             sub = ("המודל שמור בזיכרון, כך שהתמלול מתחיל מיד."

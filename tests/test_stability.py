@@ -180,6 +180,8 @@ class LifecycleTest(unittest.TestCase):
         a._lock = threading.Lock()
         a._state = main.State.IDLE
         a.recorder, a.transcriber, a.tray, a.ui = (MagicMock() for _ in range(4))
+        a.hotkeys = MagicMock()
+        a._fullscreen_paused = False
         a.recorder.recording = False
         a.recorder.start.side_effect = lambda: setattr(a.recorder, "recording", True)
         a.recorder.stop.side_effect = lambda: setattr(a.recorder, "recording", False)
@@ -191,15 +193,17 @@ class LifecycleTest(unittest.TestCase):
         self.sounds = patch.object(main, "sounds").start()
         self.addCleanup(patch.stopall)
         patch.object(main, "TempHotkey").start()
+        patch.object(main, "foreground_is_fullscreen", return_value=False).start()
 
     def test_fullscreen_does_not_unload_while_recording(self):
         self.app._start_recording()
         self.assertEqual(self.app._state, main.State.RECORDING)
-        with patch.object(main, "foreground_is_fullscreen", return_value=True):
+        with patch.object(main, "foreground_is_fullscreen", return_value=True), \
+             patch.object(main.threading, "Thread"):
             self.app._resource_poll()
         self.app.transcriber.unload.assert_not_called()
-        self.app.cancel_recording()
-        self.assertEqual(self.app._state, main.State.IDLE)
+        self.assertEqual(self.app._state, main.State.TRANSCRIBING)
+        self.app.hotkeys.pause.assert_called_once()
 
     def test_initial_load_failure_can_be_retried(self):
         self.app._model_ever_ready = False

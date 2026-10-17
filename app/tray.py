@@ -11,6 +11,7 @@ import theme
 COLORS = {
     "loading": "#4c82f7",     # brand blue — model loading at startup
     "idle": "#787878",        # grey
+    "paused": "#9a7b35",      # fullscreen: dictation hotkey unregistered
     "recording": "#dc2828",   # red
     "transcribing": "#e6be1e",  # yellow
 }

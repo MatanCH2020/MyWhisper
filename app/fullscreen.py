@@ -3,13 +3,21 @@ foreground, so MyWhisper can release the model and free the GPU/CPU for it."""
 import ctypes
 from ctypes import wintypes
 
-_user32 = ctypes.windll.user32
+_user32 = ctypes.WinDLL("user32", use_last_error=True)
+_user32.GetForegroundWindow.restype = wintypes.HWND
+_user32.GetClassNameW.argtypes = [wintypes.HWND, wintypes.LPWSTR, ctypes.c_int]
+_user32.GetWindowRect.argtypes = [wintypes.HWND, ctypes.POINTER(wintypes.RECT)]
+_user32.MonitorFromWindow.argtypes = [wintypes.HWND, wintypes.DWORD]
+_user32.MonitorFromWindow.restype = wintypes.HANDLE
 _MONITOR_DEFAULTTONEAREST = 2
 
 
 class _MONITORINFO(ctypes.Structure):
     _fields_ = [("cbSize", wintypes.DWORD), ("rcMonitor", wintypes.RECT),
                 ("rcWork", wintypes.RECT), ("dwFlags", wintypes.DWORD)]
+
+
+_user32.GetMonitorInfoW.argtypes = [wintypes.HANDLE, ctypes.POINTER(_MONITORINFO)]
 
 
 def foreground_is_fullscreen() -> bool:

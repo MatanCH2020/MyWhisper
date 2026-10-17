@@ -154,14 +154,21 @@ class HotkeyManager:
         self.hotkey = hotkey
         self.on_toggle = on_toggle
         self._id = None
+        self._paused = False
 
     def start(self):
+        if self._paused or self._id is not None:
+            return
         self._id = _register(self.hotkey, self.on_toggle)
         log.info("Registered global hotkey '%s'.", self.hotkey)
 
     def rebind(self, new_hotkey: str):
         """Switch to a new combo. Registers the new one first, so if it is
         invalid or already taken the old binding keeps working."""
+        if self._paused:
+            _parse(new_hotkey)
+            self.hotkey = new_hotkey
+            return
         new_id = _register(new_hotkey, self.on_toggle)
         _unregister(self._id)
         self._id = new_id
@@ -171,6 +178,14 @@ class HotkeyManager:
     def stop(self):
         _unregister(self._id)
         self._id = None
+
+    def pause(self):
+        self._paused = True
+        self.stop()
+
+    def resume(self):
+        self._paused = False
+        self.start()
 
 
 class TempHotkey:

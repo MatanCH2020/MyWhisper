@@ -21,6 +21,7 @@ class StartupTest(unittest.TestCase):
         app._startup = startup
         app._hotkey_ready = hotkey
         app._state = main.State.IDLE
+        app._sync_fullscreen.return_value = False
         app.recorder.recording = False
         app.transcriber.fallback_reason = None
         app.config = {"hotkey": "ctrl+space"}

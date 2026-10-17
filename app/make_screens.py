@@ -101,8 +101,17 @@ def main():
     parser.add_argument("--chatgpt-states", action="store_true",
                         help="Render connected and failed-sign-in examples with synthetic account data")
     parser.add_argument("--scan-states", action="store_true", help="Render synthetic scan progress and persistent results")
+    parser.add_argument("--fullscreen-paused", action="store_true", help="Render fullscreen suspension with demo data")
     args = parser.parse_args()
     DOCS.mkdir(exist_ok=True)
+    if args.fullscreen_paused:
+        win = build("light")
+        win.ui.model_status = lambda: {"state": "paused", "device": "cuda",
+            "model": DEFAULTS["model"], "fallback": False}
+        win._refresh_model_status()
+        shoot(win, 2, DOCS / "app-fullscreen-paused.png")
+        win.close()
+        return
     if args.scan_states:
         for palette in ("dark", "light"):
             win = build(palette)
