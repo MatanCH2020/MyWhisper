@@ -66,6 +66,10 @@ class DictionaryPageMixin:
         self._scan_note.setWordWrap(True)
         self._scan_note.setObjectName("cardtext")
         scan_box.addWidget(self._scan_note)
+        self._scan_requirement = QLabel()
+        self._scan_requirement.setWordWrap(True)
+        self._scan_requirement.setObjectName("fieldlabel")
+        scan_box.addWidget(self._scan_requirement)
         self._scan_bar = QProgressBar()
         self._scan_bar.setObjectName("scanprogress")
         self._scan_bar.setAccessibleName("התקדמות סריקת התמלולים")
@@ -133,22 +137,49 @@ class DictionaryPageMixin:
             self._on_scan_result(report, notify=False, refresh=False)
         return w
 
-    def _refresh_scan_controls(self):
-        st = self.ui.chatgpt_status()
+    def _refresh_scan_controls(self, status=None):
+        st = status if status is not None else self.ui.chatgpt_status()
         ready = (st.get("enabled") is True and st.get("connected") and st.get("eligible")
-                 and st.get("model") in {m["slug"] for m in st.get("models", [])})
-        self._scan_start.setEnabled(bool(ready) and not self._scan_busy)
-        self._scan_undo.setEnabled(not self._scan_busy and self.ui.can_undo_history_scan())
+                 and st.get("model") in {m["slug"] for m in st.get("models", [])}
+                 and st.get("error") not in {"authorization", "identity", "permission", "ineligible", "storage", "quota"})
+        self._scan_ready = bool(ready)
+        can_undo = self.ui.can_undo_history_scan()
+        if not st.get("connected") or st.get("error") in {"authorization", "identity"}:
+            reason = "נדרשת התחברות ל־ChatGPT בהגדרות לפני סריקה חדשה."
+        elif not st.get("eligible") or st.get("error") in {"permission", "ineligible", "storage", "quota"}:
+            reason = "נדרש לבדוק את הרשאות החשבון או המכסה בהגדרות לפני סריקה חדשה."
+        elif st.get("model") not in {m["slug"] for m in st.get("models", [])}:
+            reason = "נדרש לבחור מודל זמין בהגדרות לפני סריקה חדשה."
+        else:
+            reason = "עריכת הטקסט בענן כבויה. יש להפעיל אותה בהגדרות לפני סריקה חדשה."
+        self._scan_requirement.setText(reason if not ready and not self._scan_busy else "")
+        self._scan_requirement.setVisible(not ready and not self._scan_busy)
+        self._scan_start.setEnabled(not self._scan_busy)
+        self._scan_undo.setEnabled(not self._scan_busy and can_undo)
         self._scan_cancel.setVisible(self._scan_busy)
-        self._scan_start.setText("סורק…" if self._scan_busy else "סרוק ותקן את ההיסטוריה")
+        self._scan_start.setText("סורק…" if self._scan_busy else
+                                 "סרוק ותקן את ההיסטוריה" if ready else "פתח הגדרות להפעלת הסריקה")
         self._scan_details.setEnabled(bool(self._scan_report) and not self._scan_busy)
-        self._scan_start.setToolTip("" if ready else "חבר חשבון זכאי, בחר מודל והפעל עריכת טקסט בהגדרות.")
+        self._scan_start.setToolTip("" if ready else reason)
+        self._scan_details.setToolTip("" if self._scan_report else "עדיין אין תוצאות סריקה שמורות להצגה.")
+        self._scan_undo.setToolTip("מבטל את הסריקה האחרונה שנשמרה, תוך שמירת עריכות חדשות."
+                                   if can_undo else "אין תיקוני סריקה שמורים שניתן לבטל.")
         if not self._scan_busy and not getattr(self, "_scan_has_result", False):
             self._scan_status.setText("מוכן לסריקת כל היסטוריית התמלולים. המקור יישמר ואפשר לבטל את השינויים."
                                       if ready else "להפעלת הסריקה, חבר חשבון והפעל עריכת טקסט בהגדרות.")
 
     def _start_history_scan(self):
         if self._scan_busy:
+            return
+        # A setup click never enables editing or sends history. Recheck at
+        # click time too: account/opt-in state may have changed since rendering.
+        self._refresh_scan_controls()
+        if not self._scan_ready:
+            self._goto(2, from_nav=False)
+            target = (self._cloud_switch if self._cloud_switch.isEnabled() else
+                      self._cloud_model if self._cloud_model.isEnabled() else self._cloud_login)
+            self.stack.widget(2).ensureWidgetVisible(target)
+            target.setFocus()
             return
         self._scan_busy = True
         self._scan_cancelling = False

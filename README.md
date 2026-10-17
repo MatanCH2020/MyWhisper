@@ -17,7 +17,7 @@
 ### 🌐 [דף הבית ← matanch2020.github.io/MyWhisper](https://matanch2020.github.io/MyWhisper/) · ⬇️ [הורדת מתקין](https://github.com/MatanCH2020/MyWhisper/releases/latest/download/MyWhisper-Setup.cmd)
 
 <!-- release-version:start -->
-**גרסה נוכחית: [v1.13.5](https://github.com/MatanCH2020/MyWhisper/releases/tag/v1.13.5)** · [היסטוריית העדכונים](CHANGELOG.md)
+**גרסה נוכחית: [v1.13.6](https://github.com/MatanCH2020/MyWhisper/releases/tag/v1.13.6)** · [היסטוריית העדכונים](CHANGELOG.md)
 <!-- release-version:end -->
 
 <br>
@@ -187,6 +187,10 @@ irm https://raw.githubusercontent.com/MatanCH2020/MyWhisper/main/scripts/uninsta
 עריכת טקסט בהגדרות. הפעולה שולחת את היסטוריית **התמלולים** השמורה ל-OpenAI לפי
 המשפט המלא, לתיקון כתיב ותחביר ולכתיבת מונחים לועזיים באנגלית, למשל „גיטהאב” → `GitHub`.
 האודיו והיסטוריית ההעתקות אינם נשלחים. הפעולה משתמשת במכסת החשבון האישי.
+
+אם חסרה הגדרה, מופיע הסבר וכפתור **פתח הגדרות להפעלת הסריקה** מוביל להגדרות ChatGPT.
+המעבר אינו מפעיל עריכה או מתחיל סריקה. **הצג תוצאות** וביטול תיקונים שמורים זמינים
+גם כשהעריכה בענן כבויה; הם אינם דורשים התחברות מחדש.
 
 הסריקה ידנית ואינה מתבצעת בהפעלה או ברקע ללא לחיצה. מחוון התקדמות וכפתור ביטול
 מאפשרים להמשיך לעבוד; כל קבוצה מוגבלת ל-45 שניות, בנפרד מתקציב שתי השניות להכתבה.

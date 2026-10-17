@@ -559,14 +559,25 @@ class CloudSettingsTests(unittest.TestCase):
         self.win.hide()
 
     def test_history_scan_controls_require_explicit_opt_in_and_do_not_run_on_open(self):
+        from PySide6.QtCore import Qt
+        from PySide6.QtTest import QTest
+
         self.ui.scan_history = Mock()
+        self.ui.prepare_history_scan = Mock()
         self.win._refresh_cloud()
-        self.assertFalse(self.win._scan_start.isEnabled())
+        self.assertTrue(self.win._scan_start.isEnabled())
         self.ui.scan_history.assert_not_called()
         self.ui.chatgpt_status = lambda: {"connected": True, "eligible": True, "enabled": False,
             "models": [{"slug": "luna", "display_name": "Luna"}], "model": "luna"}
         self.win._refresh_cloud()
-        self.assertFalse(self.win._scan_start.isEnabled())
+        self.assertTrue(self.win._scan_start.isEnabled())
+        self.assertIn("כבויה", self.win._scan_requirement.text())
+        self.win._goto(1)
+        QTest.mouseClick(self.win._scan_start, Qt.LeftButton)
+        self.assertEqual(self.win.stack.currentIndex(), 2)
+        self.ui.scan_history.assert_not_called()
+        self.ui.prepare_history_scan.assert_not_called()
+        self.ui.chatgpt_action.assert_not_called()
         self.ui.chatgpt_status = lambda: {"connected": True, "eligible": True, "enabled": True,
             "models": [{"slug": "luna", "display_name": "Luna"}], "model": "luna"}
         self.win._refresh_cloud()
@@ -574,6 +585,37 @@ class CloudSettingsTests(unittest.TestCase):
         self.win._scan_busy = True
         self.win._refresh_scan_controls()
         self.assertFalse(self.win._scan_start.isEnabled())
+
+    def test_scan_saved_results_and_undo_clicks_work_while_cloud_is_off(self):
+        from PySide6.QtCore import Qt
+        from PySide6.QtTest import QTest
+
+        self.ui.can_undo_history_scan = lambda: True
+        self.ui.undo_history_scan = Mock(return_value={"status": "undone", "corrected": 2})
+        self.win._on_scan_result({"status": "completed", "scanned": 2, "corrected": 2},
+                                 notify=False, refresh=False)
+        self.assertTrue(self.win._scan_details.isEnabled())
+        self.assertTrue(self.win._scan_undo.isEnabled())
+        dialog = Mock()
+        with patch.object(self.win, "_scan_details_dialog", return_value=dialog):
+            QTest.mouseClick(self.win._scan_details, Qt.LeftButton)
+        dialog.exec.assert_called_once_with()
+        QTest.mouseClick(self.win._scan_undo, Qt.LeftButton)
+        self.ui.undo_history_scan.assert_called_once_with()
+        self.ui.chatgpt_action.assert_not_called()
+
+    def test_scan_click_rechecks_opt_in_before_preparing_or_sending(self):
+        self.ui.chatgpt_status = lambda: {"connected": True, "eligible": True, "enabled": True,
+            "models": [{"slug": "luna", "display_name": "Luna"}], "model": "luna"}
+        self.win._refresh_scan_controls()
+        self.assertTrue(self.win._scan_ready)
+        self.ui.chatgpt_status = lambda: {"enabled": False}
+        self.ui.scan_history = Mock()
+        self.ui.prepare_history_scan = Mock()
+        self.win._scan_start.click()
+        self.assertEqual(self.win.stack.currentIndex(), 2)
+        self.ui.prepare_history_scan.assert_not_called()
+        self.ui.scan_history.assert_not_called()
 
     def test_history_scan_summary_reports_actual_changes_and_undo(self):
         from history_scanner import ScanResult
