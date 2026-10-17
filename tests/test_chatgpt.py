@@ -530,6 +530,34 @@ class CloudSettingsTests(unittest.TestCase):
         self.assertFalse(self.win._cloud_switch.isChecked())
         self.ui.chatgpt_action.assert_not_called()
 
+    def test_cloud_popups_render_theme_background_after_theme_switch(self):
+        import theme
+        from PySide6.QtGui import QColor
+
+        self.ui._win = self.win
+        self.win.show()
+        self.win._goto(2)
+        for name in ("light", "dark", "light"):
+            self.ui.set_theme(name)
+            self.qapp.processEvents()
+            for combo in (self.win._cloud_account, self.win._cloud_browser,
+                          self.win._cloud_model):
+                with self.subTest(theme=name, combo=combo.accessibleName()):
+                    combo.setEnabled(True)
+                    combo.addItem("Popup sample", "sample")
+                    combo.showPopup()
+                    self.qapp.processEvents()
+                    viewport = combo.view().viewport()
+                    image = viewport.grab().toImage()
+                    # Sample empty space in the unselected final row, away
+                    # from text and the selected row's accent background.
+                    rect = combo.view().visualRect(combo.model().index(combo.count() - 1, 0))
+                    self.assertEqual(image.pixelColor(8, rect.center().y()),
+                                     QColor(theme.palette(name)["surface"]))
+                    combo.hidePopup()
+                    combo.removeItem(combo.count() - 1)
+        self.win.hide()
+
     def test_history_scan_controls_require_explicit_opt_in_and_do_not_run_on_open(self):
         self.ui.scan_history = Mock()
         self.win._refresh_cloud()

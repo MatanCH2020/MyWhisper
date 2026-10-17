@@ -238,6 +238,8 @@ class SettingsPageMixin:
 
 
     def _chatgpt_card(self):
+        from ui import _combo_qss
+
         card = Card()
         card.vbox.addWidget(self._section("שיפור הטקסט עם ChatGPT"))
         card.vbox.addWidget(self._hint(
@@ -291,6 +293,11 @@ class SettingsPageMixin:
         row = QHBoxLayout()
         row.addWidget(self._plain("מודל עריכת טקסט"))
         self._cloud_model = QComboBox()
+        # Ancestor transparent styles override the application popup rules on
+        # Windows. Bind directly, as for the microphone picker, and retain the
+        # recipe so an in-place theme change also recolors the popup.
+        for combo in (self._cloud_account, self._cloud_browser, self._cloud_model):
+            theme.bind_style(combo, _combo_qss, self.p)
         self._cloud_model.setAccessibleName("מודל עריכת ChatGPT")
         self._cloud_model.currentIndexChanged.connect(self._cloud_model_changed)
         row.addWidget(self._cloud_model, 1)
