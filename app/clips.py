@@ -1,7 +1,7 @@
-"""Clipboard history store — every text/image the user copies, kept on disk.
+"""Unified picker store — copied text/images and completed transcriptions.
 
-Independent of the transcription history in `history.py`: that one records what
-MyWhisper produced, this one records what the user copied from anywhere.
+The correction history in `history.py` remains independent for editing/learning.
+The dictation worker explicitly adds final logical text here before delivery.
 
 Text is deliberately **uncapped in count** — thousands of entries cost a couple
 of MB and the whole point is a long, searchable history. What *is* capped:
@@ -64,6 +64,22 @@ def load():
     """All clips, newest first. Each: {'id','time','kind','text'|'path'}."""
     with _lock:
         return _read()
+
+
+def import_transcriptions(items):
+    """Merge legacy history once, preserving dates; retry-safe after a failed save."""
+    with _lock:
+        entries = _read()
+        seen = {e.get("text") for e in entries if e.get("kind") == "text"}
+        for item in items:
+            text = item.get("text", "")
+            if not text.strip() or len(text) > MAX_TEXT_CHARS or text in seen:
+                continue
+            entries.append({"id": _new_id(), "time": item.get("time", ""),
+                            "kind": "text", "text": text})
+            seen.add(text)
+        entries.sort(key=lambda e: e.get("time", ""), reverse=True)
+        return _write(entries[:MAX_ENTRIES])
 
 
 def add_text(text: str):

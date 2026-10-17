@@ -164,8 +164,8 @@ class SettingsPageMixin:
 
         # clipboard history
         cc, cbox = self._collapsible_card(
-            "היסטוריית העתקות",
-            "חיפוש ושחזור של טקסטים ותמונות שהועתקו",
+            "תמלולים והעתקות",
+            "תמלולים, טקסטים שהועתקו ותמונות במקום אחד",
             expanded=False)
         crow = QHBoxLayout()
         ck = (self.ui.config.get("clipboard_hotkey", "ctrl+`") or "").upper()
@@ -176,7 +176,7 @@ class SettingsPageMixin:
         crow.addWidget(self._clip_count_lbl)
         cbox.addLayout(crow)
         prow = QHBoxLayout()
-        prow.addWidget(self._plain("השהה שמירה"))
+        prow.addWidget(self._plain("השהה מעקב העתקות"))
         prow.addStretch(1)
         self._clip_pause_sw = ToggleSwitch(self.p, checked=self.ui.clip_paused())
         self._clip_pause_sw.setAccessibleName("השהה שמירת העתקות")
@@ -189,11 +189,11 @@ class SettingsPageMixin:
                                        self._clear_clips, danger=True))
         cbox.addLayout(crow2)
         cbox.addWidget(self._hint(
-            "כל טקסט או תמונה שאתה מעתיק נשמר כאן, ולחיצה על הקיצור פותחת רשימה "
+            "כל תמלול וטקסט או תמונה שאתה מעתיק נשמרים כאן. הקיצור פותח רשימה "
             "לחיפוש. בחירה מעתיקה את הפריט חזרה ללוח כדי שתדביק איפה שתרצה. "
             "סיסמאות ממנהלי סיסמאות (1Password, Bitwarden, KeePass) לא נשמרות — "
-            "הן מסומנות ככאלה, והתוכנה מכבדת את הסימון. \"השהה שמירה\" עוצר את "
-            "המעקב זמנית."))
+            "הן מסומנות ככאלה, והתוכנה מכבדת את הסימון. השהיית המעקב עוצרת "
+            "העתקות חיצוניות בלבד; תמלולים ממשיכים להישמר."))
         v.addWidget(cc)
         self._refresh_clip_count()
 
@@ -593,8 +593,8 @@ class SettingsPageMixin:
             sub += "  ⚠️ טעינת ה-GPU נכשלה, לכן בוצעה נפילה למעבד."
         self._status_dot.setStyleSheet(f"color:{color}; font-size:15px;")
         self._status_lbl.setText(text)
-        self._status_sub.setText(sub)
         model = st.get("model")
+        self._status_sub.setText(sub + ("\n" + model if model else ""))
         self._status_lbl.setToolTip(model or "")
 
 
@@ -649,6 +649,9 @@ class SettingsPageMixin:
             self._mic_combo.addItem(name, name)
         current = self.ui.config.get("input_device", "")
         idx = self._mic_combo.findData(current)
+        if current and idx < 0:
+            self._mic_combo.addItem(f"{current} — לא מחובר", current)
+            idx = self._mic_combo.count() - 1
         self._mic_combo.setCurrentIndex(idx if idx >= 0 else 0)
         self._mic_combo.blockSignals(False)
 

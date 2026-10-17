@@ -62,7 +62,7 @@ import sounds
 import safe_json
 import theme
 from config import load_config, save_config
-from recorder import Recorder, has_input_device, list_input_devices, MicMonitor
+from recorder import Recorder, has_input_device, list_input_devices, MicMonitor, MicrophoneUnavailable
 from transcriber import Transcriber
 from fullscreen import foreground_is_fullscreen
 from hotkey import HotkeyManager, TempHotkey
@@ -86,6 +86,7 @@ class State(enum.Enum):
 
 class Mywishper(QObject):
     _worker_finished = Signal()
+    _clips_changed = Signal()
     _load_finished = Signal(bool)
     _storage_error = Signal(str)
     _update_prepared = Signal(str, str)
@@ -98,6 +99,7 @@ class Mywishper(QObject):
         self._updating = False
         self._update_prepared.connect(self._launch_update)
         self._worker_finished.connect(self._finish_transcription)
+        self._clips_changed.connect(self._refresh_clips)
         self._load_finished.connect(self._finish_load)
         self._storage_error.connect(self._show_storage_error)
         self.config = load_config()
@@ -155,7 +157,11 @@ class Mywishper(QObject):
         self._clip_picker = None
         if self.config.get("clipboard_history", True):
             from clipwatch import ClipboardWatcher
-            self.clipwatch = ClipboardWatcher()
+            if not self.config.get("unified_history_imported", False):
+                if clips.import_transcriptions(history.load()):
+                    self.config["unified_history_imported"] = True
+                    save_config(self.config)
+            self.clipwatch = ClipboardWatcher(on_change=self._clips_changed.emit)
             self.clipwatch.set_paused(bool(self.config.get("clipboard_paused")))
             self.clip_hotkeys = HotkeyManager(
                 self.config.get("clipboard_hotkey", "ctrl+`"), self.show_clips)
@@ -360,6 +366,12 @@ class Mywishper(QObject):
             return False
 
     # ---- clipboard history ----
+    @Slot()
+    def _refresh_clips(self):
+        picker = getattr(self, "_clip_picker", None)
+        if picker is not None and picker.isVisible():
+            picker.refresh_entries(clips.load())
+
     def show_clips(self):
         """Open the clip picker (clipboard hotkey). Built on first use."""
         if self._clip_picker is None:
@@ -494,6 +506,8 @@ class Mywishper(QObject):
                     self._start_recording()
                 else:
                     self._stop_and_transcribe()
+            except MicrophoneUnavailable as error:
+                self._recover_from_error(str(error))
             except Exception:
                 # Most often: no microphone / no default input device, so
                 # sounddevice fails to open the stream. Surface it instead of
@@ -501,7 +515,7 @@ class Mywishper(QObject):
                 log.exception("Recording toggle failed")
                 self._recover_from_error()
 
-    def _recover_from_error(self):
+    def _recover_from_error(self, message=None):
         guard = getattr(self, "_destination_guard", None)
         if guard is not None:
             guard.close()
@@ -517,7 +531,7 @@ class Mywishper(QObject):
         sounds.error()
         self.tray.notify(
             "MyWhisper — בעיית מיקרופון",
-            "לא ניתן להתחיל הקלטה. ודא שמחובר מיקרופון והוא מוגדר כהתקן הקלט "
+            message or "לא ניתן להתחיל הקלטה. ודא שמחובר מיקרופון והוא מוגדר כהתקן הקלט "
             "ברירת המחדל ב-Windows (הגדרות ← מערכת ← קול). פרטים ב-mywhisper.log.",
             "warning")
 
@@ -620,6 +634,9 @@ class Mywishper(QObject):
                 # Refresh an open history page so the new card appears on its
                 # own (no-op when the window is closed / hidden).
                 self.ui.notify_transcription()
+                if self.config.get("clipboard_history", True):
+                    if clips.add_text(logical) is not None:
+                        self._clips_changed.emit()
                 destination_check = (destination.unchanged if isinstance(destination, DestinationGuard)
                                      else lambda: same_destination(destination))
                 if not destination_check():
@@ -630,8 +647,7 @@ class Mywishper(QObject):
                 if self.config.get("bidi_isolate", True):
                     out = corrections.format_bidi(logical)  # keep English LTR in RTL
                 # paste_text writes to the clipboard (and restores it after), so
-                # mute the watcher — otherwise every dictation would also land in
-                # the clipboard history as if the user had copied it.
+                # mute the watcher: the logical text was saved explicitly above.
                 if self.clipwatch:
                     self.clipwatch.suppress(
                         2.0 + float(self.config.get("clipboard_restore_delay", 0.5)))
@@ -646,10 +662,13 @@ class Mywishper(QObject):
             else:
                 log.info("(empty transcription)")
                 sounds.error()
+                diagnostic = getattr(self.transcriber, "last_diagnostics", {})
+                silent = isinstance(diagnostic, dict) and diagnostic.get("silent", False)
                 self.tray.notify(
-                    "MyWhisper — לא זוהה דיבור",
-                    "ההקלטה לא הכילה קול. ודא שנבחר המיקרופון הנכון ובדוק אותו "
-                    "ב-הגדרות ← מיקרופון ← בדוק מיקרופון.", "warning")
+                    "MyWhisper — קלט שקט" if silent else "MyWhisper — לא זוהה דיבור",
+                    ("לא התקבל קול מהמיקרופון. בדוק חיבור, השתקה ובחירת מיקרופון בהגדרות."
+                     if silent else "התקבל אודיו אך לא התקבל טקסט מזוהה. בדוק את מד העוצמה "
+                     "בהגדרות המיקרופון ונסה שוב."), "warning")
         except Exception:
             log.exception("Transcription failed")
             sounds.error()

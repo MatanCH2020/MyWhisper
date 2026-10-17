@@ -13,7 +13,7 @@ CONFIG_PATH = Path(__file__).resolve().parent.parent / "config.json"
 
 DEFAULTS = {
     "hotkey": "ctrl+space",
-    "model": "ivrit-ai/whisper-large-v3-turbo-ct2",
+    "model": "ivrit-ai/whisper-large-v3-ct2",
     "language": "he",
     "device": "cuda",
     "compute_type": "float16",
@@ -31,9 +31,10 @@ DEFAULTS = {
     "sound_volume": 0.25,
     "initial_prompt": "",
     "glossary_prompt": True,          # prioritize English vocabulary in bounded hints
-    # Clipboard history — everything you copy, independent of transcription.
+    # Unified picker — copied text/images and completed transcriptions.
     "clipboard_history": True,
     "clipboard_hotkey": "ctrl+`",     # opens the picker
+    "unified_history_imported": False, # one-time legacy transcription import
     "clipboard_paused": False,        # user-toggled pause (survives a restart)
     "highlight_unknown": True,
     "bidi_isolate": True,

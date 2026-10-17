@@ -19,7 +19,7 @@ def main():
     print("Loading model (first run downloads it — may take a few minutes)...")
     transcriber = Transcriber(cfg)
 
-    rec = Recorder()
+    rec = Recorder(cfg.get("input_device") or None)
     print("\nRecording 4 seconds — speak Hebrew now!")
     rec.start()
     for i in range(4, 0, -1):

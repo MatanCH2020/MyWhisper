@@ -725,6 +725,7 @@ class PipelineTests(unittest.TestCase):
         with patch.object(main.corrections, "bias_terms", return_value=""), \
              patch.object(main.corrections, "english_terms", return_value=[]), \
              patch.object(main.corrections, "apply", return_value="local") as correction, \
+             patch.object(main.clips, "add_text", return_value={}), \
              patch.object(main.history, "add") as saved, \
              patch.object(main, "paste_text") as paste, \
              patch.object(main, "same_destination", return_value=destination):

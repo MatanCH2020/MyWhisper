@@ -9,6 +9,7 @@ import logging
 import os
 import sys
 import threading
+import time
 
 log = logging.getLogger("transcriber")
 _dll_handles = []
@@ -70,6 +71,7 @@ class Transcriber:
         self.device = None            # actual device in use after load
         self.fallback_reason = None   # set when GPU load failed and CPU took over
         self.model = None             # loaded lazily via load()/ensure_loaded()
+        self.last_diagnostics = {}
         self._lock = threading.RLock()
 
     def load(self):
@@ -105,6 +107,7 @@ class Transcriber:
             model = WhisperModel(model_name, device=device, compute_type=compute_type,
                                  cpu_threads=self.cpu_threads)
             self.device = device
+            self.fallback_reason = None
         except Exception as e:
             # Graceful fallback to CPU if CUDA is unavailable / misconfigured.
             # The caller can check device/fallback_reason to warn the user —
@@ -159,12 +162,22 @@ class Transcriber:
         glossary_prompt is on. Vocabulary is deduplicated and bounded together
         with initial_prompt using the loaded model's actual tokenizer.
         """
+        self.last_diagnostics = {}
         if audio is None or len(audio) == 0:
+            return ""
+        rms = float(np.sqrt(np.mean(np.square(audio, dtype=np.float64))))
+        peak = float(np.max(np.abs(audio)))
+        self.last_diagnostics = {"duration": len(audio) / 16000, "rms": rms,
+                                 "peak": peak, "silent": peak <= 0.0001 and rms <= 0.00001}
+        log.info("Capture: duration=%.3fs rms=%.6f peak=%.6f", len(audio) / 16000, rms, peak)
+        if self.last_diagnostics["silent"]:
+            log.info("Capture is silent; decoder skipped")
             return ""
         with self._lock:
             self.ensure_loaded()  # reload transparently if it was released
             prompt, vocabulary = self._prompt_inputs(hotwords, glossary)
-            segments, _info = self.model.transcribe(
+            started = time.monotonic()
+            segments, info = self.model.transcribe(
                 audio,
                 language=self.language,
                 task="transcribe",
@@ -175,4 +188,9 @@ class Transcriber:
                 condition_on_previous_text=False,
             )
             text = "".join(segment.text for segment in segments)
+            speech_seconds = getattr(info, "duration_after_vad", None)
+            self.last_diagnostics.update(speech_seconds=speech_seconds,
+                                         elapsed=time.monotonic() - started)
+            log.info("Decode: speech_seconds=%s elapsed=%.3fs result_chars=%d",
+                     speech_seconds, self.last_diagnostics["elapsed"], len(text.strip()))
             return text.strip()

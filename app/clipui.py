@@ -85,7 +85,7 @@ class ClipPicker(FramelessWindow):
         self._on_clear = on_clear or (lambda: None)
         self._entries = []
         self._by_id = {}
-        self.setWindowTitle("MyWhisper — היסטוריית העתקות")
+        self.setWindowTitle("MyWhisper — תמלולים והעתקות")
         self.setLayoutDirection(Qt.RightToLeft)
         self.setMinimumSize(720, 460)
         self.resize(1000, 680)
@@ -93,7 +93,7 @@ class ClipPicker(FramelessWindow):
                          f"#container{{background:{p['bg']};border-radius:14px;}}", palette)
         self.body.addWidget(TitleBar(
             palette, on_theme or (lambda: None), self.showMinimized, self.close,
-            on_max=self.toggle_max, title_text="היסטוריית העתקות", close_tip="סגור"))
+            on_max=self.toggle_max, title_text="תמלולים והעתקות", close_tip="סגור"))
         content = QWidget()
         self.body.addWidget(content, 1)
         layout = QVBoxLayout(content)
@@ -102,8 +102,8 @@ class ClipPicker(FramelessWindow):
 
         header = QHBoxLayout()
         self.search = QLineEdit()
-        self.search.setPlaceholderText("חיפוש בהעתקות…")
-        self.search.setAccessibleName("חיפוש בהיסטוריית העתקות")
+        self.search.setPlaceholderText("חיפוש בתמלולים ובהעתקות…")
+        self.search.setAccessibleName("חיפוש בתמלולים ובהעתקות")
         self._search_action = self.search.addAction(
             icons.icon("search", palette['text_muted'], 16), QLineEdit.LeadingPosition)
         self.search.textChanged.connect(self._queue_filter)
@@ -214,6 +214,20 @@ QListWidget::item:hover {{ background:{p['hover']}; }}
         self.activateWindow()
         self._force_foreground()
         self.search.setFocus()
+
+    def refresh_entries(self, entries):
+        """Refresh a visible picker without losing search, selection or scroll."""
+        selected = self._current_id()
+        scroll = self.list.verticalScrollBar().value()
+        self._entries = list(entries or [])
+        self._by_id = {e.get('id'): e for e in self._entries}
+        self._filter_timer.stop()
+        self._apply_filter()
+        for row in range(self.list.count()):
+            if self.list.item(row).data(Qt.UserRole) == selected:
+                self.list.setCurrentRow(row)
+                break
+        self.list.verticalScrollBar().setValue(scroll)
 
     def _centre(self):
         screen = QApplication.screenAt(QCursor.pos()) or QApplication.primaryScreen()

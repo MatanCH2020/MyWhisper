@@ -42,6 +42,7 @@ class Check(QObject):
         self.other.resize(460, 260)
         self.finished.connect(self.completed)
         self.patches = [patch.object(main.history, "add"),
+            patch.object(main.clips, "add_text", return_value={}),
             patch.object(main.corrections, "bias_terms", return_value=""),
             patch.object(main.corrections, "english_terms", return_value=[]),
             patch.object(main.corrections, "apply", side_effect=lambda text: text)]
@@ -102,4 +103,7 @@ class Check(QObject):
 
 
 check = Check()
+if "--auto" in sys.argv:
+    QTimer.singleShot(800, check.begin)
+    QTimer.singleShot(20000, lambda: qapp.exit(2))
 sys.exit(qapp.exec())

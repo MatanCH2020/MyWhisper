@@ -26,6 +26,7 @@ class DictationPipelineTest(unittest.TestCase):
         with patch.object(main.corrections, "bias_terms", return_value=""), \
              patch.object(main.corrections, "english_terms", return_value=[]), \
              patch.object(main.corrections, "apply", return_value="טקסט מתוקן") as correct, \
+             patch.object(main.clips, "add_text", return_value={}), \
              patch.object(main.history, "add") as history, \
              patch.object(main, "same_destination", return_value=True), \
              patch.object(main, "paste_text") as paste:

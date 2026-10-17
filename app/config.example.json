@@ -1,6 +1,6 @@
 {
   "hotkey": "ctrl+space",
-  "model": "ivrit-ai/whisper-large-v3-turbo-ct2",
+  "model": "ivrit-ai/whisper-large-v3-ct2",
   "language": "he",
   "device": "cuda",
   "compute_type": "float16",
@@ -20,6 +20,7 @@
   "glossary_prompt": true,
   "clipboard_history": true,
   "clipboard_hotkey": "ctrl+`",
+  "unified_history_imported": false,
   "clipboard_paused": false,
   "highlight_unknown": true,
   "bidi_isolate": true,

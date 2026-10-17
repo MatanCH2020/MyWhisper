@@ -84,6 +84,17 @@ def resolve_device(name):
     return None
 
 
+class MicrophoneUnavailable(RuntimeError):
+    pass
+
+
+def selected_device(name):
+    index = resolve_device(name)
+    if name and index is None:
+        raise MicrophoneUnavailable("המיקרופון שנבחר אינו מחובר. בחר מיקרופון זמין בהגדרות.")
+    return index
+
+
 def _rms_level(indata, prev):
     """Smoothed 0..1-ish loudness from an audio block (shared by mic monitor)."""
     rms = float(np.sqrt(np.mean(np.square(indata, dtype=np.float64))))
@@ -108,7 +119,7 @@ class MicMonitor:
         self._level = 0.0
         self._stream = sd.InputStream(
             samplerate=SAMPLE_RATE, channels=CHANNELS, dtype="float32",
-            device=resolve_device(device_name), callback=self._callback)
+            device=selected_device(device_name), callback=self._callback)
         try:
             self._stream.start()
         except Exception:
@@ -150,12 +161,8 @@ class Recorder:
         self.device = device or None
 
     def _resolve_device(self):
-        """Map the stored device name to a sounddevice index; None (system
-        default) if unset or if the named device is no longer present."""
-        idx = resolve_device(self.device)
-        if self.device and idx is None:
-            log.warning("Selected mic %r not found — using the system default.", self.device)
-        return idx
+        """Resolve the selected input; only an unset selection uses the default."""
+        return selected_device(self.device)
 
     def _callback(self, indata, frames, time_info, status):
         if status:
