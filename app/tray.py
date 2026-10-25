@@ -46,7 +46,7 @@ class Tray(QObject):
     _state_sig = Signal(str, str)        # (state, tooltip)
     _notify_sig = Signal(str, str, str, int)  # title, message, level, duration
 
-    def __init__(self, on_quit, on_settings=None, hotkey="ctrl+space", palette=None):
+    def __init__(self, on_quit, on_settings=None, hotkey="ctrl+space", palette=None, on_clips=None):
         super().__init__()
         self._icons = {s: _make_icon(c) for s, c in COLORS.items()}
         on_settings = on_settings or (lambda: None)
@@ -58,6 +58,8 @@ class Tray(QObject):
         self.set_palette(palette or theme.DARK)
         menu.setLayoutDirection(Qt.RightToLeft)
         menu.addAction("הגדרות", lambda: on_settings())
+        if on_clips:
+            menu.addAction("תמלולים והעתקות", on_clips)
         self._act_hotkey = menu.addAction(f"קיצור: {hotkey}")
         self._act_hotkey.setEnabled(False)
         menu.addSeparator()

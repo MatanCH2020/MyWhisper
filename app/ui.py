@@ -612,10 +612,11 @@ class MainWindow(HistoryPageMixin, DictionaryPageMixin, SettingsPageMixin, Frame
         midl = QHBoxLayout(mid)
         midl.setContentsMargins(0, 0, 0, 0)
         midl.setSpacing(0)
-        self.nav = NavRail(palette, [("history", "היסטוריה"),
+        self.nav = NavRail(palette, [("history", "תמלולים"),
                                      ("dictionary", "מילון"),
-                                     ("settings", "הגדרות")])
-        self.nav.set_tooltips(["Ctrl+1", "Ctrl+2", "Ctrl+3"])
+                                     ("settings", "הגדרות"),
+                                     ("copy", "העתקות")])
+        self.nav.set_tooltips(["Ctrl+1", "Ctrl+2", "Ctrl+3", "Ctrl+4 · תמלולים והעתקות"])
         self.nav.selected.connect(self._goto)
         self.stack = QStackedWidget()
         page_wrap = QFrame()
@@ -691,6 +692,7 @@ class MainWindow(HistoryPageMixin, DictionaryPageMixin, SettingsPageMixin, Frame
 
         for i, seq in enumerate(("Ctrl+1", "Ctrl+2", "Ctrl+3")):
             bind(seq, lambda idx=i: self._goto(idx, from_nav=False))
+        bind("Ctrl+4", self.ui.open_clips)
         bind(QKeySequence.Find, self._focus_search)   # Ctrl+F
         bind("Ctrl+L", self._focus_search)            # browser-style alias
         bind("Escape", self._on_escape)
@@ -710,6 +712,10 @@ class MainWindow(HistoryPageMixin, DictionaryPageMixin, SettingsPageMixin, Frame
         self.close()  # closeEvent() hides to tray
 
     def _goto(self, i, from_nav=True):
+        if i == 3:
+            self.nav.set_index(self.stack.currentIndex())
+            self.ui.open_clips()
+            return
         # Leaving the settings page stops a running mic test (frees the stream).
         if i != 2 and getattr(self, "_mic_testing", False):
             self._stop_mic_test()
@@ -869,6 +875,8 @@ class AppUI(QObject):
         self.set_clip_paused = lambda p: None
         self.clear_clips = lambda: None
         self.clip_count = lambda: 0
+        self.open_clips = lambda: None
+        self.copy_to_clipboard = lambda text: QApplication.clipboard().setText(text)
         self.model_status = lambda: None            # wired by main
         self.check_update = lambda: None            # wired by main
         self.do_update = lambda: False

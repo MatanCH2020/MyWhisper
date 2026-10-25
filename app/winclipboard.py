@@ -38,7 +38,7 @@ _unlock = _bind(k, "GlobalUnlock", w.BOOL, [w.HGLOBAL])
 _STANDARD = {1, 7, 8, 13, 15, 16, 17}
 _REGISTERED = {"html format", "rich text format", "png",
                "excludeclipboardcontentfrommonitorprocessing", "clipboard viewer ignore",
-               "canincludeinclipboardhistory", "cancloudsyncclipboard",
+               "canincludeinclipboardhistory", "cancloudsyncclipboard", "canuploadtocloudclipboard",
                "org.nspasteboard.concealedtype"}
 
 

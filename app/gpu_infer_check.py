@@ -19,9 +19,13 @@ def main():
     audio = (0.3 * np.sin(2 * np.pi * (200 + 100 * tt) * tt)).astype(np.float32)
     # Bypass VAD so the encoder definitely runs on the GPU.
     t.vad_filter = False
-    text = t.transcribe(audio)
-    print(f"GPU inference ran without DLL errors. Output: '{text}'")
-    print("SUCCESS: cublas/cudnn loaded and GPU inference works.")
+    try:
+        t.transcribe(audio)
+        if t.device != "cuda":
+            raise RuntimeError("GPU check used CPU fallback; GPU inference is NOT verified")
+        print("SUCCESS: synthetic audio decoded on CUDA; no dictated content was used or saved.")
+    finally:
+        t.unload()
 
 
 if __name__ == "__main__":

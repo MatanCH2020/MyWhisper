@@ -25,11 +25,9 @@ class DictionaryPageMixin:
         box = self._scroll(v)
 
         self._scan_busy = False
-        scan = QFrame()
-        scan.setObjectName("card")
-        scan_box = QVBoxLayout(scan)
-        scan_box.setContentsMargins(14, 12, 14, 12)
-        scan_box.addWidget(self._section("תיקון חכם של ההיסטוריה עם ChatGPT"))
+        scan, scan_box = self._collapsible_card(
+            "סריקת תמלולים עם ChatGPT", "פעולה ידנית בענן · דורשת חיבור והפעלה", expanded=False)
+        self._scan_panel = scan
         explanation = QLabel("סריקה לפי המשפט המלא: תיקון כתיב בעברית וכתיבת מונחים לועזיים באנגלית. "
             "תיקונים עקביים יילמדו להכתבות הבאות; תיקוני הקשר יישארו במשפט בלבד. "
             "לחיצה תשלח את היסטוריית התמלולים ל־OpenAI דרך החשבון והמודל שבחרת. "
@@ -96,7 +94,6 @@ class DictionaryPageMixin:
         self._scan_elapsed_timer.setInterval(1000)
         self._scan_elapsed_timer.timeout.connect(self._update_scan_activity)
         self._scan_report = {}
-        box.addWidget(scan)
         self._refresh_scan_controls()
 
         # --- English glossary: terms kept in Latin during transcription ---
@@ -130,6 +127,8 @@ class DictionaryPageMixin:
         self._dict_box.setContentsMargins(0, 0, 0, 0)
         self._dict_box.setSpacing(6)
         box.addWidget(corr_container)
+
+        box.addWidget(scan)
 
         box.addStretch(1)
         report = self.ui.history_scan_report()
@@ -176,6 +175,7 @@ class DictionaryPageMixin:
         self._refresh_scan_controls()
         if not self._scan_ready:
             self._goto(2, from_nav=False)
+            self._cloud_panel.set_open(True)
             target = (self._cloud_switch if self._cloud_switch.isEnabled() else
                       self._cloud_model if self._cloud_model.isEnabled() else self._cloud_login)
             self.stack.widget(2).ensureWidgetVisible(target)

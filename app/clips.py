@@ -14,6 +14,8 @@ Re-copying something already in the store moves it back to the top instead of
 adding a duplicate, so the list stays useful rather than repetitive.
 """
 import json
+import hashlib
+import re
 import logging
 import threading
 import uuid
@@ -52,6 +54,29 @@ def _write(entries):
     return atomic_save(CLIPS_PATH, entries)
 
 
+def _commit_bounded(entries):
+    """Evict only unpinned items, and remove images only after index commit."""
+    keep, evicted = [], []
+    images = 0
+    available = max(1, MAX_ENTRIES - sum(bool(e.get("pinned")) for e in entries))
+    unpinned = 0
+    for entry in entries:
+        if not entry.get("pinned"):
+            over = unpinned >= available or (entry["kind"] == "image" and images >= MAX_IMAGES)
+            if over:
+                if entry["kind"] == "image":
+                    evicted.append(entry["path"])
+                continue
+            unpinned += 1
+            images += entry["kind"] == "image"
+        keep.append(entry)
+    if not _write(keep):
+        return False
+    for path in evicted:
+        _remove_file(path)
+    return True
+
+
 def _new_id() -> str:
     return uuid.uuid4().hex[:12]
 
@@ -79,7 +104,7 @@ def import_transcriptions(items):
                             "kind": "text", "text": text})
             seen.add(text)
         entries.sort(key=lambda e: e.get("time", ""), reverse=True)
-        return _write(entries[:MAX_ENTRIES])
+        return _commit_bounded(entries)
 
 
 def add_text(text: str):
@@ -104,11 +129,10 @@ def add_text(text: str):
                 return entry if _write(entries) else None
         entry = {"id": _new_id(), "time": _now(), "kind": "text", "text": text}
         entries.insert(0, entry)
-        del entries[MAX_ENTRIES:]
-        return entry if _write(entries) else None
+        return entry if _commit_bounded(entries) else None
 
 
-def add_image(save_png) -> dict:
+def add_image(save_png, name="") -> dict:
     """Store a copied image.
 
     *save_png* is called with a destination Path and must return True on
@@ -126,30 +150,29 @@ def add_image(save_png) -> dict:
         if not save_png(path):
             _remove_file(path)
             return None
+        digest = hashlib.sha256(path.read_bytes()).hexdigest()
     except Exception:
         _remove_file(path)
         log.exception("Failed to save a clipboard image")
         return None
     with _lock:
         entries = _read()
+        for i, old in enumerate(entries):
+            if old.get("kind") == "image" and old.get("sha256") == digest and Path(old["path"]).is_file():
+                entries.pop(i)
+                old["time"] = _now()
+                if name:
+                    old["name"] = name
+                entries.insert(0, old)
+                saved = _write(entries)
+                _remove_file(path)
+                return old if saved else None
         entry = {"id": cid, "time": _now(), "kind": "image", "path": str(path)}
+        entry.update(sha256=digest, name=name)
         entries.insert(0, entry)
-        # Trim surplus images (and their files); text entries are untouched.
-        seen = 0
-        keep, evicted = [], []
-        for e in entries:
-            if e.get("kind") == "image":
-                seen += 1
-                if seen > MAX_IMAGES:
-                    evicted.append(e.get("path"))
-                    continue
-            keep.append(e)
-        del keep[MAX_ENTRIES:]
-        if not _write(keep):
+        if not _commit_bounded(entries):
             _remove_file(path)
             return None
-        for old_path in evicted:
-            _remove_file(old_path)
         return entry
 
 
@@ -195,6 +218,16 @@ def restore(entry: dict, index: int):
         return _write(entries)
 
 
+def set_pinned(clip_id, pinned):
+    with _lock:
+        entries = _read()
+        for entry in entries:
+            if entry["id"] == clip_id:
+                entry["pinned"] = bool(pinned)
+                return _write(entries)
+        return False
+
+
 def clear():
     """Clear the index before removing every managed PNG, including undo orphans."""
     with _lock:
@@ -211,17 +244,22 @@ def clear():
         return ok
 
 
-def search(query: str, entries=None):
-    """Clips whose text contains *query* (case-insensitive).
+def category(entry):
+    if entry.get("kind") == "image":
+        return "image"
+    return "link" if re.fullmatch(r"https?://\S+", entry.get("text", "").strip(), re.I) else "text"
 
-    Images have no text to match, so a non-empty query filters them out.
-    """
-    items = _read() if entries is None else entries
+
+def search(query: str, entries=None, kind="all"):
+    """Filter by type, text/name/date, keeping favourites first; no image OCR."""
+    items = load() if entries is None else entries
     q = (query or "").strip().lower()
-    if not q:
-        return list(items)
-    return [e for e in items
-            if e.get("kind") == "text" and q in (e.get("text") or "").lower()]
+    labels = {"image": "תמונה צילום מסך image screenshot", "text": "", "link": "קישור link"}
+    matches = [e for e in items
+               if (kind == "all" or (kind == "pinned" and e.get("pinned")) or category(e) == kind)
+               and (not q or q in " ".join((e.get("text", ""), e.get("name", ""),
+                                           e.get("time", ""), labels[category(e)])).lower())]
+    return sorted(matches, key=lambda e: not bool(e.get("pinned")))
 
 
 def preview(entry, limit=90) -> str:

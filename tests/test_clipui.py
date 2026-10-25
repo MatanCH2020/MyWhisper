@@ -83,6 +83,62 @@ class ClipboardWindowTest(unittest.TestCase):
         self.assertEqual(self.window._current_id(), "demo")
         self.assertIn(theme.LIGHT["surface"], self.window.list.styleSheet())
 
+    def test_failed_copy_keeps_window_and_shows_error(self):
+        self.show_entries([{'id':'one', 'kind':'text', 'text':'one'}])
+        self.pick.return_value = False
+        self.window._copy_selected()
+        self.assertTrue(self.window.isVisible())
+        self.assertIn('לא הצליחה', self.window._feedback.text())
+
+    def test_type_filter_clears_stale_search_and_reveals_images(self):
+        self.show_entries([{'id':'text', 'kind':'text', 'text':'one'},
+                           {'id':'image', 'kind':'image', 'path':'missing.png'}])
+        self.window.search.setText('one')
+        self.window._apply_filter()
+        self.window._set_filter('image')
+        self.assertEqual(self.window.search.text(), '')
+        self.assertEqual(self.window.list.count(), 1)
+        self.assertTrue(self.window._gallery_btn.isChecked())
+        self.assertFalse(self.window._copy_btn.isEnabled())
+
+    def test_large_history_is_paged_without_losing_selection(self):
+        self.show_entries([{'id':str(i),'kind':'text','text':str(i)} for i in range(300)])
+        self.assertEqual(self.window.list.count(), 100)
+        self.window.list.setCurrentRow(50)
+        self.window._show_more()
+        self.assertEqual(self.window.list.count(), 200)
+        self.assertEqual(self.window._current_id(), '50')
+
+    def test_delete_and_undo_and_pin(self):
+        entry = {'id':'one','kind':'text','text':'one'}
+        self.window._on_delete = Mock(return_value=(entry,0))
+        self.window._on_restore = Mock(return_value=True)
+        self.window._on_pin = Mock(return_value=True)
+        self.show_entries([entry])
+        self.window._toggle_pin()
+        self.assertTrue(entry['pinned'])
+        self.window._delete_selected()
+        self.assertEqual(self.window.list.count(), 0)
+        self.window._undo_delete()
+        self.assertEqual(self.window.list.count(), 1)
+        self.assertIsNone(self.window._undo)
+
+    def test_delete_in_search_does_not_delete_clip(self):
+        self.window._on_delete = Mock()
+        self.show_entries([{'id':'one','kind':'text','text':'one'}])
+        self.window.search.setText('one')
+        self.window.search.setCursorPosition(0)
+        QTest.keyClick(self.window.search, Qt.Key_Delete)
+        self.window._on_delete.assert_not_called()
+
+    def test_pause_control_uses_callback_and_displays_state(self):
+        state = [False]
+        self.window._is_paused = lambda: state[0]
+        self.window._on_pause = lambda value: state.__setitem__(0,value)
+        self.window._toggle_pause()
+        self.assertTrue(state[0])
+        self.assertIn('מושהית', self.window._capture_status.text())
+
 
 if __name__ == "__main__":
     unittest.main()

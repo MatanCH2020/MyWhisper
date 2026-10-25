@@ -40,7 +40,6 @@ class SettingsPageMixin:
         self._status_timer = QTimer(self)
         self._status_timer.timeout.connect(self._refresh_model_status)
         self._refresh_model_status()
-        v.addWidget(self._chatgpt_card())
 
         # hotkey — one of the first things users need when dictation feels
         # "stuck", so keep it above the lower tuning/maintenance sections.
@@ -174,6 +173,9 @@ class SettingsPageMixin:
         self._clip_count_lbl = QLabel("")
         self._clip_count_lbl.setObjectName("hint")
         crow.addWidget(self._clip_count_lbl)
+        open_clips = QPushButton("פתח העתקות")
+        open_clips.clicked.connect(self.ui.open_clips)
+        crow.addWidget(open_clips)
         cbox.addLayout(crow)
         prow = QHBoxLayout()
         prow.addWidget(self._plain("השהה מעקב העתקות"))
@@ -196,6 +198,12 @@ class SettingsPageMixin:
             "העתקות חיצוניות בלבד; תמלולים ממשיכים להישמר."))
         v.addWidget(cc)
         self._refresh_clip_count()
+
+        self._cloud_panel, cloud_box = self._collapsible_card(
+            "עריכת טקסט עם ChatGPT · לבחירתך", "תמלול מקומי עובד גם ללא חיבור לחשבון",
+            expanded=self.ui.config.get("chatgpt_enabled") is True)
+        cloud_box.addWidget(self._chatgpt_card())
+        v.addWidget(self._cloud_panel)
 
         # updates / version
         upc, ubox = self._collapsible_card(
@@ -523,6 +531,7 @@ class SettingsPageMixin:
             toggle.setText("הסתר" if opened else "פתח")
 
         toggle.clicked.connect(lambda _=False: set_open(not body.isVisible()))
+        card.set_open = set_open
         return card, body_box
 
 

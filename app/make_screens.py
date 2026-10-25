@@ -187,6 +187,12 @@ def shoot_clipboard():
     picker._force_foreground = lambda: None
     picker._centre = lambda: picker.move(-4000, 200)
     picker.show_for([
+        {"id": "demo-image-1", "kind": "image", "time": "2026-10-25 10:12",
+         "name": "תמלול לדוגמה", "path": str(DOCS / "app-history-light.png"), "pinned": True},
+        {"id": "demo-image-2", "kind": "image", "time": "2026-10-25 10:11",
+         "name": "הגדרות המיקרופון", "path": str(DOCS / "app-settings-light.png")},
+        {"id": "demo-link", "kind": "text", "time": "2026-10-25 10:10",
+         "text": "https://github.com/MatanCH2020/MyWhisper"},
         {"id": "demo-long", "kind": "text", "time": "2026-10-03 10:00",
          "text": "תכנון היום עם MyWhisper\n\n"
                  "אפשר לקרוא כאן את כל הטקסט, גם כשמדובר בהעתקה ארוכה.\n\n"
@@ -199,6 +205,13 @@ def shoot_clipboard():
     ])
     app.processEvents()
     picker.grab().save(str(DOCS / "app-clipboard-dark.png"), "PNG")
+    picker._set_filter("image")
+    app.processEvents()
+    picker.grab().save(str(DOCS / "app-clipboard-gallery-dark.png"), "PNG")
+    app.setStyleSheet(ui_mod.theme.build_qss(ui_mod.theme.LIGHT))
+    picker.set_palette(ui_mod.theme.LIGHT)
+    app.processEvents()
+    picker.grab().save(str(DOCS / "app-clipboard-gallery-light.png"), "PNG")
     picker.close()
 
 

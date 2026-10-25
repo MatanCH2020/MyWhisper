@@ -14,7 +14,8 @@ from pathlib import Path
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "app"))
 
-from PySide6.QtCore import QMimeData
+from PySide6.QtCore import QMimeData, QUrl
+from PySide6.QtGui import QImage, QColor
 from PySide6.QtWidgets import QApplication
 
 import clips
@@ -56,7 +57,7 @@ class ClipboardWatcherTestCase(unittest.TestCase):
         self.w._clip = type("FakeClip", (), {
             "mimeData": lambda _self: md,
             "text": lambda _self: md.text(),
-            "image": lambda _self: None,
+            "image": lambda _self: md.imageData(),
         })()
         self.w._on_data_changed()
 
@@ -134,6 +135,68 @@ class ClipboardWatcherTestCase(unittest.TestCase):
     def test_none_mimedata_does_not_raise(self):
         self._feed(None)  # must not blow up inside the Qt signal handler
         self.assertEqual(clips.load(), [])
+
+    def test_screenshot_with_windows_allow_flag_is_saved(self):
+        md = QMimeData()
+        image = QImage(80, 60, QImage.Format_ARGB32)
+        image.fill(QColor("blue"))
+        md.setImageData(image)
+        md.setData('application/x-qt-windows-mime;value="CanIncludeInClipboardHistory"', b'\x01\0\0\0')
+        # A cloud-sync exclusion is not a local-history exclusion.
+        md.setData('application/x-qt-windows-mime;value="CanUploadToCloudClipboard"', b'\0\0\0\0')
+        self._feed(md)
+        saved = clips.load()
+        self.assertEqual(len(saved), 1)
+        self.assertEqual(saved[0]["kind"], "image")
+        self.assertFalse(QImage(saved[0]["path"]).isNull())
+
+    def test_allow_history_does_not_override_explicit_secret(self):
+        for fmt in ("ExcludeClipboardContentFromMonitorProcessing", "Clipboard Viewer Ignore",
+                    "CanCloudSyncClipboard", "org.nspasteboard.ConcealedType"):
+            md = _mime("private", fmt)
+            md.setData("CanIncludeInClipboardHistory", b'\x01\0\0\0')
+            self._feed(md)
+        self.assertEqual(clips.load(), [])
+
+    def test_deny_or_malformed_history_flag_is_not_saved(self):
+        for value in (b'\0\0\0\0', b'', b'1', b'\x01', b'\x02\0\0\0', b'\x01\0\0\0\0'):
+            md = _mime("private")
+            md.setData("CanIncludeInClipboardHistory", value)
+            self._feed(md)
+        self.assertEqual(clips.load(), [])
+
+    def test_image_beats_accompanying_text_and_duplicate_is_merged(self):
+        md = _mime("https://example.test/image.png")
+        image = QImage(20, 20, QImage.Format_RGB32)
+        image.fill(QColor("green"))
+        md.setImageData(image)
+        self._feed(md)
+        self._feed(md)
+        self.assertEqual([e['kind'] for e in clips.load()], ['image'])
+        self.assertEqual(len(list(clips.IMAGE_DIR.glob('*.png'))), 1)
+
+    def test_local_image_file_is_snapshotted(self):
+        path = Path(self._tmp.name) / 'source.png'
+        image = QImage(20, 20, QImage.Format_RGB32)
+        image.fill(QColor("green"))
+        image.save(str(path))
+        md = QMimeData()
+        md.setUrls([QUrl.fromLocalFile(str(path))])
+        self._feed(md)
+        saved = clips.load()[0]
+        path.unlink()
+        self.assertEqual(saved['name'], 'source.png')
+        self.assertTrue(Path(saved['path']).exists())
+
+    def test_text_can_be_recopied_after_an_image(self):
+        self._feed(_mime("text"))
+        md = QMimeData()
+        image = QImage(10, 10, QImage.Format_RGB32)
+        image.fill(QColor("red"))
+        md.setImageData(image)
+        self._feed(md)
+        self._feed(_mime("text"))
+        self.assertEqual([e['kind'] for e in clips.load()], ['text', 'image'])
 
 
 if __name__ == "__main__":

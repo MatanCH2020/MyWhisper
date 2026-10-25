@@ -19,9 +19,11 @@ Three things it deliberately does NOT record:
 import logging
 import time
 import threading
+from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor
 
 from PySide6.QtCore import QObject, Signal
+from PySide6.QtGui import QImageReader
 from PySide6.QtWidgets import QApplication
 
 import clips
@@ -110,6 +112,7 @@ class ClipboardWatcher(QObject):
     # ---- control ----
     def set_paused(self, paused: bool):
         self._paused = bool(paused)
+        self._last_text = None
         log.info("Clipboard capture %s.", "paused" if paused else "resumed")
 
     def is_paused(self) -> bool:
@@ -136,34 +139,65 @@ class ClipboardWatcher(QObject):
         if md is None:
             return
         if self._is_secret(md):
+            self._last_text = None
             log.info("Clipboard change skipped: marked as sensitive by its source.")
             return
         try:
+            if md.hasImage():
+                # Image formats take precedence over a browser's accompanying URL.
+                self._last_text = None
+                img = self._clip.image()
+                if img is not None and not img.isNull():
+                    snapshot = img.copy()
+                    self._persist(lambda: clips.add_image(lambda p: snapshot.save(str(p), "PNG")))
+                return
+            if md.hasUrls():
+                paths = [Path(url.toLocalFile()) for url in md.urls()
+                         if url.isLocalFile() and not url.host()
+                         and not url.toLocalFile().startswith(("//", "\\\\"))]
+                paths = [p for p in paths if p.suffix.lower() in
+                         (".png", ".jpg", ".jpeg", ".webp", ".bmp", ".gif")]
+                if paths:
+                    self._last_text = None
+                    for path in paths:
+                        self._persist(lambda path=path: self._import_image(path))
+                    return
             if md.hasText() and (md.text() or "").strip():
                 text = md.text()
                 if text == self._last_text:
                     return  # same value re-announced; not a new copy
                 self._last_text = text
                 self._persist(lambda: clips.add_text(text), text)
-            elif md.hasImage():
-                # Detach on the GUI thread; workers never access QClipboard.
-                img = self._clip.image()
-                if img is not None and not img.isNull():
-                    snapshot = img.copy()
-                    self._persist(lambda: clips.add_image(lambda p: snapshot.save(str(p), "PNG")))
+            else:
+                self._last_text = None
         except Exception:
             log.exception("Failed to record a clipboard change")
 
     @staticmethod
     def _is_secret(md) -> bool:
         try:
-            formats = [f.lower() for f in md.formats()]
+            for fmt in md.formats():
+                name = fmt.lower()
+                if "canincludeinclipboardhistory" in name:
+                    # Windows DWORD: 1 explicitly allows local history. Absent,
+                    # malformed and zero values must not bypass privacy guards.
+                    if bytes(md.data(fmt)) != b"\x01\x00\x00\x00":
+                        return True
+                elif any(marker in name for marker in _SECRET_FORMATS):
+                    return True
+            return False
         except Exception:
             return True  # unknown sensitivity: do not capture
-        return any(any(marker in f for f in formats) for marker in _SECRET_FORMATS)
 
-    def _save_image(self, path) -> bool:
-        img = self._clip.image()
-        if img is None or img.isNull():
-            return False
-        return bool(img.save(str(path), "PNG"))
+    @staticmethod
+    def _import_image(path):
+        """Decode local files off the GUI thread, with a bounded pixel count."""
+        reader = QImageReader(str(path))
+        reader.setAutoTransform(True)
+        size = reader.size()
+        if not size.isValid() or size.width() * size.height() > 40_000_000:
+            return None
+        img = reader.read()
+        if img.isNull():
+            return None
+        return clips.add_image(lambda p: img.save(str(p), "PNG"), name=path.name)

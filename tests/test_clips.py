@@ -64,7 +64,7 @@ class ClipsTestCase(unittest.TestCase):
 
     # ---- images ----
     def _fake_png(self, path):
-        path.write_bytes(b"\x89PNG\r\n\x1a\n" + b"0" * 32)
+        path.write_bytes(b"\x89PNG\r\n\x1a\n" + path.stem.encode())
         return True
 
     def test_add_image_stores_a_file(self):
@@ -158,6 +158,34 @@ class ClipsTestCase(unittest.TestCase):
 
     def test_preview_labels_images(self):
         self.assertIn("תמונה", clips.preview(clips.add_image(self._fake_png)))
+
+    def test_pinned_image_survives_automatic_eviction(self):
+        first = clips.add_image(self._fake_png)
+        self.assertTrue(clips.set_pinned(first['id'], True))
+        for _ in range(clips.MAX_IMAGES + 2):
+            clips.add_image(self._fake_png)
+        self.assertTrue(Path(first['path']).exists())
+        self.assertEqual(clips.search('', kind='pinned')[0]['id'], first['id'])
+
+    def test_type_filters_and_image_name_search(self):
+        clips.add_text('plain text')
+        clips.add_text('https://example.test/')
+        image = clips.add_image(self._fake_png, name='holiday.png')
+        self.assertEqual(len(clips.search('', kind='text')), 1)
+        self.assertEqual(len(clips.search('', kind='link')), 1)
+        self.assertEqual(clips.search('holiday')[0]['id'], image['id'])
+        self.assertEqual(len(clips.search('תמונה')), 1)
+
+    def test_duplicate_image_keeps_identity_pin_and_single_file(self):
+        def save(path):
+            path.write_bytes(b'same image')
+            return True
+        original = clips.add_image(save)
+        clips.set_pinned(original['id'], True)
+        copied = clips.add_image(save)
+        self.assertEqual(original['id'], copied['id'])
+        self.assertTrue(copied['pinned'])
+        self.assertEqual(len(list(clips.IMAGE_DIR.glob('*.png'))), 1)
 
 
 if __name__ == "__main__":

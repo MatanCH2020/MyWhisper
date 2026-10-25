@@ -42,12 +42,14 @@ class DestinationGuard:
                                             callback_type, ctypes.c_ulong, ctypes.c_ulong, ctypes.c_ulong]
             user.SetWinEventHook.restype = ctypes.c_void_p
             self._hook = user.SetWinEventHook(3, 3, None, self._callback, 0, 0, 0)
+            if not self._hook:
+                self.changed.set()
         except (AttributeError, OSError):
-            pass
+            self.changed.set()
         return self
 
     def unchanged(self):
-        return not self.changed.is_set() and same_destination(self.window)
+        return bool(self._hook) and not self.changed.is_set() and same_destination(self.window)
 
     def close(self):
         if self._hook:

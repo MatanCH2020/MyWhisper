@@ -76,7 +76,7 @@ RADIUS_SM = 8
 # alone accounted for 29 of them), so a change meant a find-and-replace and the
 # odd one always got missed. Name the roles instead.
 FS = {
-    "hint": 11,     # secondary explanation under a control
+    "hint": 12,     # secondary explanation under a control
     "small": 12,    # section titles, chips
     "body": 13,     # default control / label text
     "read": 14,     # transcription text — the thing users actually read
@@ -135,6 +135,7 @@ QPushButton {{
 }}
 QPushButton:hover {{ background: {p['hover']}; }}
 QPushButton:pressed {{ background: {p['border']}; }}
+QPushButton#clipfilter:checked {{ background: {p['nav_sel']}; color: {p['accent']}; border: 1px solid {p['accent']}; font-weight: 600; }}
 QPushButton:focus {{
     border: 2px solid {p['accent']};
     padding: 5px 13px;

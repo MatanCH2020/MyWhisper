@@ -147,6 +147,7 @@ class Mywishper(QObject):
             on_settings=self.ui.open_settings,
             hotkey=self.config.get("hotkey"),
             palette=self.ui.p,
+            on_clips=lambda: self.show_clips(toggle=False),
         )
         self.ui.notify = self.tray.notify  # balloon hints (minimize-to-tray etc.)
         safe_json.set_error_handler(self._storage_error.emit)
@@ -167,8 +168,10 @@ class Mywishper(QObject):
                 self.config.get("clipboard_hotkey", "ctrl+`"), self.show_clips)
         self.ui.clip_paused = lambda: bool(self.clipwatch and self.clipwatch.is_paused())
         self.ui.set_clip_paused = self._set_clip_paused
-        self.ui.clear_clips = self.clipwatch.clear_history if self.clipwatch else clips.clear
+        self.ui.clear_clips = self._clear_clips
         self.ui.clip_count = lambda: len(clips.load())
+        self.ui.open_clips = lambda: self.show_clips(toggle=False)
+        self.ui.copy_to_clipboard = lambda text: self._use_clip({"kind": "text", "text": text})
         self.ui.set_hotkey = self._set_hotkey            # live hotkey editor
         self.ui.list_input_devices = lambda: [n for _, n in list_input_devices()]
         self.ui.set_input_device = self._set_input_device
@@ -373,15 +376,26 @@ class Mywishper(QObject):
         if picker is not None and picker.isVisible():
             picker.refresh_entries(clips.load())
 
-    def show_clips(self):
+    def _clear_clips(self):
+        result = self.clipwatch.clear_history() if self.clipwatch else clips.clear()
+        if self._clip_picker is not None:
+            self._clip_picker._undo = None
+            self._clip_picker._undo_btn.hide()
+            self._clip_picker.refresh_entries(clips.load())
+        return result
+
+    def show_clips(self, toggle=True):
         """Open the clip picker (clipboard hotkey). Built on first use."""
         if self._clip_picker is None:
             from clipui import ClipPicker
             self._clip_picker = ClipPicker(
                 self.ui.p, on_pick=self._use_clip,
                 on_delete=lambda cid: clips.delete(cid),
-                on_clear=self.ui.clear_clips, on_theme=self.ui.toggle_theme)
-        if self._clip_picker.isVisible():
+                on_clear=self.ui.clear_clips, on_theme=self.ui.toggle_theme,
+                on_restore=clips.restore, on_pin=clips.set_pinned,
+                is_paused=self.ui.clip_paused, on_pause=self._set_clip_paused,
+                capture_enabled=self.config.get("clipboard_history", True))
+        if toggle and self._clip_picker.isVisible() and not self._clip_picker.isMinimized():
             self._clip_picker.hide()   # same key closes it again
             return
         self._clip_picker.show_for(clips.load())
@@ -397,18 +411,28 @@ class Mywishper(QObject):
                 img = QImage(entry.get("path", ""))
                 if img.isNull():
                     log.warning("Clip image missing: %s", entry.get("path"))
-                    return
+                    return False
                 cb.setImage(img)
+                return cb.image() == img
             else:
                 cb.setText(entry.get("text", ""))
+                return cb.text() == entry.get("text", "")
         except Exception:
             log.exception("Failed to put a clip on the clipboard")
+            return False
 
     def _set_clip_paused(self, paused):
         if self.clipwatch:
             self.clipwatch.set_paused(paused)
         self.config["clipboard_paused"] = bool(paused)
         save_config(self.config)
+        if self._clip_picker:
+            self._clip_picker.refresh_capture_status()
+        window = self.ui._win
+        if window is not None:
+            window._clip_pause_sw.blockSignals(True)
+            window._clip_pause_sw.setChecked(bool(paused))
+            window._clip_pause_sw.blockSignals(False)
 
     def _model_status(self):
         """Snapshot of the transcription engine for the settings UI.

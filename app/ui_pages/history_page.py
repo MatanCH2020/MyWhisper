@@ -18,7 +18,7 @@ class HistoryPageMixin:
         v.setSpacing(10)
         bar = QHBoxLayout()
         self.search = QLineEdit()
-        self.search.setPlaceholderText("חיפוש בהיסטוריה…   (Ctrl+F)")
+        self.search.setPlaceholderText("חיפוש בתמלולים…   (Ctrl+F)")
         self.search.addAction(icons.icon("search", self.p["text_muted"], 16),
                               QLineEdit.LeadingPosition)
         # Debounced: rebuilding up to MAX_HISTORY_CARDS cards on every keystroke
@@ -292,8 +292,8 @@ class HistoryPageMixin:
         if not text:
             return
         out = self.ui.format_bidi(text) if self.ui.config.get("bidi_isolate", True) else text
-        QApplication.clipboard().setText(out)
-        self._toast.show_message("הטקסט הועתק", msec=2500)
+        copied = self.ui.copy_to_clipboard(out)
+        self._toast.show_message("ההעתקה נכשלה; אפשר לנסות שוב" if copied is False else "הטקסט הועתק", msec=2500)
 
 
     def delete_entry(self, entry_id):
