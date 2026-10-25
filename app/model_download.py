@@ -4,6 +4,8 @@ import json
 from pathlib import Path
 import threading
 import urllib.request
+import ssl
+import certifi
 
 MODEL_ID = "mlx-community/ivrit-ai-whisper-large-v3-mlx"
 REVISION = "097c0cb2bb4288a3c82f6d524a39c4ce09afa187"
@@ -45,7 +47,7 @@ def download_file(url, destination, size, sha256, cancel, progress=lambda done, 
         if offset:
             headers["Range"] = f"bytes={offset}-"
         request = urllib.request.Request(url, headers=headers)
-        with urllib.request.urlopen(request, timeout=20) as response:
+        with urllib.request.urlopen(request, timeout=20, context=ssl.create_default_context(cafile=certifi.where())) as response:
             if response.status == 206:
                 if response.headers.get("Content-Range", "") != f"bytes {offset}-{size - 1}/{size}":
                     raise ValueError("Unexpected partial response")

@@ -54,6 +54,14 @@ class NativeClipboardTest(unittest.TestCase):
         self.assertEqual(self.module.safe_snapshot(self.board, preserve=True),
                          ([{"public.utf8-plain-text": b"synthetic"}], 10))
 
+    def test_history_permission_marker_is_checked_before_text(self):
+        self.item.types.return_value = ["public.utf8-plain-text", "CanIncludeInClipboardHistory"]
+        for value in (b"\x00\x00\x00\x00", b"\x01", None):
+            self.item.dataForType_.reset_mock()
+            self.item.dataForType_.side_effect = lambda kind: value if kind == "CanIncludeInClipboardHistory" else b"secret"
+            self.assertIsNone(self.module.safe_snapshot(self.board))
+            self.item.dataForType_.assert_called_once_with("CanIncludeInClipboardHistory")
+
     def test_missing_destination_does_not_touch_board(self):
         with patch.object(self.module, "on_main", side_effect=lambda fn: fn()), \
              patch.object(self.module, "accessibility_allowed", return_value=True), \
@@ -90,3 +98,22 @@ class NativeDestinationTest(unittest.TestCase):
              patch.object(system.AppKit, "NSWorkspace") as workspace:
             self.assertIsNone(system._foreground())
         workspace.sharedWorkspace.assert_not_called()
+
+
+@unittest.skipUnless(sys.platform == "darwin", "Mac audio dependencies")
+class NativeAudioTest(unittest.TestCase):
+    def test_resampling_preserves_duration_and_tone(self):
+        import numpy as np
+        from recorder import resample_capture
+        signal = np.sin(2 * np.pi * 1000 * np.arange(48000) / 48000).astype(np.float32)
+        converted = resample_capture(signal, 48000)
+        self.assertEqual(converted.dtype, np.float32)
+        self.assertEqual(len(converted), 16000)
+        self.assertEqual(np.argmax(np.abs(np.fft.rfft(converted))), 1000)
+
+    def test_native_rate_fallback_does_not_switch_device(self):
+        import recorder
+        with patch.object(recorder.sd, "check_input_settings", side_effect=recorder.sd.PortAudioError("rate")), \
+             patch.object(recorder.sd, "query_devices", return_value={"default_samplerate": 48000}) as query:
+            self.assertEqual(recorder.capture_rate(7), 48000)
+        query.assert_called_once_with(7, "input")

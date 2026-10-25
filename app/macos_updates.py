@@ -2,6 +2,8 @@
 import json
 import re
 import urllib.request
+import ssl
+import certifi
 from packaging.version import Version, InvalidVersion
 
 BASE = "https://github.com/MatanCH2020/MyWhisper"
@@ -25,5 +27,5 @@ def select_release(releases):
 def check():
     request = urllib.request.Request("https://api.github.com/repos/MatanCH2020/MyWhisper/releases?per_page=100",
                                      headers={"User-Agent": "MyWhisper-Mac"})
-    with urllib.request.urlopen(request, timeout=8) as response:
+    with urllib.request.urlopen(request, timeout=8, context=ssl.create_default_context(cafile=certifi.where())) as response:
         return select_release(json.load(response))

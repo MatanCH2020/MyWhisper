@@ -1,21 +1,22 @@
 # PyInstaller runs this on a native Apple Silicon macOS runner.
 from pathlib import Path
-from PyInstaller.utils.hooks import collect_data_files, collect_dynamic_libs, copy_metadata
+from PyInstaller.utils.hooks import collect_data_files, collect_dynamic_libs, copy_metadata, collect_submodules
 import re
 
 root = Path(SPECPATH).parent
 version = re.search(r'__version__ = "([^"]+)"', (root / 'app/version.py').read_text()).group(1)
 datas = [(str(root / 'app/assets'), 'assets'), (str(root / 'CHANGELOG.md'), '.')]
-for package in ('mlx_whisper', 'wordfreq', 'langcodes', 'tiktoken'):
+for package in ('mlx_whisper', 'wordfreq', 'langcodes', 'tiktoken', 'certifi'):
     datas += collect_data_files(package)
 datas += copy_metadata('mlx-whisper')
 datas += copy_metadata('mlx')
+datas += collect_data_files('mlx', includes=['**/*.metallib', '**/*.metal'])
 binaries = collect_dynamic_libs('mlx')
 a = Analysis([str(root / 'app/main.py')], pathex=[str(root / 'app')],
     binaries=binaries, datas=datas,
     hiddenimports=['mlx.core', 'mlx_whisper.transcribe', 'mlx_whisper.tokenizer',
                    'ApplicationServices', 'AppKit', 'AVFoundation', 'CoreFoundation', 'Quartz',
-                   'scipy.signal', 'onnxruntime', 'tiktoken_ext.openai_public'],
+                   'scipy.signal', 'onnxruntime', 'tiktoken_ext.openai_public'] + collect_submodules('mlx'),
     excludes=['torch', 'mlx_whisper.torch_whisper', 'faster_whisper', 'ctranslate2',
               'chatgpt_auth', 'cloud_http', 'text_editor', 'history_scanner',
               'updater', 'hotkey', 'paste', 'winclipboard', 'delivery', 'fullscreen',

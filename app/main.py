@@ -434,6 +434,12 @@ class Mywishper(QObject):
             self._clip_picker.refresh_entries(clips.load())
         return result
 
+    def _clipboard_allowed(self):
+        if IS_MAC:
+            from macos_clipboard import clipboard_allowed
+            return clipboard_allowed()
+        return True
+
     def show_clips(self, toggle=True):
         """Open the clip picker (clipboard hotkey). Built on first use."""
         if self._clip_picker is None:
@@ -444,7 +450,8 @@ class Mywishper(QObject):
                 on_clear=self.ui.clear_clips, on_theme=self.ui.toggle_theme,
                 on_restore=clips.restore, on_pin=clips.set_pinned,
                 is_paused=self.ui.clip_paused, on_pause=self._set_clip_paused,
-                capture_enabled=self.config.get("clipboard_history", True))
+                capture_enabled=self.config.get("clipboard_history", True),
+                capture_allowed=self._clipboard_allowed)
         if toggle and self._clip_picker.isVisible() and not self._clip_picker.isMinimized():
             self._clip_picker.hide()   # same key closes it again
             return

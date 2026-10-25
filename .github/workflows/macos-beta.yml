@@ -24,7 +24,9 @@ jobs:
           python-version: '3.12'
           architecture: arm64
           cache: pip
-          cache-dependency-path: requirements-macos.txt
+          cache-dependency-path: |
+            requirements-macos.txt
+            requirements-macos.lock
       - name: Install native dependencies
         run: |
           test "$(uname -m)" = arm64

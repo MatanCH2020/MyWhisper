@@ -1,3 +1,4 @@
+-c requirements-macos.lock
 # Native arm64 Python 3.12; macOS 15+. No CUDA or faster-whisper.
 mlx==0.32.4
 mlx-whisper==0.4.3
@@ -15,3 +16,4 @@ pyobjc-framework-Quartz==12.2.2
 pyobjc-framework-ApplicationServices==12.2.2
 pyobjc-framework-AVFoundation==12.2.2
 pyinstaller==6.22.3
+certifi==2026.5.20

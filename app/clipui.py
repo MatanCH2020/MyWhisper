@@ -79,7 +79,7 @@ class ClipPicker(FramelessWindow):
     """Click selects a preview; Copy / Enter / double-click chooses the clip."""
 
     def __init__(self, palette, on_pick, on_delete=None, on_clear=None, on_theme=None,
-                 on_restore=None, on_pin=None, is_paused=None, on_pause=None, capture_enabled=True):
+                 on_restore=None, on_pin=None, is_paused=None, on_pause=None, capture_enabled=True, capture_allowed=None):
         super().__init__()
         self.p = palette
         self._on_pick = on_pick
@@ -90,6 +90,7 @@ class ClipPicker(FramelessWindow):
         self._is_paused = is_paused or (lambda: False)
         self._on_pause = on_pause or (lambda paused: None)
         self._capture_enabled = capture_enabled
+        self._capture_allowed = capture_allowed or (lambda: True)
         self._kind = "all"
         self._limit = PAGE_SIZE
         self._undo = None
@@ -342,6 +343,7 @@ QListWidget::item:hover {{ background:{p['hover']}; }}
     def refresh_capture_status(self):
         paused = self._is_paused()
         self._capture_status.setText("שמירת העתקות כבויה בהגדרות" if not self._capture_enabled else
+                                     "נדרשת הרשאת לוח — פתח את הגדרות הכנת ה־Mac" if not self._capture_allowed() else
                                      "שמירת העתקות מושהית · תמלולים ממשיכים להישמר" if paused else
                                      "שמירת העתקות פעילה · נשמר מקומית במחשב")
         self._pause_btn.setText("המשך שמירה" if paused else "השהה שמירה")

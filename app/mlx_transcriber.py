@@ -32,10 +32,17 @@ class Transcriber:
             if not mx.metal.is_available():
                 raise RuntimeError("Metal is unavailable; no cloud fallback")
             self._module = importlib.import_module("mlx_whisper.transcribe")
-            self.model = self._module.ModelHolder.get_model(str(self.download.path), mx.float16)
-            from mlx_whisper.tokenizer import get_tokenizer
-            self._tokenizer = get_tokenizer(self.model.is_multilingual,
-                num_languages=self.model.num_languages, language=self.config.get("language", "he"), task="transcribe")
+            try:
+                loaded = self._module.ModelHolder.get_model(str(self.download.path), mx.float16)
+                from mlx_whisper.tokenizer import get_tokenizer
+                tokenizer = get_tokenizer(loaded.is_multilingual,
+                    num_languages=loaded.num_languages, language=self.config.get("language", "he"), task="transcribe")
+            except Exception:
+                self._module.ModelHolder.model = None
+                self._module.ModelHolder.model_path = None
+                mx.clear_cache()
+                raise
+            self.model, self._tokenizer = loaded, tokenizer
             self.device = "metal"
 
     ensure_loaded = load
