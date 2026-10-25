@@ -22,7 +22,7 @@ def verify():
         raise RuntimeError("Wrong platform backend was imported")
     from PySide6.QtWidgets import QApplication
     from PySide6.QtGui import QImage
-    from PySide6.QtCore import Qt
+    from PySide6.QtCore import Qt, QEvent, QEventLoop, QTimer
     from ui import AppUI, MainWindow
     import theme
     from config import DEFAULTS
@@ -32,16 +32,22 @@ def verify():
     ui = AppUI(dict(DEFAULTS), lambda: 0, lambda cfg: True, lambda: demo,
                lambda: True, lambda cue: None, lambda *args: True)
     window = MainWindow(ui, theme.DARK)
+    ui._win = window
     output = Path(os.environ["MYWHISPER_QA_OUTPUT"])
     output.mkdir(parents=True, exist_ok=True)
     for palette in (theme.DARK, theme.LIGHT):
-        window.set_palette(palette)
-        window.show()
-        qapp.processEvents()
-        image = QImage(window.size(), QImage.Format_ARGB32)
-        image.fill(Qt.transparent)
-        window.render(image)
-        if not image.save(str(output / ("macos-preview-" + palette["name"] + ".png"))):
-            raise RuntimeError("Could not save UI preview")
+        ui.set_theme(palette["name"])
+        for page, name in enumerate(("history", "dictionary", "settings")):
+            window._goto(page)
+            window.show()
+            qapp.sendPostedEvents(None, QEvent.DeferredDelete)
+            settled = QEventLoop()
+            QTimer.singleShot(100, settled.quit)
+            settled.exec()
+            image = QImage(window.size(), QImage.Format_ARGB32)
+            image.fill(Qt.transparent)
+            window.render(image)
+            if not image.save(str(output / f"macos-preview-{palette['name']}-{name}.png")):
+                raise RuntimeError("Could not save UI preview")
     window.hide()
     print("Mac bundle imports, local assets and VAD silence check passed; hardware behavior is not verified")

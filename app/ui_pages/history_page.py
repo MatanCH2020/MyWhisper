@@ -8,6 +8,7 @@ from PySide6.QtWidgets import QApplication, QDialog, QFrame, QHBoxLayout, QLabel
 
 import icons
 import theme
+from platform_support import IS_MAC
 
 
 class HistoryPageMixin:
@@ -18,7 +19,8 @@ class HistoryPageMixin:
         v.setSpacing(10)
         bar = QHBoxLayout()
         self.search = QLineEdit()
-        self.search.setPlaceholderText("חיפוש בתמלולים…   (Ctrl+F)")
+        shortcut = "Command+F" if IS_MAC else "Ctrl+F"
+        self.search.setPlaceholderText(f"חיפוש בתמלולים…   ({shortcut})")
         self.search.addAction(icons.icon("search", self.p["text_muted"], 16),
                               QLineEdit.LeadingPosition)
         # Debounced: rebuilding up to MAX_HISTORY_CARDS cards on every keystroke
