@@ -213,7 +213,7 @@ class ChangelogDialog(QDialog):
             s = ln.strip()
             if s.startswith("## "):
                 head = s[3:].strip()
-                m = re.search(r"(\d+\.\d+\.\d+)", head)
+                m = re.search(r"(\d+\.\d+\.\d+(?:b\d+)?)", head)
                 cur = {"head": head, "ver": m.group(1) if m else None, "items": []}
                 versions.append(cur)
             elif s.startswith("- ") and cur is not None:

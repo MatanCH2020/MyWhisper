@@ -35,7 +35,7 @@ def _changelog_versions():
     for line in CHANGELOG.read_text(encoding="utf-8").splitlines():
         s = line.strip()
         if s.startswith("## "):
-            m = re.search(r"(\d+\.\d+\.\d+)", s)
+            m = re.search(r"(\d+\.\d+\.\d+(?:b\d+)?)", s)
             if m:
                 out.append(m.group(1))
     return out
@@ -50,11 +50,12 @@ def _git_tags():
     if r.returncode != 0:
         return None
     return [t.lstrip("v") for t in r.stdout.split()
-            if re.fullmatch(r"v?\d+\.\d+\.\d+", t)]
+            if re.fullmatch(r"v?\d+\.\d+\.\d+(?:b\d+)?", t)]
 
 
 def _key(v):
-    return [int(x) for x in v.split(".")]
+    from packaging.version import Version
+    return Version(v)
 
 
 class ChangelogTestCase(unittest.TestCase):
