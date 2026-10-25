@@ -9,8 +9,9 @@ import logging
 import sys
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
+from platform_support import data_dir, log_dir
 
-LOG_PATH = Path(__file__).resolve().parent.parent / "mywhisper.log"
+LOG_PATH = log_dir() / "mywhisper.log"
 
 
 def setup():

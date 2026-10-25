@@ -12,7 +12,7 @@ REPO = "https://github.com/MatanCH2020/MyWhisper"
 
 def release_content():
     source = (ROOT / "app/version.py").read_text(encoding="utf-8")
-    version = re.search(r'__version__\s*=\s*"(\d+\.\d+\.\d+)"', source).group(1)
+    version = re.search(r'__version__\s*=\s*"(\d+\.\d+\.\d+(?:b\d+)?)"', source).group(1)
     sections = re.split(r"^## ", (ROOT / "CHANGELOG.md").read_text(encoding="utf-8"), flags=re.M)
     heading, notes = sections[1].split("\n", 1)
     if heading.strip() != f"גרסה {version}":
@@ -46,6 +46,29 @@ def main():
         changed = subprocess.run(["git", "diff", "--quiet", tag, "--", "app"], cwd=ROOT)
         if changed.returncode:
             raise ValueError(f"Application changed since {tag}; bump version.py and add a changelog section")
+    if "b" in version:
+        # Beta release links are separate from the published stable Windows blocks.
+        readme = ROOT / "README.md"
+        homepage = ROOT / "docs/index.html"
+        url = f"{REPO}/releases/download/{tag}/MyWhisper-{version}-macos-arm64.dmg"
+        beta_md = f"**בטא ל־Mac: {version}** · [הורדת DMG]({url}) · [מדריך ובדיקות](docs/macos-beta.md)\n\nApple Silicon M1 ומעלה · 16GB ומעלה · macOS 15 ומעלה · התקנה מחוץ לחנות · ללא ChatGPT. טרם אומת על מחשבי בודקים."
+        beta_html = f'<aside dir="rtl" data-mac-beta="{version}"><h2>בטא פרטית ל־Mac · {version}</h2><p>Apple Silicon M1 ומעלה, 16GB ומעלה, macOS 15 ומעלה. ללא ChatGPT. נדרשות בדיקות חומרה אצל בודקים.</p><a href="{url}">הורדת DMG לבדיקות</a> · <a href="{REPO}/blob/{tag}/docs/macos-beta.md">מדריך התקנה ובדיקות</a></aside>'
+        stale = []
+        for path, content in ((readme, beta_md), (homepage, beta_html)):
+            old = path.read_text(encoding="utf-8")
+            new = replace_block(old, "mac-beta", content)
+            if new != old:
+                stale.append(path.name)
+                if not args.check:
+                    path.write_text(new, encoding="utf-8")
+        if stale and args.check:
+            raise ValueError(f"Stale Mac beta information: {stale}")
+        if args.notes:
+            if args.check:
+                raise ValueError("--check cannot write notes")
+            args.notes.write_text(notes + "\n", encoding="utf-8")
+        print(f"Mac beta {tag}: metadata synchronized; stable Windows links preserved")
+        return
     items = []
     for line in [line[2:] for line in notes.splitlines() if line.startswith("- ")][:6]:
         escaped = html.escape(line)

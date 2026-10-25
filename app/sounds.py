@@ -3,7 +3,9 @@ at a gentle, configurable volume. Falls back to a quiet winsound beep if the WAV
 assets are missing."""
 import logging
 import wave
-import winsound
+from platform_support import IS_MAC, data_dir
+if not IS_MAC:
+    import winsound
 from pathlib import Path
 
 import numpy as np
@@ -27,7 +29,9 @@ def configure(enabled: bool = True, volume: float = 0.35):
 def _load(name):
     if name in _cache:
         return _cache[name]
-    path = ASSETS / f"{name}.wav"
+    path = data_dir() / "sounds" / f"{name}.wav" if IS_MAC else ASSETS / f"{name}.wav"
+    if not path.exists():
+        path = ASSETS / f"{name}.wav"
     data = None
     if path.exists():
         try:
@@ -48,7 +52,8 @@ def _play(name, fallback_freq):
     clip = _load(name)
     if clip is None:
         try:
-            winsound.Beep(fallback_freq, 100)
+            if not IS_MAC:
+                winsound.Beep(fallback_freq, 100)
         except RuntimeError:
             pass
         return
@@ -78,9 +83,10 @@ def import_sound(name: str, src_path: str) -> bool:
     """
     import av  # ships with faster-whisper
 
-    dst = ASSETS / f"{name}.wav"
+    target = data_dir() / "sounds" if IS_MAC else ASSETS
+    dst = target / f"{name}.wav"
     try:
-        ASSETS.mkdir(exist_ok=True)
+        target.mkdir(parents=True, exist_ok=True)
         container = av.open(str(src_path))
         stream = container.streams.audio[0]
         resampler = av.AudioResampler(format="s16", layout="mono", rate=44100)

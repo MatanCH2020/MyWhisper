@@ -42,3 +42,9 @@ desktop.ini
 .mywhisper-update.lock
 test-artifacts/
 /app/split_ui.py
+
+# Mac packaging and downloaded build-only assets
+build/
+dist/
+app/assets/silero_vad.onnx
+app/assets/SILERO-LICENSE.txt

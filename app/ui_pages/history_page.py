@@ -126,7 +126,7 @@ class HistoryPageMixin:
             v.addSpacing(8)
 
         v.addSpacing(6)
-        tip = QLabel("תמלול מקומי כברירת מחדל. עריכת טקסט בענן — לבחירתך.")
+        tip = QLabel("תמלול מקומי במחשב שלך." if not self.ui.cloud_supported else "תמלול מקומי כברירת מחדל. עריכת טקסט בענן — לבחירתך.")
         tip.setAlignment(Qt.AlignCenter)
         tip.setWordWrap(True)
         tip.setObjectName("hint")

@@ -3,6 +3,7 @@ import logging
 import queue
 import numpy as np
 import sounddevice as sd
+from platform_support import IS_MAC
 
 log = logging.getLogger("recorder")
 
@@ -84,6 +85,25 @@ def resolve_device(name):
     return None
 
 
+def capture_rate(device):
+    if not IS_MAC:
+        return SAMPLE_RATE
+    try:
+        sd.check_input_settings(device=device, channels=CHANNELS, dtype="float32", samplerate=SAMPLE_RATE)
+        return SAMPLE_RATE
+    except sd.PortAudioError:
+        return int(sd.query_devices(device, "input")["default_samplerate"])
+
+
+def resample_capture(audio, rate):
+    if rate == SAMPLE_RATE or not len(audio):
+        return audio
+    from math import gcd
+    from scipy.signal import resample_poly
+    divisor = gcd(SAMPLE_RATE, rate)
+    return resample_poly(audio, SAMPLE_RATE // divisor, rate // divisor).astype(np.float32)
+
+
 class MicrophoneUnavailable(RuntimeError):
     pass
 
@@ -117,9 +137,10 @@ class MicMonitor:
         """Open the given mic (name or None=default). Raises if it can't open."""
         self.stop()
         self._level = 0.0
+        device = selected_device(device_name)
         self._stream = sd.InputStream(
-            samplerate=SAMPLE_RATE, channels=CHANNELS, dtype="float32",
-            device=selected_device(device_name), callback=self._callback)
+            samplerate=capture_rate(device), channels=CHANNELS, dtype="float32",
+            device=device, callback=self._callback)
         try:
             self._stream.start()
         except Exception:
@@ -185,11 +206,13 @@ class Recorder:
         self._chunks = []
         self._q = queue.Queue()
         self._level = 0.0
+        device = self._resolve_device()
+        self._capture_rate = capture_rate(device)
         self._stream = sd.InputStream(
-            samplerate=SAMPLE_RATE,
+            samplerate=self._capture_rate,
             channels=CHANNELS,
             dtype="float32",
-            device=self._resolve_device(),
+            device=device,
             callback=self._callback,
         )
         try:
@@ -223,4 +246,4 @@ class Recorder:
         if not self._chunks:
             return np.array([], dtype=np.float32)
         audio = np.concatenate(self._chunks, axis=0).flatten().astype(np.float32)
-        return audio
+        return resample_capture(audio, getattr(self, "_capture_rate", SAMPLE_RATE))

@@ -91,7 +91,7 @@ def palette(name: str) -> dict:
 
 def pick_font() -> str:
     fams = set(QFontDatabase.families())
-    for name in ("Segoe UI Variable Text", "Segoe UI Variable", "Segoe UI", "Inter"):
+    for name in ("Segoe UI Variable Text", "Segoe UI Variable", "Segoe UI", "Arial Hebrew", "Arial", "Helvetica Neue", "Inter"):
         if name in fams:
             return name
     return "Segoe UI"

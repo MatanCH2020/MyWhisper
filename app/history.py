@@ -12,12 +12,13 @@ import threading
 import uuid
 from datetime import datetime
 from pathlib import Path
+from platform_support import data_dir, log_dir
 
 from safe_json import atomic_save, read_json
 
 log = logging.getLogger("history")
 
-HISTORY_PATH = Path(__file__).resolve().parent.parent / "history.json"
+HISTORY_PATH = data_dir() / "history.json"
 MAX_ENTRIES = 300
 
 _lock = threading.Lock()

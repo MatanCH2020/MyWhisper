@@ -27,5 +27,6 @@
   "theme": "dark",
   "chatgpt_enabled": false,
   "chatgpt_model": "",
-  "chatgpt_browser": "system"
+  "chatgpt_browser": "system",
+  "backend": "faster-whisper"
 }

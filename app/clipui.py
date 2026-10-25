@@ -314,10 +314,8 @@ QListWidget::item:hover {{ background:{p['hover']}; }}
 
     def _force_foreground(self):
         try:
-            import ctypes
-            hwnd = int(self.winId())
-            ctypes.windll.user32.ShowWindow(hwnd, 3 if self.isMaximized() else 5)
-            ctypes.windll.user32.SetForegroundWindow(hwnd)
+            from platform_support import bring_forward
+            bring_forward(self)
         except Exception:
             pass
 

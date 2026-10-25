@@ -1,3 +1,4 @@
+from platform_support import IS_MAC, CLOUD_SUPPORTED
 """MyWhisper UI (Qt / PySide6) — professional themed shell.
 
 A frameless branded window with a side nav rail and three pages (history,
@@ -188,7 +189,7 @@ class ChangelogDialog(QDialog):
     def _read_lines(self):
         try:
             from pathlib import Path
-            p = Path(__file__).resolve().parent.parent / "CHANGELOG.md"
+            p = (Path(__file__).resolve().parent if getattr(__import__("sys"), "frozen", False) else Path(__file__).resolve().parent.parent) / "CHANGELOG.md"
             if p.exists():
                 return p.read_text(encoding="utf-8").splitlines()
         except Exception:
@@ -313,12 +314,11 @@ def _blend(fg, bg, t):
 
 
 def _version_gt(a, b):
-    """True if version string a is newer than b (numeric dotted compare)."""
-    def parts(v):
-        return [int(x) for x in str(v).split(".") if x.isdigit()]
+    """Compare stable and beta versions without mistaking b10 for b1."""
+    from packaging.version import Version, InvalidVersion
     try:
-        return parts(a) > parts(b)
-    except Exception:
+        return Version(str(a)) > Version(str(b))
+    except InvalidVersion:
         return False
 
 
@@ -425,13 +425,13 @@ class HotkeyEdit(QPushButton):
         parts = []
         m = e.modifiers()
         if m & Qt.ControlModifier:
-            parts.append("ctrl")
+            parts.append("cmd" if IS_MAC else "ctrl")
         if m & Qt.AltModifier:
             parts.append("alt")
         if m & Qt.ShiftModifier:
             parts.append("shift")
         if m & Qt.MetaModifier:
-            parts.append("windows")
+            parts.append("ctrl" if IS_MAC else "windows")
         parts.append(name)
         self._finish("+".join(parts))
 
@@ -616,7 +616,8 @@ class MainWindow(HistoryPageMixin, DictionaryPageMixin, SettingsPageMixin, Frame
                                      ("dictionary", "מילון"),
                                      ("settings", "הגדרות"),
                                      ("copy", "העתקות")])
-        self.nav.set_tooltips(["Ctrl+1", "Ctrl+2", "Ctrl+3", "Ctrl+4 · תמלולים והעתקות"])
+        self.nav.set_tooltips([label.replace("Ctrl", "Command") if IS_MAC else label
+                               for label in ["Ctrl+1", "Ctrl+2", "Ctrl+3", "Ctrl+4 · תמלולים והעתקות"]])
         self.nav.selected.connect(self._goto)
         self.stack = QStackedWidget()
         page_wrap = QFrame()
@@ -880,6 +881,9 @@ class AppUI(QObject):
         self.model_status = lambda: None            # wired by main
         self.check_update = lambda: None            # wired by main
         self.do_update = lambda: False
+        self.cloud_supported = CLOUD_SUPPORTED
+        self.open_mac_setup = lambda: None
+        self.set_clip_hotkey = lambda combo: False
         self.chatgpt_status = lambda: {"accounts": [], "models": [], "enabled": False}
         self.chatgpt_action = lambda action, value=None: self.chatgpt_status()
         self.chatgpt_browsers = lambda: [{"slug": "system", "name": "דפדפן ברירת המחדל — חיצוני"}]
@@ -922,10 +926,8 @@ class AppUI(QObject):
         w.raise_()
         w.activateWindow()
         try:
-            import ctypes
-            hwnd = int(w.winId())
-            ctypes.windll.user32.ShowWindow(hwnd, 3 if w.isMaximized() else 5)
-            ctypes.windll.user32.SetForegroundWindow(hwnd)
+            from platform_support import bring_forward
+            bring_forward(w)
         except Exception:
             pass
 

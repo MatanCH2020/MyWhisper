@@ -21,12 +21,13 @@ import threading
 import uuid
 from datetime import datetime
 from pathlib import Path
+from platform_support import data_dir, log_dir
 
 from safe_json import atomic_save, read_json, report_error
 
 log = logging.getLogger("clips")
 
-_ROOT = Path(__file__).resolve().parent.parent
+_ROOT = data_dir()
 CLIPS_PATH = _ROOT / "clips.json"
 IMAGE_DIR = _ROOT / "clip_images"
 

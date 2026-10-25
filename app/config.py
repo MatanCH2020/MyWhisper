@@ -3,15 +3,19 @@ import json
 import logging
 import math
 from pathlib import Path
+from platform_support import data_dir, log_dir
+
+from platform_support import IS_MAC, defaults as platform_defaults
 
 from safe_json import atomic_save, read_json, report_error
 
 log = logging.getLogger("config")
 
 # config.json lives in the project root (one level above this app/ folder)
-CONFIG_PATH = Path(__file__).resolve().parent.parent / "config.json"
+CONFIG_PATH = data_dir() / "config.json"
 
 DEFAULTS = {
+    "backend": "faster-whisper",
     "hotkey": "ctrl+space",
     "model": "ivrit-ai/whisper-large-v3-ct2",
     "language": "he",
@@ -45,6 +49,8 @@ DEFAULTS = {
     "chatgpt_browser": "system",
 }
 
+DEFAULTS.update(platform_defaults())
+
 # Invalid values recover per key; unknown keys are preserved for compatibility.
 _RANGES = {
     "beam_size": (1, 100), "beam_size_cpu": (1, 100), "cpu_threads": (0, 256),
@@ -53,7 +59,8 @@ _RANGES = {
 }
 _CHOICES = {
     "chatgpt_browser": {"system", "chrome", "edge", "firefox", "brave", "opera", "vivaldi"},
-    "device": {"cuda", "cpu", "auto"}, "theme": {"dark", "light"},
+    "backend": {"faster-whisper", "mlx"},
+    "device": {"cuda", "cpu", "auto", "metal"}, "theme": {"dark", "light"},
     "compute_type": {"default", "auto", "int8", "int8_float16", "int8_float32",
                      "int8_bfloat16", "int16", "float16", "bfloat16", "float32"},
 }
@@ -87,6 +94,8 @@ def _validate(key, value):
 def load_config():
     cfg = dict(DEFAULTS)
     cfg.update(read_json(CONFIG_PATH, {}, lambda d: isinstance(d, dict)))
+    if IS_MAC:
+        cfg["chatgpt_enabled"] = False
     return {key: _validate(key, value) for key, value in cfg.items()
             if not key.startswith("llm_")}
 

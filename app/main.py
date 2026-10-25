@@ -7,7 +7,9 @@ into whatever field has focus.
 import ctypes
 import enum
 import os
-import updater
+from platform_support import IS_MAC
+if not IS_MAC:
+    import updater
 import subprocess
 import sys
 import threading
@@ -17,6 +19,11 @@ from pathlib import Path
 
 # Allow running as `python app/main.py` from the project root.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+if __name__ == "__main__" and "--verify-bundle" in sys.argv:
+    from macos_bundle_check import verify
+    verify()
+    sys.exit(0)
 
 # Qt manages per-monitor DPI awareness itself, so no manual ctypes DPI call.
 
@@ -31,6 +38,9 @@ _instance_mutex = None  # kept alive for the process lifetime (OS frees on exit)
 
 def _acquire_single_instance():
     global _instance_mutex
+    if IS_MAC:
+        from macos_system import acquire_single_instance
+        return acquire_single_instance()
     try:
         kernel32 = ctypes.windll.kernel32
         _instance_mutex = kernel32.CreateMutexW(None, False, _MUTEX_NAME)
@@ -63,18 +73,26 @@ import safe_json
 import theme
 from config import load_config, save_config
 from recorder import Recorder, has_input_device, list_input_devices, MicMonitor, MicrophoneUnavailable
-from transcriber import Transcriber
-from fullscreen import foreground_is_fullscreen
-from hotkey import HotkeyManager, TempHotkey
+if IS_MAC:
+    from mlx_transcriber import Transcriber
+    from macos_system import foreground_is_fullscreen, foreground_window, same_destination, DestinationGuard
+    from macos_hotkey import HotkeyManager, TempHotkey
+    from macos_clipboard import paste_text
+else:
+    from transcriber import Transcriber
+    from fullscreen import foreground_is_fullscreen
+    from hotkey import HotkeyManager, TempHotkey
+    from paste import paste_text
+    from delivery import foreground_window, same_destination, DestinationGuard
 from ui import AppUI
-from paste import paste_text
 from tray import Tray
-from cloud_http import CloudHTTP
-from chatgpt_auth import ChatGPTAuth, AuthError, DEFAULT_MODEL
-from history_scanner import HistoryScanner
-from text_editor import TextEditor
-from delivery import foreground_window, same_destination, DestinationGuard
-from external_browser import browser_choices, open_external_browser
+if not IS_MAC:
+    from cloud_http import CloudHTTP
+    from chatgpt_auth import ChatGPTAuth, AuthError, DEFAULT_MODEL
+    from history_scanner import HistoryScanner
+    from text_editor import TextEditor
+    from external_browser import browser_choices, open_external_browser
+
 
 
 class State(enum.Enum):
@@ -103,15 +121,17 @@ class Mywishper(QObject):
         self._load_finished.connect(self._finish_load)
         self._storage_error.connect(self._show_storage_error)
         self.config = load_config()
-        self.cloud_http = CloudHTTP()
-        self.chatgpt = ChatGPTAuth(self.cloud_http)
-        self.text_editor = TextEditor(self.chatgpt, self.cloud_http)
-        self.history_scanner = HistoryScanner(self.chatgpt, self.cloud_http)
-        self._set_chatgpt_enabled(self.config.get("chatgpt_enabled") is True)
-        self._cloud_timer = QTimer(self)
-        self._cloud_timer.timeout.connect(self.chatgpt.schedule_refresh)
-        self._cloud_timer.start(30000)
-        self.chatgpt.schedule_refresh()
+        self._cloud_timer = None
+        if not IS_MAC:
+            self.cloud_http = CloudHTTP()
+            self.chatgpt = ChatGPTAuth(self.cloud_http)
+            self.text_editor = TextEditor(self.chatgpt, self.cloud_http)
+            self.history_scanner = HistoryScanner(self.chatgpt, self.cloud_http)
+            self._set_chatgpt_enabled(self.config.get("chatgpt_enabled") is True)
+            self._cloud_timer = QTimer(self)
+            self._cloud_timer.timeout.connect(self.chatgpt.schedule_refresh)
+            self._cloud_timer.start(30000)
+            self.chatgpt.schedule_refresh()
         self._apply_sound_config()
 
         self.recorder = Recorder(self.config.get("input_device") or None)
@@ -182,15 +202,18 @@ class Mywishper(QObject):
         self.ui.model_status = self._model_status
         self.ui.check_update = self._check_update
         self.ui.do_update = self._do_update
-        self.ui.chatgpt_status = self._chatgpt_status
-        self.ui.chatgpt_action = self._chatgpt_action
-        self.ui.chatgpt_browsers = browser_choices
-        self.ui.scan_history = self._scan_history
-        self.ui.cancel_history_scan = self.history_scanner.cancel
-        self.ui.undo_history_scan = self.history_scanner.undo
-        self.ui.can_undo_history_scan = self.history_scanner.can_undo
-        self.ui.history_scan_report = self.history_scanner.report
-        self.ui.prepare_history_scan = self.history_scanner.prepare
+        self.ui.open_mac_setup = self.open_mac_setup
+        self.ui.set_clip_hotkey = self._set_clip_hotkey
+        if not IS_MAC:
+            self.ui.chatgpt_status = self._chatgpt_status
+            self.ui.chatgpt_action = self._chatgpt_action
+            self.ui.chatgpt_browsers = browser_choices
+            self.ui.scan_history = self._scan_history
+            self.ui.cancel_history_scan = self.history_scanner.cancel
+            self.ui.undo_history_scan = self.history_scanner.undo
+            self.ui.can_undo_history_scan = self.history_scanner.can_undo
+            self.ui.history_scan_report = self.history_scanner.report
+            self.ui.prepare_history_scan = self.history_scanner.prepare
 
         self._lock = threading.Lock()
         self._state = State.IDLE
@@ -201,6 +224,31 @@ class Mywishper(QObject):
         self._model_ever_ready = False  # first successful load happened
         self._last_used = time.monotonic()
         self._resource_timer = None     # idle / fullscreen release poll
+
+    def open_mac_setup(self):
+        if not IS_MAC:
+            return
+        from macos_setup import MacSetup
+        if not hasattr(self, "_mac_setup"):
+            self._mac_setup = MacSetup(self.transcriber.download, self._start_load_async)
+        self._mac_setup.show()
+        self._mac_setup.raise_()
+        self._mac_setup.activateWindow()
+
+    def _set_clip_hotkey(self, combo):
+        if self.clip_hotkeys is None:
+            return False
+        previous = self.config.get("clipboard_hotkey")
+        try:
+            self.clip_hotkeys.rebind(combo)
+        except (ValueError, OSError):
+            return False
+        self.config["clipboard_hotkey"] = combo
+        if not save_config(self.config):
+            self.config["clipboard_hotkey"] = previous
+            self.clip_hotkeys.rebind(previous)
+            return False
+        return True
 
     def _apply_sound_config(self):
         sounds.configure(
@@ -314,6 +362,8 @@ class Mywishper(QObject):
     def _on_settings_change(self, config):
         """Called from the settings UI when sound options change: apply + persist."""
         self.config = config
+        if IS_MAC:
+            self.config["chatgpt_enabled"] = False
         self._apply_sound_config()
         palette = theme.palette(self.config.get("theme", "dark"))
         self.tray.set_palette(palette)
@@ -458,6 +508,10 @@ class Mywishper(QObject):
         """Return the latest published version string (e.g. '1.8.1'), or None on
         failure. Called from a worker thread by the settings UI."""
         try:
+            if IS_MAC:
+                from macos_updates import check
+                latest, self._mac_update_url = check()
+                return latest
             import json
             import urllib.request
             url = "https://api.github.com/repos/MatanCH2020/MyWhisper/releases/latest"
@@ -470,6 +524,11 @@ class Mywishper(QObject):
 
     def _do_update(self):
         """Prepare in the background while the current installation stays usable."""
+        if IS_MAC:
+            from PySide6.QtCore import QUrl
+            from PySide6.QtGui import QDesktopServices
+            url = getattr(self, "_mac_update_url", None)
+            return bool(url and QDesktopServices.openUrl(QUrl(url)))
         if self._updating or self._state != State.IDLE or self._loading:
             return False
         self._updating = True
@@ -559,10 +618,15 @@ class Mywishper(QObject):
         self.tray.notify(
             "MyWhisper — בעיית מיקרופון",
             message or "לא ניתן להתחיל הקלטה. ודא שמחובר מיקרופון והוא מוגדר כהתקן הקלט "
-            "ברירת המחדל ב-Windows (הגדרות ← מערכת ← קול). פרטים ב-mywhisper.log.",
+            "ברירת המחדל בהגדרות הקול של מערכת ההפעלה. פרטים ביומן האפליקציה.",
             "warning")
 
     def _start_recording(self):
+        if IS_MAC:
+            from macos_system import microphone_status
+            if microphone_status() != 3:
+                self.open_mac_setup()
+                raise MicrophoneUnavailable("יש לאשר גישה למיקרופון במסך הכנת ה־Mac.")
         self.recorder.start()
         self._state = State.RECORDING
         self.tray.set_state("recording", "MyWhisper — מקליט...")
@@ -644,7 +708,7 @@ class Mywishper(QObject):
                 logical = corrections.apply(text)
                 original = logical
                 edit = None
-                if self.config.get("chatgpt_enabled") is True:
+                if not IS_MAC and self.config.get("chatgpt_enabled") is True:
                     if not getattr(self, "_fullscreen_paused", False):
                         self.ui.set_overlay_state("polishing")
                     edit = self.text_editor.edit(logical, self.config.get("chatgpt_model", ""))
@@ -759,7 +823,7 @@ class Mywishper(QObject):
         if not has_input_device():
             QTimer.singleShot(2500, lambda: self.tray.notify(
                 "MyWhisper — לא נמצא מיקרופון",
-                "לא זוהה התקן הקלטה. חבר מיקרופון והגדר אותו כברירת מחדל ב-Windows "
+                "לא זוהה התקן הקלטה. חבר מיקרופון והגדר אותו בהגדרות הקול של המערכת "
                 "(הגדרות ← מערכת ← קול), אחרת ההקלטה לא תעבוד.", "warning"))
         self._start_load_async()
         # If loading is still going after a few seconds (first-run download),
@@ -776,6 +840,10 @@ class Mywishper(QObject):
         """Load (or reload) the model in the background if not already loading."""
         if self._sync_fullscreen():
             return
+        if IS_MAC and not self.transcriber.download.ready():
+            if not self._startup:
+                self.open_mac_setup()
+            return
         if self._loading or self.transcriber.is_loaded():
             return
         self._loading = True
@@ -789,7 +857,7 @@ class Mywishper(QObject):
             self.tray.notify(
                 "MyWhisper — טוען מודל",
                 "מודל התמלול נטען ברקע. בהפעלה הראשונה זו הורדה חד-פעמית "
-                "של כ-2GB — האייקון במגש יהפוך אפור כשהכול מוכן.")
+                "של כ-3GB — סמל האפליקציה יהפוך אפור כשהכול מוכן.")
 
     def _load_model(self):
         try:
@@ -904,11 +972,14 @@ class Mywishper(QObject):
             self.tray.notify("MyWhisper", "יש להמתין לסיום הפעולה לפני יציאה או עדכון.")
             return
         self._closing = True
-        self._cloud_timer.stop()
-        self.chatgpt.close()
-        self.text_editor.cancel()
-        self.history_scanner.cancel()
-        self.cloud_http.close()
+        if not IS_MAC:
+            self._cloud_timer.stop()
+            self.chatgpt.close()
+            self.text_editor.cancel()
+            self.history_scanner.cancel()
+            self.cloud_http.close()
+        elif hasattr(self, "_mac_setup"):
+            self._mac_setup.cancel_download()
         if self.recorder.recording:
             self.cancel_recording()
         self.mic_monitor.stop()
@@ -930,6 +1001,15 @@ class Mywishper(QObject):
 def main():
     # QApplication must exist before any widget (tray / overlay / windows).
     qapp = QApplication.instance() or QApplication(sys.argv)
+    if IS_MAC:
+        from macos_dispatch import initialize
+        initialize()
+        from macos_setup import system_problem
+        from PySide6.QtWidgets import QMessageBox
+        problem = system_problem()
+        if problem:
+            QMessageBox.warning(None, "MyWhisper — דרישות הבטא", problem)
+            return
     qapp.setQuitOnLastWindowClosed(False)  # closing settings keeps the tray alive
     # Own taskbar identity: without an explicit AppUserModelID Windows groups
     # the window under python.exe and shows the Python icon.

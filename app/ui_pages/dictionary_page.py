@@ -25,76 +25,77 @@ class DictionaryPageMixin:
         box = self._scroll(v)
 
         self._scan_busy = False
-        scan, scan_box = self._collapsible_card(
-            "סריקת תמלולים עם ChatGPT", "פעולה ידנית בענן · דורשת חיבור והפעלה", expanded=False)
-        self._scan_panel = scan
-        explanation = QLabel("סריקה לפי המשפט המלא: תיקון כתיב בעברית וכתיבת מונחים לועזיים באנגלית. "
-            "תיקונים עקביים יילמדו להכתבות הבאות; תיקוני הקשר יישארו במשפט בלבד. "
-            "לחיצה תשלח את היסטוריית התמלולים ל־OpenAI דרך החשבון והמודל שבחרת. "
-            "הסריקה ידנית ומשתמשת במכסת החשבון; האודיו והיסטוריית ההעתקות אינם נשלחים.")
-        explanation.setWordWrap(True)
-        explanation.setObjectName("cardtext")
-        scan_box.addWidget(explanation)
-        self._scan_status = QLabel("להפעלת הסריקה, חבר חשבון והפעל עריכת טקסט בהגדרות.")
-        self._scan_status.setWordWrap(True)
-        self._scan_status.setObjectName("scanstatus")
-        self._scan_status.setTextFormat(Qt.PlainText)
-        self._scan_status.setAccessibleName("מצב סריקת ההיסטוריה")
-        scan_box.addWidget(self._scan_status)
-        self._scan_activity = QLabel("")
-        self._scan_activity.setWordWrap(True)
-        self._scan_activity.setTextFormat(Qt.PlainText)
-        self._scan_activity.setObjectName("fieldlabel")
-        scan_box.addWidget(self._scan_activity)
-        self._scan_summary = QWidget()
-        stats = QGridLayout(self._scan_summary)
-        stats.setContentsMargins(0, 4, 0, 4)
-        self._scan_stats = {}
-        for index, (key, title) in enumerate((("checked", "תמלולים שנבדקו"), ("corrected", "תמלולים שתוקנו"),
-                                             ("learned", "תיקונים שנלמדו"), ("english", "מונחים באנגלית שנוספו"))):
-            label = QLabel(title + ": 0")
-            label.setObjectName("fieldlabel")
-            label.setWordWrap(True)
-            self._scan_stats[key] = label
-            stats.addWidget(label, index // 2, index % 2)
-        self._scan_summary.hide()
-        scan_box.addWidget(self._scan_summary)
-        self._scan_note = QLabel("")
-        self._scan_note.setTextFormat(Qt.PlainText)
-        self._scan_note.setWordWrap(True)
-        self._scan_note.setObjectName("cardtext")
-        scan_box.addWidget(self._scan_note)
-        self._scan_requirement = QLabel()
-        self._scan_requirement.setWordWrap(True)
-        self._scan_requirement.setObjectName("fieldlabel")
-        scan_box.addWidget(self._scan_requirement)
-        self._scan_bar = QProgressBar()
-        self._scan_bar.setObjectName("scanprogress")
-        self._scan_bar.setAccessibleName("התקדמות סריקת התמלולים")
-        self._scan_bar.setVisible(False)
-        scan_box.addWidget(self._scan_bar)
-        scan_buttons = QHBoxLayout()
-        self._scan_start = self._accent_btn("סרוק ותקן את ההיסטוריה", self._start_history_scan)
-        self._scan_cancel = QPushButton("בטל סריקה")
-        self._scan_cancel.clicked.connect(self._cancel_history_scan)
-        self._scan_cancel.hide()
-        self._scan_undo = QPushButton("בטל את התיקונים שנשמרו")
-        self._scan_undo.clicked.connect(self._undo_history_scan)
-        self._scan_undo.setToolTip("מבטל את הסריקה האחרונה שנשמרה, גם לאחר הפעלה מחדש, תוך שמירת עריכות חדשות.")
-        self._scan_details = QPushButton("הצג תוצאות")
-        self._scan_details.clicked.connect(self._show_scan_details)
-        scan_buttons.addWidget(self._scan_start)
-        scan_buttons.addWidget(self._scan_cancel)
-        scan_box.addLayout(scan_buttons)
-        scan_secondary = QHBoxLayout()
-        scan_secondary.addWidget(self._scan_details)
-        scan_secondary.addWidget(self._scan_undo)
-        scan_box.addLayout(scan_secondary)
-        self._scan_elapsed_timer = QTimer(self)
-        self._scan_elapsed_timer.setInterval(1000)
-        self._scan_elapsed_timer.timeout.connect(self._update_scan_activity)
-        self._scan_report = {}
-        self._refresh_scan_controls()
+        if self.ui.cloud_supported:
+            scan, scan_box = self._collapsible_card(
+                "סריקת תמלולים עם ChatGPT", "פעולה ידנית בענן · דורשת חיבור והפעלה", expanded=False)
+            self._scan_panel = scan
+            explanation = QLabel("סריקה לפי המשפט המלא: תיקון כתיב בעברית וכתיבת מונחים לועזיים באנגלית. "
+                "תיקונים עקביים יילמדו להכתבות הבאות; תיקוני הקשר יישארו במשפט בלבד. "
+                "לחיצה תשלח את היסטוריית התמלולים ל־OpenAI דרך החשבון והמודל שבחרת. "
+                "הסריקה ידנית ומשתמשת במכסת החשבון; האודיו והיסטוריית ההעתקות אינם נשלחים.")
+            explanation.setWordWrap(True)
+            explanation.setObjectName("cardtext")
+            scan_box.addWidget(explanation)
+            self._scan_status = QLabel("להפעלת הסריקה, חבר חשבון והפעל עריכת טקסט בהגדרות.")
+            self._scan_status.setWordWrap(True)
+            self._scan_status.setObjectName("scanstatus")
+            self._scan_status.setTextFormat(Qt.PlainText)
+            self._scan_status.setAccessibleName("מצב סריקת ההיסטוריה")
+            scan_box.addWidget(self._scan_status)
+            self._scan_activity = QLabel("")
+            self._scan_activity.setWordWrap(True)
+            self._scan_activity.setTextFormat(Qt.PlainText)
+            self._scan_activity.setObjectName("fieldlabel")
+            scan_box.addWidget(self._scan_activity)
+            self._scan_summary = QWidget()
+            stats = QGridLayout(self._scan_summary)
+            stats.setContentsMargins(0, 4, 0, 4)
+            self._scan_stats = {}
+            for index, (key, title) in enumerate((("checked", "תמלולים שנבדקו"), ("corrected", "תמלולים שתוקנו"),
+                                                 ("learned", "תיקונים שנלמדו"), ("english", "מונחים באנגלית שנוספו"))):
+                label = QLabel(title + ": 0")
+                label.setObjectName("fieldlabel")
+                label.setWordWrap(True)
+                self._scan_stats[key] = label
+                stats.addWidget(label, index // 2, index % 2)
+            self._scan_summary.hide()
+            scan_box.addWidget(self._scan_summary)
+            self._scan_note = QLabel("")
+            self._scan_note.setTextFormat(Qt.PlainText)
+            self._scan_note.setWordWrap(True)
+            self._scan_note.setObjectName("cardtext")
+            scan_box.addWidget(self._scan_note)
+            self._scan_requirement = QLabel()
+            self._scan_requirement.setWordWrap(True)
+            self._scan_requirement.setObjectName("fieldlabel")
+            scan_box.addWidget(self._scan_requirement)
+            self._scan_bar = QProgressBar()
+            self._scan_bar.setObjectName("scanprogress")
+            self._scan_bar.setAccessibleName("התקדמות סריקת התמלולים")
+            self._scan_bar.setVisible(False)
+            scan_box.addWidget(self._scan_bar)
+            scan_buttons = QHBoxLayout()
+            self._scan_start = self._accent_btn("סרוק ותקן את ההיסטוריה", self._start_history_scan)
+            self._scan_cancel = QPushButton("בטל סריקה")
+            self._scan_cancel.clicked.connect(self._cancel_history_scan)
+            self._scan_cancel.hide()
+            self._scan_undo = QPushButton("בטל את התיקונים שנשמרו")
+            self._scan_undo.clicked.connect(self._undo_history_scan)
+            self._scan_undo.setToolTip("מבטל את הסריקה האחרונה שנשמרה, גם לאחר הפעלה מחדש, תוך שמירת עריכות חדשות.")
+            self._scan_details = QPushButton("הצג תוצאות")
+            self._scan_details.clicked.connect(self._show_scan_details)
+            scan_buttons.addWidget(self._scan_start)
+            scan_buttons.addWidget(self._scan_cancel)
+            scan_box.addLayout(scan_buttons)
+            scan_secondary = QHBoxLayout()
+            scan_secondary.addWidget(self._scan_details)
+            scan_secondary.addWidget(self._scan_undo)
+            scan_box.addLayout(scan_secondary)
+            self._scan_elapsed_timer = QTimer(self)
+            self._scan_elapsed_timer.setInterval(1000)
+            self._scan_elapsed_timer.timeout.connect(self._update_scan_activity)
+            self._scan_report = {}
+            self._refresh_scan_controls()
 
         # --- English glossary: terms kept in Latin during transcription ---
         box.addWidget(self._section("מונחים באנגלית  ·  יישארו באנגלית בתמלול"))
@@ -128,7 +129,8 @@ class DictionaryPageMixin:
         self._dict_box.setSpacing(6)
         box.addWidget(corr_container)
 
-        box.addWidget(scan)
+        if self.ui.cloud_supported:
+            box.addWidget(scan)
 
         box.addStretch(1)
         report = self.ui.history_scan_report()
@@ -137,6 +139,8 @@ class DictionaryPageMixin:
         return w
 
     def _refresh_scan_controls(self, status=None):
+        if not self.ui.cloud_supported:
+            return
         st = status if status is not None else self.ui.chatgpt_status()
         ready = (st.get("enabled") is True and st.get("connected") and st.get("eligible")
                  and st.get("model") in {m["slug"] for m in st.get("models", [])}

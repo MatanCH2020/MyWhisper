@@ -18,12 +18,13 @@ import re
 import threading
 from functools import lru_cache
 from pathlib import Path
+from platform_support import data_dir, log_dir
 
 from safe_json import atomic_save, read_json
 
 log = logging.getLogger("corrections")
 
-_ROOT = Path(__file__).resolve().parent.parent
+_ROOT = data_dir()
 CORRECTIONS_PATH = _ROOT / "corrections.json"
 DICTIONARY_PATH = _ROOT / "dictionary.json"
 ENGLISH_TERMS_PATH = _ROOT / "english_terms.json"

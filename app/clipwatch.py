@@ -26,6 +26,7 @@ from PySide6.QtCore import QObject, Signal
 from PySide6.QtGui import QImageReader
 from PySide6.QtWidgets import QApplication
 
+from platform_support import IS_MAC
 import clips
 
 log = logging.getLogger("clipwatch")
@@ -57,7 +58,13 @@ class ClipboardWatcher(QObject):
         self._paused = False
         self._suppress_until = 0.0
         self._last_text = None
-        self._clip = QApplication.clipboard()
+        if IS_MAC:
+            from macos_clipboard import ClipboardSource
+            self._clip = ClipboardSource()
+            self._clip.should_capture = lambda: (not self._closed and not self._paused
+                                                and time.monotonic() >= self._suppress_until)
+        else:
+            self._clip = QApplication.clipboard()
         self._clip.dataChanged.connect(self._on_data_changed)
         # Seed with whatever is already on the clipboard so the first real copy
         # isn't mistaken for a repeat of it.
@@ -70,6 +77,8 @@ class ClipboardWatcher(QObject):
         if self._closed:
             return
         self._closed = True
+        if IS_MAC:
+            self._clip.close()
         try:
             self._clip.dataChanged.disconnect(self._on_data_changed)
         except (AttributeError, RuntimeError, TypeError):

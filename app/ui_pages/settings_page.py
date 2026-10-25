@@ -1,3 +1,4 @@
+from platform_support import IS_MAC
 """Settings page behavior for the Qt shell; backends are injected."""
 import threading
 
@@ -36,6 +37,10 @@ class SettingsPageMixin:
         self._status_sub.setWordWrap(True)
         self._status_sub.setObjectName("hint")
         stc.vbox.addWidget(self._status_sub)
+        if IS_MAC:
+            setup = QPushButton("הרשאות, מודל והפעלה בכניסה ל־Mac")
+            setup.clicked.connect(self.ui.open_mac_setup)
+            stc.vbox.addWidget(setup)
         v.addWidget(stc)
         self._status_timer = QTimer(self)
         self._status_timer.timeout.connect(self._refresh_model_status)
@@ -81,7 +86,7 @@ class SettingsPageMixin:
         mrow.addWidget(self._tool_btn("refresh", "רענן", self._populate_mics))
         mc.vbox.addLayout(mrow)
         mic_hint = QLabel("בחר את המיקרופון להקלטה. \"ברירת מחדל של המערכת\" עוקב אחר "
-                          "ההתקן שמוגדר ב-Windows. אם הרשימה ריקה — אין מיקרופון מחובר.")
+                          "ההתקן שמוגדר במערכת ההפעלה. אם הרשימה ריקה — אין מיקרופון מחובר.")
         mic_hint.setWordWrap(True)
         mic_hint.setObjectName("hint")
         mc.vbox.addWidget(mic_hint)
@@ -177,6 +182,13 @@ class SettingsPageMixin:
         open_clips.clicked.connect(self.ui.open_clips)
         crow.addWidget(open_clips)
         cbox.addLayout(crow)
+        clip_edit = HotkeyEdit(self.p, self.ui.config.get("clipboard_hotkey", "ctrl+`"))
+        def set_clip_shortcut(combo):
+            if not self.ui.set_clip_hotkey(combo):
+                clip_edit.reset()
+                QMessageBox.warning(self, "MyWhisper", "קיצור הלוח אינו זמין. בחר צירוף אחר.")
+        clip_edit.captured.connect(set_clip_shortcut)
+        cbox.addWidget(clip_edit)
         prow = QHBoxLayout()
         prow.addWidget(self._plain("השהה מעקב העתקות"))
         prow.addStretch(1)
@@ -199,11 +211,12 @@ class SettingsPageMixin:
         v.addWidget(cc)
         self._refresh_clip_count()
 
-        self._cloud_panel, cloud_box = self._collapsible_card(
-            "עריכת טקסט עם ChatGPT · לבחירתך", "תמלול מקומי עובד גם ללא חיבור לחשבון",
-            expanded=self.ui.config.get("chatgpt_enabled") is True)
-        cloud_box.addWidget(self._chatgpt_card())
-        v.addWidget(self._cloud_panel)
+        if self.ui.cloud_supported:
+            self._cloud_panel, cloud_box = self._collapsible_card(
+                "עריכת טקסט עם ChatGPT · לבחירתך", "תמלול מקומי עובד גם ללא חיבור לחשבון",
+                expanded=self.ui.config.get("chatgpt_enabled") is True)
+            cloud_box.addWidget(self._chatgpt_card())
+            v.addWidget(self._cloud_panel)
 
         # updates / version
         upc, ubox = self._collapsible_card(
@@ -342,6 +355,8 @@ class SettingsPageMixin:
         return card
 
     def _refresh_cloud(self, status=None):
+        if not self.ui.cloud_supported:
+            return
         self._refresh_scan_controls(status)
         if self._cloud_busy:
             return
@@ -596,10 +611,10 @@ class SettingsPageMixin:
             color, text = self.p["text_muted"], "מושהה — מסך מלא"
             sub = "קיצור ההקלטה כבוי. המודל משתחרר בסיום עבודה פעילה; הקיצור יחזור ביציאה ממסך מלא."
         elif state == "ready":
-            where = "על ה-GPU" if dev == "cuda" else "על המעבד (CPU)"
+            where = "על Apple GPU / Metal" if dev == "metal" else "על ה-GPU" if dev == "cuda" else "על המעבד (CPU)"
             color, text = ok, f"טעון ומוכן — רץ {where}"
             sub = ("המודל שמור בזיכרון, כך שהתמלול מתחיל מיד."
-                   if dev == "cuda" else
+                   if dev in ("cuda", "metal") else
                    "רץ על המעבד — איטי בהרבה מ-GPU. בדוק דרייבר NVIDIA וספריות CUDA.")
         elif state == "loading":
             color, text = self.p["accent"], "נטען…"
@@ -649,6 +664,10 @@ class SettingsPageMixin:
 
 
     def _on_update_now(self):
+        if IS_MAC:
+            if self.ui.do_update():
+                QMessageBox.information(self, "עדכון בטא ל־Mac", "הורד את קובץ ה־DMG מהגרסה שנפתחה, סגור את MyWhisper והחלף את האפליקציה ב־Applications. הנתונים נשמרים בנפרד.")
+            return
         if self.ui.do_update():
             QMessageBox.information(
                 self, "MyWhisper",

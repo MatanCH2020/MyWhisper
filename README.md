@@ -382,3 +382,17 @@ CI מריץ את אותה בדיקה עם `--check` ונכשל אם המידע �
 <img src="docs/app-fullscreen-paused.png" width="780" alt="חיווי השהיית ההקלטה במסך מלא — צילום הדגמה">
 
 [פרטי בדיקות Windows, שחרור GPU ומגבלות האימות](docs/fullscreen-pause-validation.md).
+
+<!-- mac-beta:start -->
+**בטא ל־Mac: 1.15.0b1** · [הורדת DMG](https://github.com/MatanCH2020/MyWhisper/releases/download/v1.15.0b1/MyWhisper-1.15.0b1-macos-arm64.dmg) · [מדריך ובדיקות](docs/macos-beta.md)
+
+Apple Silicon M1 ומעלה · 16GB ומעלה · macOS 15 ומעלה · התקנה מחוץ לחנות · ללא ChatGPT. טרם אומת על מחשבי בודקים.
+<!-- mac-beta:end -->
+
+### הגדרות מנוע לפי מערכת
+
+| מפתח | Windows | Mac |
+|---|---|---|
+| `backend` | `faster-whisper` | `mlx` |
+
+ב־Mac ברירות המחדל הן `device=metal`, מודל `mlx-community/ivrit-ai-whisper-large-v3-mlx`, קיצור תמלול `ctrl+alt+space` וקיצור לוח `ctrl+alt+v`. בחירת מנוע אחרת בבטא אינה נתמכת. דוגמה מלאה: `app/config.macos.example.json`. נתונים נשמרים ב־Library/Application Support/MatanDigital/MyWhisper; הגדרות Windows קיימות נשמרות.

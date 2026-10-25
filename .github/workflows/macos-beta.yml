@@ -1,0 +1,48 @@
+name: macOS beta
+on:
+  push:
+    branches: [main, 'codex/macos-beta']
+    tags: ['v*b*']
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: macos-15
+    timeout-minutes: 45
+    env:
+      PYTHONIOENCODING: utf-8
+      QT_QPA_PLATFORM: offscreen
+      MACOSX_DEPLOYMENT_TARGET: '15.0'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          architecture: arm64
+          cache: pip
+          cache-dependency-path: requirements-macos.txt
+      - name: Install native dependencies
+        run: |
+          test "$(uname -m)" = arm64
+          python -m pip install -r requirements-macos.txt
+          python -m pip check
+      - name: Verify source and regression contracts
+        run: |
+          python -m compileall -q app scripts
+          python scripts/fetch_mac_assets.py
+          python scripts/test_macos.py
+          python scripts/sync_release.py --check
+      - name: Build and verify ad-hoc signed DMG
+        run: python scripts/build_macos.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: MyWhisper-macos-arm64-beta
+          path: |
+            dist/*.dmg
+            dist/SHA256SUMS.txt
+            dist/macos-build-requirements.txt
+          if-no-files-found: error
