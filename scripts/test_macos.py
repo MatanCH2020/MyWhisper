@@ -6,7 +6,8 @@ import unittest
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 WINDOWS_SUITES = {"test_chatgpt", "test_delivery_guard", "test_fullscreen_pause",
-                  "test_stability", "test_transcriber", "test_unified_history", "test_updater"}
+                  "test_stability", "test_transcriber", "test_unified_history", "test_updater",
+                  "test_external_browser", "test_history_scanner"}
 
 if __name__ == "__main__":
     # Existing QClipboard tests exercise shared storage/privacy contracts using Qt.

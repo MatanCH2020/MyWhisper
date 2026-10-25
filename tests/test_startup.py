@@ -65,7 +65,8 @@ class StartupTest(unittest.TestCase):
     def test_only_manual_launch_opens_main_window(self):
         for args, visible in ((["main.py"], True), (["main.py", "--startup"], False)):
             with self.subTest(args=args):
-                with patch.object(main.sys, "argv", args), \
+                with patch.object(main, "IS_MAC", False), \
+                     patch.object(main.sys, "argv", args), \
                      patch.object(main.sys, "exit"), \
                      patch.object(main, "QApplication") as application, \
                      patch.object(main, "Mywishper") as backend, \
