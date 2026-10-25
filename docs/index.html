@@ -719,6 +719,10 @@ footer a{color:var(--muted);transition:color 0.2s}footer a:hover{color:var(--tex
 /* mobile: center everything, no clipped text */
 @media (max-width:640px){
   .wrap{padding:0 20px}
+  .nav-in{grid-template-columns:minmax(0,1fr) auto;gap:12px}
+  .nav-in .brand{font-size:20px;min-width:0}
+  .nav-in .brand small{display:none}
+  .nav-in .gh{font-size:14px}
   .split>div, .split .eyebrow{text-align:center!important}
   .pt{justify-content:center}
   .step, .card{text-align:center}
@@ -727,6 +731,7 @@ footer a{color:var(--muted);transition:color 0.2s}footer a:hover{color:var(--tex
   .inst{text-align:center}
   .inst-head{justify-content:center}
   .inst ol{display:inline-block;text-align:right}
+  .inst code{overflow-wrap:anywhere}
   .inst .btn{white-space:normal}
   .cta-sub{gap:8px 16px}
   .final .box{padding:48px 24px}
