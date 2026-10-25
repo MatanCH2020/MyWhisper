@@ -38,7 +38,7 @@ def verify():
     for palette in (theme.DARK, theme.LIGHT):
         ui.set_theme(palette["name"])
         for page, name in enumerate(("history", "dictionary", "settings")):
-            window._goto(page)
+            window._goto(page, from_nav=False)
             window.show()
             qapp.sendPostedEvents(None, QEvent.DeferredDelete)
             settled = QEventLoop()
