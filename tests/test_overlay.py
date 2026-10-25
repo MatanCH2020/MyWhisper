@@ -9,7 +9,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "app"))
 from PySide6.QtCore import QAbstractAnimation, QPoint, QRect, QSize, Qt
 from PySide6.QtGui import QFontDatabase, QFontMetricsF
-from PySide6.QtTest import QTest
+from PySide6.QtTest import QTest, QSignalSpy
 from PySide6.QtWidgets import QApplication
 import overlay
 
@@ -136,8 +136,9 @@ class OverlayTest(unittest.TestCase):
             self.assertEqual(self.hud._entrance.state(), QAbstractAnimation.Stopped)
             QTest.qWait(240)
             self.assertFalse(self.hud.isVisible())
+            finished = QSignalSpy(self.hud._entrance.finished)
             self.hud.set_state("recording")
-            QTest.qWait(260)
+            self.assertTrue(finished.count() or finished.wait(2000))
             self.assertTrue(self.hud.isVisible())
             self.assertAlmostEqual(self.hud.windowOpacity(), 1.0)
             self.assertEqual(self.hud.pos(), overlay.hud_position(

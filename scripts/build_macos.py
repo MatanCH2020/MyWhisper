@@ -18,6 +18,24 @@ def main():
     if sys.platform != "darwin" or platform.machine() != "arm64":
         raise SystemExit("Build requires native macOS ARM64")
     run(sys.executable, "scripts/fetch_mac_assets.py")
+    from PySide6.QtCore import Qt
+    from PySide6.QtGui import QImageReader
+    iconset = ROOT / "build/MyWhisper.iconset"
+    iconset.mkdir(parents=True, exist_ok=True)
+    reader = QImageReader(str(ROOT / "app/assets/icon.ico"))
+    images = []
+    for index in range(reader.imageCount()):
+        reader.jumpToImage(index)
+        images.append(reader.read())
+    image = max(images, key=lambda img: img.width())
+    if image.isNull():
+        raise RuntimeError("Application icon cannot be read")
+    for size in (16, 32, 128, 256, 512):
+        for scale in (1, 2):
+            suffix = "@2x" if scale == 2 else ""
+            image.scaled(size * scale, size * scale, Qt.KeepAspectRatio, Qt.SmoothTransformation).save(
+                str(iconset / f"icon_{size}x{size}{suffix}.png"))
+    run("iconutil", "-c", "icns", str(iconset), "-o", str(ROOT / "build/MyWhisper.icns"))
     run(sys.executable, "-m", "PyInstaller", "--noconfirm", "--clean", "scripts/macos.spec")
     app = ROOT / "dist/MyWhisper.app"
     run("codesign", "--verify", "--deep", "--strict", str(app))

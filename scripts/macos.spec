@@ -25,7 +25,7 @@ pyz = PYZ(a.pure)
 exe = EXE(pyz, a.scripts, [], exclude_binaries=True, name='MyWhisper',
           console=False, target_arch='arm64', codesign_identity='-')
 collection = COLLECT(exe, a.binaries, a.datas, name='MyWhisper')
-app = BUNDLE(collection, name='MyWhisper.app', bundle_identifier='com.matandigital.mywhisper',
+app = BUNDLE(collection, name='MyWhisper.app', icon=str(root / 'build/MyWhisper.icns'), bundle_identifier='com.matandigital.mywhisper',
     info_plist={'CFBundleShortVersionString': version.split('b')[0],
                 'CFBundleVersion': version.split('b')[0] + '.' + version.split('b')[-1],
                 'NSHumanReadableCopyright': 'Matan Digital',
