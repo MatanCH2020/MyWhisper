@@ -52,7 +52,19 @@ def main():
         homepage = ROOT / "docs/index.html"
         url = f"{REPO}/releases/download/{tag}/MyWhisper-{version}-macos-arm64.dmg"
         beta_md = f"**בטא ל־Mac: {version}** · [הורדת DMG]({url}) · [מדריך ובדיקות](docs/macos-beta.md)\n\nApple Silicon M1 ומעלה · 16GB ומעלה · macOS 15 ומעלה · התקנה מחוץ לחנות · ללא ChatGPT. טרם אומת על מחשבי בודקים."
-        beta_html = f'<section id="mac-beta" dir="rtl" data-mac-beta="{version}"><div class="wrap"><span class="eyebrow">Apple Silicon · בטא לבודקים</span><h2 class="h2">MyWhisper ל־Mac · <bdi>{version}</bdi></h2><p class="sub">M1 ומעלה, 16GB ומעלה, macOS 15 ומעלה. התקנה מקומית מחוץ לחנות, ללא ChatGPT. נדרשות בדיקות חומרה אצל בודקים.</p><div class="cta-row"><a class="btn btn-lg btn-primary" href="{url}">הורדת DMG לבדיקות</a><a class="btn btn-lg btn-ghost" href="{REPO}/blob/{tag}/docs/macos-beta.md">מדריך התקנה ובדיקות</a></div></div></section>'
+        beta_html = f'''<article class="inst" id="mac-beta" data-mac-beta="{version}" aria-labelledby="mac-install-title">
+      <span class="eyebrow">Apple Silicon · בטא לבודקים</span>
+      <h3 id="mac-install-title">Mac · <bdi>{version}</bdi></h3>
+      <p>M1 ומעלה · 16GB ומעלה · macOS 15 ומעלה.</p>
+      <div class="cta-row"><a class="btn btn-primary" href="{url}">הורדת DMG ל־Mac</a><a class="btn btn-ghost" href="{REPO}/blob/{tag}/docs/macos-beta.md">מדריך התקנה ובדיקות</a></div>
+      <ol class="platform-steps">
+        <li>פותחים את ה־DMG וגוררים את MyWhisper לתיקיית Applications.</li>
+        <li>מפעילים משם. אם macOS חוסם את הפתיחה, משתמשים ב״פתח בכל זאת״ בפרטיות ואבטחה, לפי המדריך.</li>
+        <li>מאשרים מיקרופון ונגישות, ומורידים את המודל דרך מסך ההכנה (כ־3.08GB).</li>
+      </ol>
+      <p>קיצור תמלול: <kbd dir="ltr">Control + Option + Space</kbd>. אין צורך ב־Python או Homebrew. לאחר הורדת המודל התמלול מקומי, ללא ChatGPT.</p>
+      <p class="platform-note">בטא ניסיונית, ללא notarization של Apple. נדרשות עדיין בדיקות חומרה אצל בודקים. עדכון מתבצע בהורדת DMG חדש ובהחלפת האפליקציה לאחר סגירתה.</p>
+    </article>'''
         stale = []
         for path, content in ((readme, beta_md), (homepage, beta_html)):
             old = path.read_text(encoding="utf-8")
@@ -77,7 +89,7 @@ def main():
     section = f'''<section id="updates" data-release-version="{version}">
   <div class="wrap">
     <span class="eyebrow">מה חדש</span>
-    <h2 class="h2">הגרסה העדכנית: <bdi>{tag}</bdi></h2>
+    <h2 class="h2">גרסת Windows היציבה: <bdi>{tag}</bdi></h2>
     <p class="sub">העדכונים האחרונים מתוך יומן השינויים של התוכנה.</p>
     <div class="release-notes">
       <ul>
