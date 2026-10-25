@@ -219,6 +219,7 @@ class Mywishper(QObject):
         self._state = State.IDLE
         self._esc_hook = None   # Esc-to-cancel, registered only while recording
         self._max_timer = None  # auto-stop for a forgotten recording
+        self._load_error = False
         self._loading = False           # model load in progress
         self._fullscreen_paused = False
         self._model_ever_ready = False  # first successful load happened
@@ -498,8 +499,12 @@ class Mywishper(QObject):
         in memory, 'released' after _resource_poll freed it (idle / fullscreen).
         A released model is normal, not an error — it reloads on the next press.
         """
-        if self._loading:
+        if IS_MAC and not self.transcriber.download.ready():
+            state = "needs_download"
+        elif self._loading:
             state = "loading"
+        elif getattr(self, "_load_error", False) is True:
+            state = "error"
         elif self.transcriber.is_loaded():
             state = "ready"
         else:
@@ -576,6 +581,9 @@ class Mywishper(QObject):
         if self._closing or self._updating:
             return
         if self._sync_fullscreen():
+            return
+        if IS_MAC and not self.transcriber.download.ready():
+            self.open_mac_setup()
             return
         log.info("Hotkey toggle triggered.")
         self._mark_used()
@@ -853,6 +861,7 @@ class Mywishper(QObject):
             return
         if self._loading or self.transcriber.is_loaded():
             return
+        self._load_error = False
         self._loading = True
         self.tray.set_state("loading", "MyWhisper — טוען מודל...")
         threading.Thread(target=self._load_model, daemon=True).start()
@@ -878,6 +887,7 @@ class Mywishper(QObject):
     @Slot(bool)
     def _finish_load(self, succeeded):
         self._loading = False
+        self._load_error = not succeeded
         if self._closing:
             return
         if self._sync_fullscreen():

@@ -45,6 +45,7 @@ jobs:
           name: MyWhisper-macos-arm64-beta
           path: |
             dist/*.dmg
+            dist/macos-preview-*.png
             dist/SHA256SUMS.txt
             dist/macos-build-requirements.txt
           if-no-files-found: error

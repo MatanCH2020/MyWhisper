@@ -1,5 +1,6 @@
 """Build an ad-hoc signed app and DMG on macOS ARM64, without Apple credentials."""
 import hashlib
+import os
 from pathlib import Path
 import platform
 import re
@@ -40,6 +41,7 @@ def main():
     app = ROOT / "dist/MyWhisper.app"
     run("codesign", "--verify", "--deep", "--strict", str(app))
     # The frozen probe imports native components without starting capture or UI.
+    os.environ["MYWHISPER_QA_OUTPUT"] = str(ROOT / "dist")
     run(str(app / "Contents/MacOS/MyWhisper"), "--verify-bundle")
     staging = ROOT / "build/dmg-stage"
     staging.mkdir(parents=True, exist_ok=True)

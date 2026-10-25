@@ -40,6 +40,8 @@ class Transcriber:
             except Exception:
                 self._module.ModelHolder.model = None
                 self._module.ModelHolder.model_path = None
+                loaded = None
+                gc.collect()
                 mx.clear_cache()
                 raise
             self.model, self._tokenizer = loaded, tokenizer

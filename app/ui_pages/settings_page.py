@@ -616,6 +616,12 @@ class SettingsPageMixin:
             sub = ("המודל שמור בזיכרון, כך שהתמלול מתחיל מיד."
                    if dev in ("cuda", "metal") else
                    "רץ על המעבד — איטי בהרבה מ-GPU. בדוק דרייבר NVIDIA וספריות CUDA.")
+        elif state == "needs_download":
+            color, text = self.p["text_muted"], "נדרשת הורדת מודל"
+            sub = "פתח את הכנת ה־Mac להורדת המודל ולאישור הרשאות. לאחר ההורדה התמלול עובד ללא אינטרנט."
+        elif state == "error":
+            color, text = self.p["danger"], "טעינת המודל נכשלה"
+            sub = "אפשר לנסות שוב במסך הכנת ה־Mac." if IS_MAC else "אפשר לנסות שוב בעזרת קיצור ההקלטה."
         elif state == "loading":
             color, text = self.p["accent"], "נטען…"
             sub = "בהרצה הראשונה המודל גם יורד מהרשת (~1.5–3GB) — פעם אחת בלבד."

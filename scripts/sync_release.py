@@ -52,7 +52,7 @@ def main():
         homepage = ROOT / "docs/index.html"
         url = f"{REPO}/releases/download/{tag}/MyWhisper-{version}-macos-arm64.dmg"
         beta_md = f"**בטא ל־Mac: {version}** · [הורדת DMG]({url}) · [מדריך ובדיקות](docs/macos-beta.md)\n\nApple Silicon M1 ומעלה · 16GB ומעלה · macOS 15 ומעלה · התקנה מחוץ לחנות · ללא ChatGPT. טרם אומת על מחשבי בודקים."
-        beta_html = f'<aside dir="rtl" data-mac-beta="{version}"><h2>בטא פרטית ל־Mac · {version}</h2><p>Apple Silicon M1 ומעלה, 16GB ומעלה, macOS 15 ומעלה. ללא ChatGPT. נדרשות בדיקות חומרה אצל בודקים.</p><a href="{url}">הורדת DMG לבדיקות</a> · <a href="{REPO}/blob/{tag}/docs/macos-beta.md">מדריך התקנה ובדיקות</a></aside>'
+        beta_html = f'<section id="mac-beta" dir="rtl" data-mac-beta="{version}"><div class="wrap"><span class="eyebrow">Apple Silicon · בטא לבודקים</span><h2 class="h2">MyWhisper ל־Mac · <bdi>{version}</bdi></h2><p class="sub">M1 ומעלה, 16GB ומעלה, macOS 15 ומעלה. התקנה מקומית מחוץ לחנות, ללא ChatGPT. נדרשות בדיקות חומרה אצל בודקים.</p><div class="cta-row"><a class="btn btn-lg btn-primary" href="{url}">הורדת DMG לבדיקות</a><a class="btn btn-lg btn-ghost" href="{REPO}/blob/{tag}/docs/macos-beta.md">מדריך התקנה ובדיקות</a></div></div></section>'
         stale = []
         for path, content in ((readme, beta_md), (homepage, beta_html)):
             old = path.read_text(encoding="utf-8")
