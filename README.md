@@ -396,7 +396,7 @@ CI מריץ את אותה בדיקה עם `--check` ונכשל אם המידע �
 [פרטי בדיקות Windows, שחרור GPU ומגבלות האימות](docs/fullscreen-pause-validation.md).
 
 <!-- mac-beta:start -->
-**בטא ל־Mac: 1.15.0b1** · [הורדת DMG](https://github.com/MatanCH2020/MyWhisper/releases/download/v1.15.0b1/MyWhisper-1.15.0b1-macos-arm64.dmg) · [מדריך ובדיקות](docs/macos-beta.md)
+**בטא ל־Mac: 1.15.1b1** · [הורדת DMG](https://github.com/MatanCH2020/MyWhisper/releases/download/v1.15.1b1/MyWhisper-1.15.1b1-macos-arm64.dmg) · [מדריך ובדיקות](docs/macos-beta.md)
 
 Apple Silicon M1 ומעלה · 16GB ומעלה · macOS 15 ומעלה · התקנה מחוץ לחנות · ללא ChatGPT. טרם אומת על מחשבי בודקים.
 <!-- mac-beta:end -->
