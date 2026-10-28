@@ -3,6 +3,7 @@ import json
 import os
 import ssl
 import sys
+import urllib.error
 import urllib.parse
 import urllib.request
 
@@ -56,6 +57,9 @@ if __name__ == "__main__":
         raise SystemExit(1)
     try:
         collect(endpoint)
+    except urllib.error.HTTPError as error:
+        print(f"Download snapshot failed (HTTP {error.code}); previous samples remain unchanged.", file=sys.stderr)
+        raise SystemExit(1)
     except Exception:
         print("Download snapshot failed; previous stored samples remain unchanged.", file=sys.stderr)
         raise SystemExit(1)
