@@ -200,6 +200,9 @@ class Mywishper(QObject):
         self.ui.mic_test_stop = self.mic_monitor.stop
         self.ui.mic_level = self.mic_monitor.level
         self.ui.model_status = self._model_status
+        import support
+        self.ui.support_diagnostics = lambda: support.diagnostics(self.config, self.transcriber)
+        self.ui.submit_support_report = support.submit_report
         self.ui.check_update = self._check_update
         self.ui.do_update = self._do_update
         self.ui.open_mac_setup = self.open_mac_setup

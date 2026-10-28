@@ -123,6 +123,29 @@ Keys by group:
 - *UI*: `theme`, `sounds`, `sound_volume`, `highlight_unknown`, `bidi_isolate`.
 - *ChatGPT*: `chatgpt_enabled` (strict boolean, default false), `chatgpt_model` (account-catalog slug, default empty), `chatgpt_browser` (system or an explicitly selected installed external browser, e.g. chrome). Never store credentials in config.
 
+## Explicit support reports and download metrics
+
+`app/support.py` builds allowlisted diagnostics and sends a single explicit support POST;
+`app/support_ui.py` previews that exact technical snapshot and keeps the draft/request ID
+after an uncertain failure. Never read raw logs, history, clips, dictionaries, credentials
+or microphone names for a support report. No submission on startup, opening the dialog,
+model errors or transcription completion. Only a committed server receipt is success.
+The UI receives `support_diagnostics` and `submit_support_report` callbacks from main.
+
+The isolated Sticklight Studio project is `38a07dac-009f-492c-94f3-6d45f52678e9`.
+All report/snapshot reads require owner admin in server auth AND database RLS. Google
+sign-in alone is not admin. Public submission is write-only, rate/size limited and
+idempotent by UUID; unknown diagnostic keys must be rejected, never persisted.
+Only public endpoint information belongs in the desktop. No service-role/admin/sync key.
+
+`.github/workflows/download-metrics.yml` triggers an hourly snapshot using GitHub OIDC,
+not a shared secret. The Edge Function verifies the exact repo/ref/workflow/event before
+collecting all GitHub release pages and committing a complete sample. The repository
+variable `MYWHISPER_METRICS_URL` is a public URL, not a credential. Keep previous good
+samples on failure; never fabricate pre-baseline daily history or infer users/installations
+from downloads. `docs/download-counts.js` uses the same installer-only filter on the public
+site. See `docs/monitoring.md`; regressions are in `test_support` and `test_download_metrics`.
+
 ## Distribution & updates
 
 `app/version.py` is the version source of truth; `CHANGELOG.md` supplies the in-app What's New content and GitHub release notes. The version, newest changelog section, README, Pages site, git tag and GitHub release must agree.

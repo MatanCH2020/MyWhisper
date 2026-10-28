@@ -879,6 +879,8 @@ class AppUI(QObject):
         self.open_clips = lambda: None
         self.copy_to_clipboard = lambda text: QApplication.clipboard().setText(text)
         self.model_status = lambda: None            # wired by main
+        self.support_diagnostics = lambda: {}
+        self.submit_support_report = lambda payload: None
         self.check_update = lambda: None            # wired by main
         self.do_update = lambda: False
         self.cloud_supported = CLOUD_SUPPORTED

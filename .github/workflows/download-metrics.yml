@@ -1,0 +1,24 @@
+name: Download metrics
+on:
+  schedule:
+    - cron: '17 * * * *'
+  workflow_dispatch:
+permissions:
+  contents: read
+  id-token: write
+concurrency:
+  group: download-metrics
+  cancel-in-progress: false
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Collect and persist a complete GitHub release snapshot
+        env:
+          MYWHISPER_METRICS_URL: ${{ vars.MYWHISPER_METRICS_URL }}
+        run: python scripts/download_metrics.py

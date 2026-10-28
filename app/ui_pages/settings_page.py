@@ -247,6 +247,17 @@ class SettingsPageMixin:
         ubox.addWidget(self._upd_now_btn)
         v.addWidget(upc)
 
+        support_card = Card()
+        support_card.vbox.addWidget(self._section("עזרה ודיווח על תקלה"))
+        support_card.vbox.addWidget(self._hint(
+            "אפשר לתאר בעיה ולבדוק את הנתונים הטכניים לפני שליחה לצוות Matan Digital. "
+            "אין דיווח אוטומטי ואין צירוף של תמלולים, הקלטות או תוכן הלוח."))
+        self._support_btn = QPushButton("דיווח על תקלה")
+        self._support_btn.setCursor(Qt.PointingHandCursor)
+        self._support_btn.clicked.connect(self._open_support)
+        support_card.vbox.addWidget(self._support_btn)
+        v.addWidget(support_card)
+
         v.addStretch(1)
         # Wrap in a scroll area so a small window scrolls instead of squeezing
         # all the cards into an unreadable, overlapping stack.
@@ -256,6 +267,17 @@ class SettingsPageMixin:
         area.setStyleSheet("background:transparent;")
         area.setWidget(w)
         return area
+
+    def _open_support(self):
+        from support_ui import SupportDialog
+        dialog = getattr(self, "_support_dialog", None)
+        if dialog is not None and dialog.isVisible():
+            dialog.raise_()
+            dialog.activateWindow()
+            return
+        self._support_dialog = SupportDialog(
+            self, self.p, self.ui.support_diagnostics, self.ui.submit_support_report)
+        self._support_dialog.show()
 
 
     def _chatgpt_card(self):
