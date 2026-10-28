@@ -17,7 +17,7 @@
 ### 🌐 [דף הבית ← matanch2020.github.io/MyWhisper](https://matanch2020.github.io/MyWhisper/) · ⬇️ [הורדת מתקין](https://github.com/MatanCH2020/MyWhisper/releases/latest/download/MyWhisper-Setup.cmd)
 
 <!-- release-version:start -->
-**גרסה נוכחית: [v1.14.1](https://github.com/MatanCH2020/MyWhisper/releases/tag/v1.14.1)** · [היסטוריית העדכונים](CHANGELOG.md)
+**גרסה נוכחית: [v1.15.0](https://github.com/MatanCH2020/MyWhisper/releases/tag/v1.15.0)** · [היסטוריית העדכונים](CHANGELOG.md)
 <!-- release-version:end -->
 
 <br>
