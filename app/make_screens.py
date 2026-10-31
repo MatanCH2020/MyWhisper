@@ -245,6 +245,7 @@ def main():
 
     win = build("light")
     shoot(win, 0, DOCS / "app-history-light.png")
+    win.resize(900, 680)
     shoot(win, 2, DOCS / "app-settings-light.png")
     win.close()
 

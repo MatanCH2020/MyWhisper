@@ -11,7 +11,7 @@ import re
 
 from version import __version__ as APP_VERSION
 
-from PySide6.QtCore import QObject, Qt, QTimer, Signal
+from PySide6.QtCore import QEvent, QObject, Qt, QTimer, Signal
 from PySide6.QtGui import QColor, QFont, QKeySequence, QPainter, QShortcut
 from PySide6.QtWidgets import QApplication, QDialog, QFrame, QHBoxLayout, QLabel, QLineEdit, QPushButton, QScrollArea, QSizeGrip, QStackedWidget, QVBoxLayout, QWidget
 
@@ -385,7 +385,7 @@ class HotkeyEdit(QPushButton):
         self._p = palette
         self._current = current
         self._capturing = False
-        self.setStyleSheet(_primary_btn_qss(palette))
+        theme.bind_style(self, _primary_btn_qss, palette)
         self.setMinimumWidth(150)
         self.setCursor(Qt.PointingHandCursor)
         self.clicked.connect(self._begin)
@@ -399,16 +399,20 @@ class HotkeyEdit(QPushButton):
     def _finish(self, combo):
         self._capturing = False
         self.releaseKeyboard()
-        if combo:
-            self._current = combo
-            self.setText(combo)
-            self.captured.emit(combo)
-        else:
-            self.setText(self._current or "לא הוגדר")
-
-    def reset(self):
-        """Revert the label to the last accepted hotkey (after a rejection)."""
         self.setText(self._current or "לא הוגדר")
+        if combo:
+            self.captured.emit(combo)
+
+    def accept_combo(self, combo):
+        self._current = combo
+        self.setText(combo)
+
+    def event(self, event):
+        # Reserve captured keys (including Esc) before window shortcuts see them.
+        if event.type() == QEvent.ShortcutOverride and getattr(self, "_capturing", False):
+            event.accept()
+            return True
+        return super().event(event)
 
     def keyPressEvent(self, e):
         if not self._capturing:
@@ -729,6 +733,7 @@ class MainWindow(HistoryPageMixin, DictionaryPageMixin, SettingsPageMixin, Frame
         timer = getattr(self, "_status_timer", None)
         if timer is not None:
             if i == 2:
+                self._populate_mics()
                 self._refresh_model_status()
                 timer.start(2000)
             else:
@@ -968,6 +973,8 @@ class AppUI(QObject):
         self._history_dirty = False
         w.setWindowState((w.windowState() & ~Qt.WindowMinimized) | Qt.WindowActive)
         w.showMaximized() if w.isMaximized() else w.showNormal()
+        if w.stack.currentIndex() == 2:
+            w._goto(2, from_nav=False)  # resume the settings status poll after hiding to tray
         w.raise_()
         w.activateWindow()
         try:

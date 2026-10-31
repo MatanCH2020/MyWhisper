@@ -1,5 +1,5 @@
-from platform_support import IS_MAC
 """Settings page behavior for the Qt shell; backends are injected."""
+from platform_support import IS_MAC
 import threading
 
 import theme
@@ -7,106 +7,134 @@ import theme
 from version import __version__ as APP_VERSION
 
 from PySide6.QtCore import Qt, QTimer
-from PySide6.QtWidgets import QComboBox, QFileDialog, QFrame, QHBoxLayout, QLabel, QMessageBox, QProgressBar, QPushButton, QScrollArea, QSlider, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QComboBox, QFileDialog, QFrame, QHBoxLayout, QLabel, QMessageBox, QProgressBar, QPushButton, QScrollArea, QSlider, QSizePolicy, QVBoxLayout, QWidget
 
 from widgets import Card, ToggleSwitch
+
+
+def shortcut_label(combo):
+    return " + ".join(key.capitalize() for key in combo.split("+")) if combo else "לא הוגדר"
+
+
+class SettingsSection(Card):
+    """A full-width, keyboard-operable disclosure with a persistent open state."""
+
+    def __init__(self, title):
+        super().__init__(padding=5)
+        self.header = QPushButton()
+        self.header.setObjectName("settingsSection")
+        self.header.setCheckable(True)
+        self.header.setCursor(Qt.PointingHandCursor)
+        heading = QHBoxLayout(self.header)
+        heading.setContentsMargins(12, 4, 12, 4)
+        self._caption = QLabel()
+        self._caption.setObjectName("settingsCaption")
+        self._caption.setAttribute(Qt.WA_TransparentForMouseEvents)
+        heading.addWidget(self._caption, 1)
+        self._indicator = QLabel()
+        self._indicator.setAttribute(Qt.WA_TransparentForMouseEvents)
+        heading.addWidget(self._indicator)
+        self.header.setMinimumHeight(32)
+        self.set_title(title)
+        self.vbox.addWidget(self.header)
+        body = QWidget()
+        self.content = QVBoxLayout(body)
+        self.content.setContentsMargins(9, 2, 9, 9)
+        self.content.setSpacing(8)
+        self.vbox.addWidget(body)
+        body.hide()
+        self.header.toggled.connect(body.setVisible)
+        self.header.toggled.connect(self._refresh_title)
+        self._refresh_title()
+
+    def _refresh_title(self):
+        self._indicator.setText("−" if self.header.isChecked() else "+")
+        self.header.setAccessibleDescription("פתוח" if self.header.isChecked() else "סגור")
+
+    def set_title(self, title):
+        self._caption.setText(title)
+        self.header.setAccessibleName(title)
+
+    def set_open(self, opened):
+        self.header.setChecked(opened)
 
 
 class SettingsPageMixin:
     def _settings_page(self):
         from ui import HotkeyEdit, _combo_qss, _primary_btn_qss
         w = QWidget()
-        w.setStyleSheet("background:transparent;")
         v = QVBoxLayout(w)
-        v.setContentsMargins(18, 16, 18, 14)
-        v.setSpacing(14)
+        v.setContentsMargins(18, 14, 18, 14)
+        v.setSpacing(7)
 
-        # engine status — the model is released after idle_release_minutes and
-        # reloaded on demand, which was invisible until now.
-        stc = Card()
-        stc.vbox.addWidget(self._section("מנוע התמלול"))
-        srow = QHBoxLayout()
-        self._status_dot = QLabel("●")
-        theme.bind_style(self._status_dot, lambda _theme_palette: f"color:{_theme_palette['text_muted']}; font-size:15px;", self.p)
-        srow.addWidget(self._status_dot)
-        self._status_lbl = self._plain("בודק…")
-        srow.addWidget(self._status_lbl)
-        srow.addStretch(1)
-        stc.vbox.addLayout(srow)
-        self._status_sub = QLabel("")
-        self._status_sub.setWordWrap(True)
-        self._status_sub.setObjectName("hint")
-        stc.vbox.addWidget(self._status_sub)
-        if IS_MAC:
-            setup = QPushButton("הרשאות, מודל והפעלה בכניסה ל־Mac")
-            setup.clicked.connect(self.ui.open_mac_setup)
-            stc.vbox.addWidget(setup)
-        v.addWidget(stc)
-        self._status_timer = QTimer(self)
-        self._status_timer.timeout.connect(self._refresh_model_status)
-        self._refresh_model_status()
-
-        # hotkey — one of the first things users need when dictation feels
-        # "stuck", so keep it above the lower tuning/maintenance sections.
+        title = QLabel("הגדרות")
+        title.setObjectName("settingsTitle")
+        v.addWidget(title)
+        # Keep the two everyday actions visible before the optional sections.
         hc = Card()
-        hc.vbox.addWidget(self._section("קיצור הקלטה"))
         row = QHBoxLayout()
-        row.addWidget(self._plain("לחיצה להפעלה/עצירה"))
+        row.addWidget(self._section("קיצור הקלטה"))
+        combo = self.ui.config.get("hotkey", "ctrl+space")
+        self._hk_label = self._plain(shortcut_label(combo))
+        self._hk_label.setLayoutDirection(Qt.LeftToRight)
+        row.addWidget(self._hk_label)
         row.addStretch(1)
-        self._hk_edit = HotkeyEdit(self.p, self.ui.config.get("hotkey", "ctrl+space"))
-        self._hk_edit.captured.connect(self._on_hotkey_captured)
-        row.addWidget(self._hk_edit)
+        self._hk_change = QPushButton("שינוי קיצור")
+        self._hk_change.setCheckable(True)
+        row.addWidget(self._hk_change)
         hc.vbox.addLayout(row)
-        hk_hint = QLabel("לחץ על הכפתור הכחול ואז הקש צירוף, או בחר צירוף מוכן.")
-        hk_hint.setWordWrap(True)
-        hk_hint.setObjectName("hint")
-        hc.vbox.addWidget(hk_hint)
-        presets = QHBoxLayout()
-        presets.addWidget(self._plain("מהיר:"))
-        for combo in ("ctrl+alt+space", "ctrl+shift+space", "alt+q", "f9"):
-            pb = QPushButton(combo)
-            pb.setCursor(Qt.PointingHandCursor)
-            pb.clicked.connect(lambda _=False, c=combo: self._apply_preset(c))
-            presets.addWidget(pb)
-        presets.addStretch(1)
-        hc.vbox.addLayout(presets)
+        hc.vbox.addWidget(self._hint("לחיצה אחת מתחילה הקלטה, ולחיצה נוספת מסיימת אותה."))
+        editor = QWidget()
+        edit_box = QVBoxLayout(editor)
+        edit_box.setContentsMargins(0, 0, 0, 0)
+        edit_box.addWidget(self._hint("לבחירת קיצור אישי, לחצו על הקיצור והקישו צירוף חדש. Esc מבטל."))
+        self._hk_edit = HotkeyEdit(self.p, combo)
+        self._hk_edit.setAccessibleName("הקלטת קיצור מקלדת חדש")
+        self._hk_edit.captured.connect(self._on_hotkey_captured)
+        edit_box.addWidget(self._hk_edit)
+        presets = QComboBox()
+        presets.setAccessibleName("בחירת קיצור מוכן")
+        presets.addItem("בחירת קיצור מוכן…")
+        for preset in ("ctrl+alt+space", "ctrl+shift+space", "alt+q", "f9"):
+            presets.addItem(shortcut_label(preset), preset)
+        def choose_preset(index):
+            if index > 0:
+                self._on_hotkey_captured(presets.itemData(index))
+                presets.setCurrentIndex(0)
+        presets.activated.connect(choose_preset)
+        theme.bind_style(presets, _combo_qss, self.p)
+        edit_box.addWidget(presets)
+        hc.vbox.addWidget(editor)
+        editor.hide()
+        self._hk_change.toggled.connect(editor.setVisible)
         v.addWidget(hc)
 
-        # microphone
         mc = Card()
-        mc.vbox.addWidget(self._section("מיקרופון"))
         mrow = QHBoxLayout()
-        mrow.addWidget(self._plain("התקן קלט"))
-        mrow.addStretch(1)
+        mrow.addWidget(self._section("מיקרופון"))
         self._mic_combo = QComboBox()
-        self._mic_combo.setMinimumWidth(240)
-        theme.bind_style(self._mic_combo, lambda _theme_palette: _combo_qss(_theme_palette), self.p)
+        self._mic_combo.setAccessibleName("מיקרופון להקלטה")
+        self._mic_combo.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Fixed)
+        theme.bind_style(self._mic_combo, _combo_qss, self.p)
         self._mic_combo.currentIndexChanged.connect(self._on_mic_changed)
-        mrow.addWidget(self._mic_combo)
-        mrow.addWidget(self._tool_btn("refresh", "רענן", self._populate_mics))
-        mc.vbox.addLayout(mrow)
-        mic_hint = QLabel("בחר את המיקרופון להקלטה. \"ברירת מחדל של המערכת\" עוקב אחר "
-                          "ההתקן שמוגדר במערכת ההפעלה. אם הרשימה ריקה — אין מיקרופון מחובר.")
-        mic_hint.setWordWrap(True)
-        mic_hint.setObjectName("hint")
-        mc.vbox.addWidget(mic_hint)
-        # live test: open the selected mic and show the input level
-        trow = QHBoxLayout()
-        self._mic_test_btn = QPushButton("בדוק מיקרופון")
-        self._mic_test_btn.setCursor(Qt.PointingHandCursor)
+        mrow.addWidget(self._mic_combo, 1)
+        mrow.addWidget(self._tool_btn("refresh", "רענון", self._populate_mics))
+        self._mic_test_btn = QPushButton("בדיקת מיקרופון")
         self._mic_test_btn.clicked.connect(self._toggle_mic_test)
-        trow.addWidget(self._mic_test_btn)
+        mrow.addWidget(self._mic_test_btn)
+        mc.vbox.addLayout(mrow)
+        self._mic_warning = self._hint("המיקרופון שנבחר נותק. חברו אותו ולחצו על רענון, או בחרו מיקרופון אחר.")
+        mc.vbox.addWidget(self._mic_warning)
+        self._mic_status = self._hint("")
         self._mic_level = QProgressBar()
+        self._mic_level.setAccessibleName("עוצמת הקול מהמיקרופון")
         self._mic_level.setRange(0, 100)
         self._mic_level.setTextVisible(False)
-        self._mic_level.setFixedHeight(12)
-        theme.bind_style(self._mic_level, lambda _theme_palette: f"QProgressBar{{background:{_theme_palette['surface_alt']};border:none;border-radius:6px;}}"
-            f"QProgressBar::chunk{{background:{_theme_palette['accent']};border-radius:6px;}}", self.p)
-        trow.addWidget(self._mic_level, 1)
-        mc.vbox.addLayout(trow)
-        self._mic_status = QLabel("")
-        self._mic_status.setObjectName("hint")
+        self._mic_level.setFixedHeight(10)
         mc.vbox.addWidget(self._mic_status)
+        mc.vbox.addWidget(self._mic_level)
+        self._mic_status.hide()
+        self._mic_level.hide()
         self._mic_testing = False
         self._mic_detected = False
         self._mic_timer = QTimer(self)
@@ -114,9 +142,18 @@ class SettingsPageMixin:
         v.addWidget(mc)
         self._populate_mics()
 
+        status = QHBoxLayout()
+        self._status_lbl = self._hint("")
+        status.addWidget(self._status_lbl, 1)
+        self._status_help = QPushButton("עזרה")
+        self._status_help.clicked.connect(self._open_status_help)
+        status.addWidget(self._status_help)
+        v.addLayout(status)
+
+        v.addWidget(self._section("אפשרויות נוספות"))
+
         # appearance
-        ap = Card()
-        ap.vbox.addWidget(self._section("מראה"))
+        ap = SettingsSection("מראה וצלילים")
         row = QHBoxLayout()
         row.addWidget(self._plain("מצב כהה"))
         row.addStretch(1)
@@ -125,12 +162,10 @@ class SettingsPageMixin:
         self._theme_sw.toggled.connect(
             lambda on: self.ui.set_theme("dark" if on else "light"))
         row.addWidget(self._theme_sw)
-        ap.vbox.addLayout(row)
+        ap.content.addLayout(row)
         v.addWidget(ap)
 
         # sound
-        sc = Card()
-        sc.vbox.addWidget(self._section("צליל"))
         r1 = QHBoxLayout()
         r1.addWidget(self._plain("הפעל צלילים"))
         r1.addStretch(1)
@@ -138,7 +173,9 @@ class SettingsPageMixin:
         self._snd_sw.setAccessibleName("הפעל צלילים")
         self._snd_sw.toggled.connect(self._on_sound_toggle)
         r1.addWidget(self._snd_sw)
-        sc.vbox.addLayout(r1)
+        ap.content.addLayout(r1)
+        sound = SettingsSection("התאמת הצלילים")
+        ap.content.addWidget(sound)
         r2 = QHBoxLayout()
         r2.addWidget(self._plain("עוצמה"))
         self._vol = QSlider(Qt.Horizontal)
@@ -147,33 +184,31 @@ class SettingsPageMixin:
         # volume 0 painted a full blue bar. A level slider reads min-left /
         # max-right in either language anyway.
         self._vol.setLayoutDirection(Qt.LeftToRight)
+        self._vol.setAccessibleName("עוצמת צלילי ההקלטה")
         self._vol.setRange(0, 100)
         self._vol.setValue(int(self.ui.config.get("sound_volume", 0.25) * 100))
         self._vol.valueChanged.connect(self._on_volume)
         self._vol_lbl = self._plain(f"{self._vol.value()}%")
         r2.addWidget(self._vol, 1)
         r2.addWidget(self._vol_lbl)
-        sc.vbox.addLayout(r2)
+        sound.content.addLayout(r2)
         r3 = QHBoxLayout()
         for txt, cue in (("נגן התחלה", "start"), ("נגן סיום", "stop")):
             b = QPushButton(txt)
             b.clicked.connect(lambda _=False, c=cue: self.ui.test_sound(c))
             r3.addWidget(b)
+        sound.content.addLayout(r3)
+        r3 = QHBoxLayout()
         for txt, cue in (("החלף התחלה…", "start"), ("החלף סיום…", "stop")):
             b = QPushButton(txt)
             b.clicked.connect(lambda _=False, c=cue: self._replace_sound(c))
             r3.addWidget(b)
-        sc.vbox.addLayout(r3)
-        v.addWidget(sc)
+        sound.content.addLayout(r3)
 
         # clipboard history
-        cc, cbox = self._collapsible_card(
-            "תמלולים והעתקות",
-            "תמלולים, טקסטים שהועתקו ותמונות במקום אחד",
-            expanded=False)
+        cc = SettingsSection("תמלולים והעתקות")
+        cbox = cc.content
         crow = QHBoxLayout()
-        ck = (self.ui.config.get("clipboard_hotkey", "ctrl+`") or "").upper()
-        crow.addWidget(self._plain(f"פתיחת הרשימה: {ck}"))
         crow.addStretch(1)
         self._clip_count_lbl = QLabel("")
         self._clip_count_lbl.setObjectName("hint")
@@ -183,12 +218,17 @@ class SettingsPageMixin:
         crow.addWidget(open_clips)
         cbox.addLayout(crow)
         clip_edit = HotkeyEdit(self.p, self.ui.config.get("clipboard_hotkey", "ctrl+`"))
+        clip_edit.setAccessibleName("שינוי הקיצור לפתיחת ההעתקות")
         def set_clip_shortcut(combo):
-            if not self.ui.set_clip_hotkey(combo):
-                clip_edit.reset()
-                QMessageBox.warning(self, "MyWhisper", "קיצור הלוח אינו זמין. בחר צירוף אחר.")
+            if self.ui.set_clip_hotkey(combo):
+                clip_edit.accept_combo(combo)
+            else:
+                QMessageBox.warning(self, "MyWhisper", "הקיצור תפוס. אפשר לבחור צירוף אחר.")
         clip_edit.captured.connect(set_clip_shortcut)
-        cbox.addWidget(clip_edit)
+        clip_row = QHBoxLayout()
+        clip_row.addWidget(self._plain("קיצור לפתיחת הרשימה"))
+        clip_row.addWidget(clip_edit)
+        cbox.addLayout(clip_row)
         prow = QHBoxLayout()
         prow.addWidget(self._plain("השהה מעקב העתקות"))
         prow.addStretch(1)
@@ -197,32 +237,22 @@ class SettingsPageMixin:
         self._clip_pause_sw.toggled.connect(self._on_clip_pause_toggle)
         prow.addWidget(self._clip_pause_sw)
         cbox.addLayout(prow)
+        cbox.addWidget(self._hint("בזמן ההשהיה תמלולים ממשיכים להישמר."))
         crow2 = QHBoxLayout()
         crow2.addStretch(1)
         crow2.addWidget(self._tool_btn("trash", "נקה היסטוריית העתקות",
                                        self._clear_clips, danger=True))
         cbox.addLayout(crow2)
-        cbox.addWidget(self._hint(
-            "כל תמלול וטקסט או תמונה שאתה מעתיק נשמרים כאן. הקיצור פותח רשימה "
-            "לחיפוש. בחירה מעתיקה את הפריט חזרה ללוח כדי שתדביק איפה שתרצה. "
-            "סיסמאות ממנהלי סיסמאות (1Password, Bitwarden, KeePass) לא נשמרות — "
-            "הן מסומנות ככאלה, והתוכנה מכבדת את הסימון. השהיית המעקב עוצרת "
-            "העתקות חיצוניות בלבד; תמלולים ממשיכים להישמר."))
         v.addWidget(cc)
         self._refresh_clip_count()
 
         if self.ui.cloud_supported:
-            self._cloud_panel, cloud_box = self._collapsible_card(
-                "עריכת טקסט עם ChatGPT · לבחירתך", "תמלול מקומי עובד גם ללא חיבור לחשבון",
-                expanded=self.ui.config.get("chatgpt_enabled") is True)
-            cloud_box.addWidget(self._chatgpt_card())
+            self._cloud_panel = SettingsSection("עריכת טקסט עם ChatGPT")
+            self._build_cloud_settings(self._cloud_panel.content)
             v.addWidget(self._cloud_panel)
 
-        # updates / version
-        upc, ubox = self._collapsible_card(
-            "עדכונים וגרסה",
-            f"מותקן עכשיו: v{APP_VERSION}",
-            expanded=False)
+        self._help_panel = SettingsSection("עזרה ועדכונים")
+        ubox = self._help_panel.content
         urow = QHBoxLayout()
         urow.addWidget(self._plain(f"גרסה נוכחית: v{APP_VERSION}"))
         urow.addStretch(1)
@@ -251,18 +281,21 @@ class SettingsPageMixin:
         self._upd_now_btn.clicked.connect(self._on_update_now)
         self._upd_now_btn.setVisible(False)
         ubox.addWidget(self._upd_now_btn)
-        v.addWidget(upc)
-
-        support_card = Card()
-        support_card.vbox.addWidget(self._section("עזרה ודיווח על תקלה"))
-        support_card.vbox.addWidget(self._hint(
-            "אפשר לתאר בעיה ולבדוק את הנתונים הטכניים לפני שליחה לצוות Matan Digital. "
-            "אין דיווח אוטומטי ואין צירוף של תמלולים, הקלטות או תוכן הלוח."))
         self._support_btn = QPushButton("דיווח על תקלה")
-        self._support_btn.setCursor(Qt.PointingHandCursor)
         self._support_btn.clicked.connect(self._open_support)
-        support_card.vbox.addWidget(self._support_btn)
-        v.addWidget(support_card)
+        ubox.addWidget(self._support_btn)
+        self._technical = SettingsSection("פרטים טכניים")
+        self._status_sub = self._hint("")
+        self._technical.content.addWidget(self._status_sub)
+        ubox.addWidget(self._technical)
+        if IS_MAC:
+            setup = QPushButton("הכנת ה־Mac והרשאות")
+            setup.clicked.connect(self.ui.open_mac_setup)
+            ubox.addWidget(setup)
+        v.addWidget(self._help_panel)
+        self._status_timer = QTimer(self)
+        self._status_timer.timeout.connect(self._refresh_model_status)
+        self._refresh_model_status()
 
         v.addStretch(1)
         # Wrap in a scroll area so a small window scrolls instead of squeezing
@@ -286,117 +319,110 @@ class SettingsPageMixin:
         self._support_dialog.show()
 
 
-    def _chatgpt_card(self):
+    def _build_cloud_settings(self, box):
         from ui import _combo_qss
 
-        card = Card()
-        card.vbox.addWidget(self._section("שיפור הטקסט עם ChatGPT"))
-        card.vbox.addWidget(self._hint(
-            "תמלול מקומי כברירת מחדל. עריכת טקסט בענן — לבחירתך. "
-            "במצב AI בענן אפשר לומר מה לנסח ואז לדבר בחופשיות. ללא הוראות, הטקסט עובר שיפור עדין. "
-            "היא אינה מבטיחה תיקון של כל טעות בזיהוי הדיבור."))
+        box.addWidget(self._hint("ההקלטה נשארת במחשב. רק כשמפעילים עריכה נשלח הטקסט ל־OpenAI, במסגרת מכסת החשבון."))
         self._cloud_busy = False
-        self._cloud_connection = QLabel()
+        self._cloud_connection = self._plain("")
         self._cloud_connection.setObjectName("connectionstatus")
         self._cloud_connection.setTextFormat(Qt.PlainText)
         self._cloud_connection.setWordWrap(True)
-        self._cloud_connection.setAccessibleName("מצב החיבור לחשבון ChatGPT")
-        card.vbox.addWidget(self._cloud_connection)
-        self._cloud_connection_detail = QLabel()
+        self._cloud_connection.setAccessibleDescription("מצב החיבור לחשבון ChatGPT")
+        box.addWidget(self._cloud_connection)
+        self._cloud_connection_detail = self._hint("")
         self._cloud_connection_detail.setTextFormat(Qt.PlainText)
-        self._cloud_connection_detail.setObjectName("fieldlabel")
-        self._cloud_connection_detail.setWordWrap(True)
-        card.vbox.addWidget(self._cloud_connection_detail)
-        self._cloud_account = QComboBox()
-        self._cloud_account.setAccessibleName("חשבון ChatGPT פעיל")
-        self._cloud_account.currentIndexChanged.connect(self._cloud_account_changed)
-        card.vbox.addWidget(self._cloud_account)
-        browser_row = QHBoxLayout()
-        browser_row.addWidget(self._plain("דפדפן להתחברות"))
+        box.addWidget(self._cloud_connection_detail)
+        self._cloud_login = QPushButton("התחברות ל־ChatGPT")
+        self._cloud_login.clicked.connect(lambda: self._cloud_async("login"))
+        box.addWidget(self._cloud_login)
+        self._cloud_relogin = QPushButton("חדש התחברות")
+        self._cloud_relogin.clicked.connect(lambda: self._cloud_async("relogin"))
+        box.addWidget(self._cloud_relogin)
+        self._cloud_cancel = QPushButton("בטל התחברות")
+        self._cloud_cancel.clicked.connect(lambda: self.ui.chatgpt_action("cancel"))
+        self._cloud_cancel.hide()
+        box.addWidget(self._cloud_cancel)
+
+        self._cloud_status = self._hint("")
+        self._cloud_status.setTextFormat(Qt.PlainText)
+        self._cloud_status.setAccessibleName("מצב עריכת הטקסט בענן")
+        box.addWidget(self._cloud_status)
+        switch_row = QHBoxLayout()
+        self._cloud_switch_label = self._plain("עריכת הטקסט בענן")
+        switch_row.addWidget(self._cloud_switch_label)
+        switch_row.addStretch(1)
+        self._cloud_switch = ToggleSwitch(self.p)
+        self._cloud_switch.setAccessibleName("הפעל שיפור טקסט עם ChatGPT")
+        self._cloud_switch.toggled.connect(self._cloud_toggle)
+        switch_row.addWidget(self._cloud_switch)
+        box.addLayout(switch_row)
+
+        self._cloud_options = SettingsSection("אפשרויות חיבור וחשבון")
+        options = self._cloud_options.content
         self._cloud_browser = QComboBox()
-        self._cloud_browser.setAccessibleName("דפדפן חיצוני להתחברות ChatGPT")
+        self._cloud_browser.setAccessibleName("דפדפן להתחברות")
         for browser in self.ui.chatgpt_browsers():
             self._cloud_browser.addItem(browser["name"], browser["slug"])
         self._cloud_browser.setCurrentIndex(max(0, self._cloud_browser.findData(self.ui.config.get("chatgpt_browser", "system"))))
         self._cloud_browser.currentIndexChanged.connect(lambda: self.ui.chatgpt_action("browser", self._cloud_browser.currentData()))
+        browser_row = QHBoxLayout()
+        browser_row.addWidget(self._plain("דפדפן להתחברות"))
         browser_row.addWidget(self._cloud_browser, 1)
-        card.vbox.addLayout(browser_row)
-        card.vbox.addWidget(self._hint("ההתחברות נפתחת בדפדפן החיצוני שנבחר, עם פרופיל הדפדפן הרגיל שלך. "
-                                      "בחר את הדפדפן שבו כבר התחברת לחשבון ChatGPT."))
-        row = QHBoxLayout()
-        self._cloud_login = QPushButton("Continue with ChatGPT")
-        self._cloud_login.setAccessibleName("התחברות עם ChatGPT")
-        self._cloud_login.clicked.connect(lambda: self._cloud_async("login"))
-        row.addWidget(self._cloud_login)
-        self._cloud_relogin = QPushButton("חדש התחברות")
-        self._cloud_relogin.clicked.connect(lambda: self._cloud_async("relogin"))
-        row.addWidget(self._cloud_relogin)
-        self._cloud_logout = QPushButton("ניתוק")
+        options.addLayout(browser_row)
+        self._cloud_account = QComboBox()
+        self._cloud_account.setAccessibleName("חשבון ChatGPT פעיל")
+        self._cloud_account.currentIndexChanged.connect(self._cloud_account_changed)
+        options.addWidget(self._cloud_account)
+        self._cloud_add = QPushButton("הוספת חשבון")
+        self._cloud_add.clicked.connect(lambda: self._cloud_async("login"))
+        options.addWidget(self._cloud_add)
+        self._cloud_logout = QPushButton("ניתוק החשבון")
         self._cloud_logout.clicked.connect(lambda: self._cloud_async("disconnect"))
-        row.addWidget(self._cloud_logout)
-        self._cloud_cancel = QPushButton("בטל התחברות")
-        self._cloud_cancel.clicked.connect(lambda: self.ui.chatgpt_action("cancel"))
-        self._cloud_cancel.hide()
-        row.addWidget(self._cloud_cancel)
-        card.vbox.addLayout(row)
-        row = QHBoxLayout()
-        row.addWidget(self._plain("מודל AI לעיבוד הטקסט"))
+        options.addWidget(self._cloud_logout)
+
+        # The same model picker is promoted to the next step when a choice is required.
+        self._cloud_model_row = QWidget()
+        model_row = QHBoxLayout(self._cloud_model_row)
+        model_row.setContentsMargins(0, 0, 0, 0)
+        model_row.addWidget(self._plain("מודל לעריכה"))
         self._cloud_model = QComboBox()
-        # Ancestor transparent styles override the application popup rules on
-        # Windows. Bind directly, as for the microphone picker, and retain the
-        # recipe so an in-place theme change also recolors the popup.
-        for combo in (self._cloud_account, self._cloud_browser, self._cloud_model):
-            theme.bind_style(combo, _combo_qss, self.p)
+        self._cloud_model.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Fixed)
         self._cloud_model.setAccessibleName("מודל עריכת ChatGPT")
         self._cloud_model.currentIndexChanged.connect(self._cloud_model_changed)
-        row.addWidget(self._cloud_model, 1)
+        model_row.addWidget(self._cloud_model, 1)
         self._cloud_refresh = QPushButton("רענן מודלים")
         self._cloud_refresh.clicked.connect(lambda: self._cloud_async("catalog"))
-        row.addWidget(self._cloud_refresh)
-        card.vbox.addLayout(row)
-        card.vbox.addWidget(self._hint(
-            "טקסט ההכתבה יישלח ל־OpenAI לעריכה. האודיו וזיהוי הדיבור נשארים במחשב. "
-            "השימוש כפוף לזכאות ולמכסת החשבון. התחברות לבדה אינה מפעילה עריכה. "
-            "בכשל או לאחר 20 שניות יישמר ויודבק התמלול המקומי עם חיווי ברור."
-            " כשעוברים לחלון אחר בזמן העיבוד, התוצאה תמתין בהיסטוריה."))
-        row = QHBoxLayout()
-        row.addWidget(self._plain("הפעל עריכה בענן"))
-        row.addStretch(1)
-        self._cloud_switch = ToggleSwitch(self.p, checked=False)
-        self._cloud_switch.setAccessibleName("הפעל שיפור טקסט עם ChatGPT")
-        self._cloud_switch.toggled.connect(self._cloud_toggle)
-        row.addWidget(self._cloud_switch)
-        card.vbox.addLayout(row)
-        self._cloud_status = QLabel()
-        self._cloud_status.setWordWrap(True)
-        self._cloud_status.setTextFormat(Qt.PlainText)
-        self._cloud_status.setObjectName("fieldlabel")
-        self._cloud_status.setAccessibleName("מצב עריכת הטקסט בענן")
-        card.vbox.addWidget(self._cloud_status)
+        model_row.addWidget(self._cloud_refresh)
+        self._cloud_steps = box
+        options.addWidget(self._cloud_model_row)
+        for combo in (self._cloud_account, self._cloud_browser, self._cloud_model):
+            theme.bind_style(combo, _combo_qss, self.p)
+
         self._cloud_probe = QPushButton("בדוק חיבור ועיבוד")
-        self._cloud_probe.setToolTip("שולח טקסט דוגמה בלבד למודל שנבחר, במסגרת מכסת החשבון.")
+        self._cloud_probe.setToolTip("שולח משפט דוגמה במסגרת מכסת החשבון")
         self._cloud_probe.clicked.connect(lambda: self._cloud_async("probe"))
-        card.vbox.addWidget(self._cloud_probe)
-        self._cloud_probe_label = QLabel("טרם בוצעה בדיקת עיבוד למודל שנבחר.")
+        options.addWidget(self._cloud_probe)
+        self._cloud_probe_label = self._hint("")
         self._cloud_probe_label.setTextFormat(Qt.PlainText)
-        self._cloud_probe_label.setWordWrap(True)
-        self._cloud_probe_label.setObjectName("hint")
-        card.vbox.addWidget(self._cloud_probe_label)
-        usage = QPushButton("ניהול שימוש והרשאות ב-ChatGPT")
-        usage.clicked.connect(lambda: self.ui.chatgpt_action("usage"))
-        card.vbox.addWidget(usage)
+        options.addWidget(self._cloud_probe_label)
+        self._cloud_usage = QPushButton("ניהול שימוש והרשאות ב־ChatGPT")
+        self._cloud_usage.clicked.connect(lambda: self.ui.chatgpt_action("usage"))
+        options.addWidget(self._cloud_usage)
+        box.addWidget(self._cloud_options)
         self._cloud_timer = QTimer(self)
         self._cloud_timer.timeout.connect(self._refresh_cloud)
         self._cloud_timer.start(1500)
         self._refresh_cloud()
-        return card
 
     def _open_cloud_setup(self):
         self._goto(2, from_nav=False)
         self._cloud_panel.set_open(True)
-        target = (self._cloud_switch if self._cloud_switch.isEnabled() else
-                  self._cloud_relogin if self._cloud_relogin.isVisible() else
-                  self._cloud_model if self._cloud_model.isEnabled() else self._cloud_login)
+        model_action = self._cloud_model if self._cloud_model.count() > 1 else self._cloud_refresh
+        target = next((widget for widget in (
+            self._cloud_cancel, self._cloud_relogin, self._cloud_switch, model_action,
+            self._cloud_login) if widget.isVisible() and widget.isEnabled()),
+            self._cloud_options.header)
         target.setFocus()
         # Expansion relayouts the scroll area on the next Qt event cycle.
         area = self.stack.widget(2)
@@ -436,6 +462,24 @@ class SettingsPageMixin:
         model_ready = st.get("model") in {m["slug"] for m in st.get("models", [])}
         ready = (connected and st.get("eligible", False) and model_ready
                  and error not in ("authorization", "identity", "permission", "ineligible", "storage"))
+        enabled = st.get("enabled") is True
+        needs_model = connected and st.get("eligible", False) and (
+            not model_ready or st.get("catalog_error") or error == "unsupported")
+        destination = self._cloud_steps if needs_model else self._cloud_options.content
+        if destination.indexOf(self._cloud_model_row) < 0:
+            position = destination.indexOf(self._cloud_options) if needs_model else 0
+            destination.insertWidget(position, self._cloud_model_row)
+        self._cloud_model_row.setVisible(bool(connected and st.get("eligible")))
+        self._cloud_switch_label.setVisible(bool(ready or enabled))
+        self._cloud_switch.setVisible(bool(ready or enabled))
+        self._cloud_login.setVisible(not connected and not (reconnect and st.get("active")))
+        self._cloud_add.setVisible(bool(connected or reconnect))
+        self._cloud_probe.setVisible(enabled)
+        self._cloud_probe_label.setVisible(bool(enabled and st.get("probe")))
+        self._cloud_usage.setVisible(bool(connected or error == "quota"))
+        title = "עריכת טקסט עם ChatGPT · " + ("פעילה" if enabled else "כבויה")
+        if title != self._cloud_panel.header.accessibleName():
+            self._cloud_panel.set_title(title)
         self._cloud_switch.setEnabled(bool(ready) or st.get("enabled") is True)
         self._cloud_switch.blockSignals(True)
         self._cloud_switch.setChecked(st.get("enabled") is True)
@@ -454,7 +498,7 @@ class SettingsPageMixin:
                 detail += "\nממתין לחידוש הרשאה במצב ענן; ניתן גם לחדש התחברות ידנית."
         else:
             connection = "מצב חיבור: לא מחובר ל־ChatGPT"
-            detail = "לחץ על Continue with ChatGPT והשלם את האישור בדפדפן. כניסה לדפדפן לבדה אינה מחברת את MyWhisper."
+            detail = "אחרי הלחיצה משלימים את החיבור בדפדפן."
         signin_error = st.get("sign_in_error")
         if signin_error:
             failure = {
@@ -475,6 +519,7 @@ class SettingsPageMixin:
             detail = "השלם את ההתחברות והאישור בדפדפן. החיבור יופיע כאן לאחר שהאישור יתקבל."
         self._cloud_connection.setText(connection)
         self._cloud_connection_detail.setText(detail)
+        self._cloud_connection_detail.setVisible(bool(connected or reconnect or error or signin_error or st.get("signing_in")))
         self._cloud_switch.setToolTip("" if ready else "יש לחבר חשבון זכאי ולבחור מודל זמין לפני הפעלה.")
         text = ("עריכת הטקסט: פעילה" if st.get("enabled") else "עריכת הטקסט: כבויה — התמלול נשאר מקומי")
         if connected and not st.get("eligible", False):
@@ -488,7 +533,7 @@ class SettingsPageMixin:
         elif connected and not model_ready:
             text += "\nבחר מודל זמין ואז הפעל עריכה בנפרד."
         elif connected and not st.get("enabled"):
-            text += "\nהחשבון מחובר. להפעלת השיפור בחר AI בענן במתג המצבים."
+            text += "\nאפשר להפעיל עריכה במתג למטה."
         if st.get("refreshing"):
             text += "\nמחדש הרשאה לחשבון…"
         elif st.get("session_expired") and connected:
@@ -498,6 +543,7 @@ class SettingsPageMixin:
         self._cloud_probe_label.setText(st.get("probe") or "טרם בוצעה בדיקת עיבוד למודל שנבחר.")
         self._cloud_probe.setEnabled(bool(st.get("enabled")) and not self._cloud_busy)
         self._cloud_status.setText(text)
+        self._cloud_status.setVisible(bool(error or st.get("catalog_error") or st.get("refreshing") or connected and not ready))
         self._cloud_login.setToolTip("הוסף חשבון ChatGPT" if st.get("accounts") else "התחבר עם חשבון ChatGPT אישי")
 
     def _cloud_toggle(self, on):
@@ -525,15 +571,17 @@ class SettingsPageMixin:
         if action not in ("catalog", "probe"):
             self.ui.chatgpt_action("enable", False)
         self._cloud_busy = True
-        for widget in (self._cloud_login, self._cloud_relogin, self._cloud_logout,
+        for widget in (self._cloud_login, self._cloud_add, self._cloud_relogin, self._cloud_logout,
                        self._cloud_account, self._cloud_model, self._cloud_refresh, self._cloud_switch, self._cloud_probe):
             widget.setEnabled(False)
         self._cloud_switch.setEnabled(action in ("catalog", "probe") and self.ui.chatgpt_status().get("enabled", False))
         self._cloud_browser.setEnabled(False)
         if action in ("login", "relogin"):
+            self._cloud_connection_detail.show()
             self._cloud_connection.setText("מצב חיבור: ממתין לאישור בדפדפן…")
             self._cloud_connection_detail.setText("השלם את ההתחברות והאישור בדפדפן. החיבור יופיע כאן לאחר שהאישור יתקבל.")
         self._cloud_cancel.setVisible(action in ("login", "relogin"))
+        self._cloud_status.show()
         self._cloud_status.setText("השלם התחברות ואישור בדפדפן…" if action in ("login", "relogin") else "מעבד…")
         def work():
             try:
@@ -547,7 +595,7 @@ class SettingsPageMixin:
         self._cloud_busy = False
         self._cloud_cancel.hide()
         self._cloud_browser.setEnabled(True)
-        for widget in (self._cloud_login, self._cloud_relogin, self._cloud_logout,
+        for widget in (self._cloud_login, self._cloud_add, self._cloud_relogin, self._cloud_logout,
                        self._cloud_account, self._cloud_model, self._cloud_refresh, self._cloud_switch, self._cloud_probe):
             widget.setEnabled(True)
         self._refresh_cloud(result)
@@ -603,23 +651,13 @@ class SettingsPageMixin:
 
     def _on_hotkey_captured(self, combo):
         if self.ui.set_hotkey(combo):
-            self._toast.show_message(f"הקיצור עודכן ל-{combo}", msec=3000)
+            self._hk_edit.accept_combo(combo)
+            self._hk_label.setText(shortcut_label(combo))
+            self._hk_change.setChecked(False)
+            self._hk_change.setFocus()
+            self._toast.show_message("קיצור ההקלטה עודכן", msec=3000)
         else:
-            QMessageBox.warning(self, "MyWhisper",
-                                f"לא ניתן להגדיר את הקיצור '{combo}'. נסה צירוף אחר.")
-            self._hk_edit.reset()
-
-
-    def _apply_preset(self, combo):
-        """Set a ready-made combo without needing the key-capture interaction."""
-        if self.ui.set_hotkey(combo):
-            self._hk_edit._current = combo
-            self._hk_edit.setText(combo)
-            self._toast.show_message(f"הקיצור עודכן ל-{combo}", msec=3000)
-        else:
-            QMessageBox.warning(self, "MyWhisper",
-                                f"'{combo}' תפוס בתוכנה אחרת. נסה צירוף אחר.")
-
+            QMessageBox.warning(self, "MyWhisper", "הקיצור אינו זמין. אפשר לבחור צירוף אחר.")
 
     def _refresh_clip_count(self):
         n = self.ui.clip_count()
@@ -651,43 +689,41 @@ class SettingsPageMixin:
 
     def _refresh_model_status(self):
         st = self.ui.model_status()
-        if not st:  # not wired (tests / standalone UI) — hide the row
-            self._status_lbl.setText("—")
-            self._status_sub.setText("")
-            return
-        ok = "#2ea043"
-        state = st.get("state")
-        dev = (st.get("device") or "").lower()
-        if state == "paused":
-            color, text = self.p["text_muted"], "מושהה — מסך מלא"
-            sub = "קיצור ההקלטה כבוי. המודל משתחרר בסיום עבודה פעילה; הקיצור יחזור ביציאה ממסך מלא."
-        elif state == "ready":
-            where = "על Apple GPU / Metal" if dev == "metal" else "על ה-GPU" if dev == "cuda" else "על המעבד (CPU)"
-            color, text = ok, f"טעון ומוכן — רץ {where}"
-            sub = ("המודל שמור בזיכרון, כך שהתמלול מתחיל מיד."
-                   if dev in ("cuda", "metal") else
-                   "רץ על המעבד — איטי בהרבה מ-GPU. בדוק דרייבר NVIDIA וספריות CUDA.")
-        elif state == "needs_download":
-            color, text = self.p["text_muted"], "נדרשת הורדת מודל"
-            sub = "פתח את הכנת ה־Mac להורדת המודל ולאישור הרשאות. לאחר ההורדה התמלול עובד ללא אינטרנט."
-        elif state == "error":
-            color, text = self.p["danger"], "טעינת המודל נכשלה"
-            sub = "אפשר לנסות שוב במסך הכנת ה־Mac." if IS_MAC else "אפשר לנסות שוב בעזרת קיצור ההקלטה."
-        elif state == "loading":
-            color, text = self.p["accent"], "נטען…"
-            sub = "בהרצה הראשונה המודל גם יורד מהרשת (~1.5–3GB) — פעם אחת בלבד."
-        else:
-            color, text = self.p["text_muted"], "משוחרר מהזיכרון"
-            sub = ("שוחרר כדי לפנות משאבים אחרי חוסר פעילות או בזמן משחק במסך מלא. "
-                   "ייטען מחדש אוטומטית בלחיצה הבאה על הקיצור.")
-        if st.get("fallback"):
-            sub += "  ⚠️ טעינת ה-GPU נכשלה, לכן בוצעה נפילה למעבד."
-        self._status_dot.setStyleSheet(f"color:{color}; font-size:15px;")
+        state = (st or {}).get("state")
+        text = {
+            "ready": "מוכן להכתבה",
+            "released": "אפשר להכתיב. ההכנה תתחיל בלחיצה על הקיצור.",
+            "loading": "מכין את ההכתבה…",
+            "paused": "ההכתבה מושהית בזמן מסך מלא",
+            "needs_download": "כדי להתחיל להכתיב, יש להשלים את הכנת ה־Mac.",
+            "error": ("ההכנה נכשלה. אפשר לנסות שוב בהכנת ה־Mac." if IS_MAC else
+                      "ההכנה נכשלה. לחצו שוב על קיצור ההקלטה כדי לנסות מחדש."),
+        }.get(state, "")
+        setup_hint = (st or {}).get("setup_hint")
+        if setup_hint and state in ("ready", "released"):
+            text = setup_hint
         self._status_lbl.setText(text)
-        model = st.get("model")
-        self._status_sub.setText(sub + ("\n" + model if model else ""))
-        self._status_lbl.setToolTip(model or "")
+        self._status_lbl.setVisible(bool(text))
+        self._status_help.setText("הכנת ה־Mac" if IS_MAC else "עזרה")
+        self._status_help.setVisible(bool(setup_hint) or state in ("error", "needs_download"))
+        st = st or {}
+        device = {"metal": "Apple GPU / Metal", "cuda": "NVIDIA GPU", "cpu": "CPU"}.get(st.get("device"))
+        details = [f"מודל התמלול: {st['model']}"] if st.get("model") else []
+        if device:
+            details.append(f"מעבד התמלול: {device}")
+        if st.get("fallback"):
+            details.append("התמלול פועל על המעבד כי ההאצה הגרפית אינה זמינה.")
+        self._status_sub.setText("\n".join(details) or "פרטי התמלול עדיין אינם זמינים.")
 
+    def _open_status_help(self):
+        if IS_MAC:
+            self.ui.open_mac_setup()
+        else:
+            self._help_panel.set_open(True)
+            self._technical.set_open(True)
+            self._technical.header.setFocus()
+            area = self.stack.widget(2)
+            QTimer.singleShot(0, area, lambda: area.ensureWidgetVisible(self._status_sub))
 
     def _show_changelog(self):
         from ui import ChangelogDialog
@@ -744,7 +780,8 @@ class SettingsPageMixin:
         self._mic_combo.blockSignals(True)
         self._mic_combo.clear()
         self._mic_combo.addItem("ברירת מחדל של המערכת", "")
-        for name in self.ui.list_input_devices():
+        devices = self.ui.list_input_devices()
+        for name in devices:
             self._mic_combo.addItem(name, name)
         current = self.ui.config.get("input_device", "")
         idx = self._mic_combo.findData(current)
@@ -753,12 +790,18 @@ class SettingsPageMixin:
             idx = self._mic_combo.count() - 1
         self._mic_combo.setCurrentIndex(idx if idx >= 0 else 0)
         self._mic_combo.blockSignals(False)
+        missing = bool(current and current not in devices)
+        self._missing_mic = current if missing else ""
+        self._mic_warning.setVisible(missing)
+        if missing and self._mic_testing:
+            self._stop_mic_test()
 
 
     def _on_mic_changed(self, _idx):
         if self._mic_testing:
             self._stop_mic_test()  # the old device stream is stale now
         self.ui.set_input_device(self._mic_combo.currentData() or "")
+        self._mic_warning.setVisible(bool(self._missing_mic) and self._mic_combo.currentData() == self._missing_mic)
 
 
     def _toggle_mic_test(self):
@@ -767,13 +810,16 @@ class SettingsPageMixin:
             return
         device = self._mic_combo.currentData() or ""
         if not self.ui.mic_test_start(device):
+            self._populate_mics()
             QMessageBox.warning(self, "MyWhisper",
-                                "לא ניתן לפתוח את המיקרופון הזה. בחר התקן אחר מהרשימה.")
+                                "לא ניתן לפתוח את המיקרופון הזה. בדקו שהוא מחובר או בחרו מיקרופון אחר.")
             return
         self._mic_testing = True
+        self._mic_level.show()
+        self._mic_status.show()
         self._mic_detected = False
         self._mic_test_btn.setText("עצור בדיקה")
-        self._mic_status.setText("דבר עכשיו כדי לבדוק…")
+        self._mic_status.setText("אפשר לדבר עכשיו")
         self._mic_timer.start(50)
 
 
@@ -781,7 +827,9 @@ class SettingsPageMixin:
         self._mic_timer.stop()
         self.ui.mic_test_stop()
         self._mic_testing = False
-        self._mic_test_btn.setText("בדוק מיקרופון")
+        self._mic_test_btn.setText("בדיקת מיקרופון")
+        self._mic_status.hide()
+        self._mic_level.hide()
         self._mic_level.setValue(0)
 
 
@@ -796,7 +844,7 @@ class SettingsPageMixin:
         if self._mic_status.objectName() != role:
             _set_role(self._mic_status, role)
         self._mic_status.setText("✓ קלט זוהה — המיקרופון עובד" if self._mic_detected
-                                 else "דבר עכשיו כדי לבדוק…")
+                                 else "אפשר לדבר עכשיו")
 
 
     def _on_sound_toggle(self, on):

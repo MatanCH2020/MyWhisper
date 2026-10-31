@@ -136,6 +136,14 @@ QPushButton {{
     font-size: 13px;
 }}
 QPushButton:hover {{ background: {p['hover']}; }}
+QLabel#settingsTitle {{ font-size: {FS["hero"]}px; font-weight: 700; color: {p["text"]}; }}
+QLabel#settingsCaption {{ font-size: {FS["body"]}px; font-weight: 600; color: {p["text"]}; }}
+QPushButton#settingsSection {{
+    background: transparent; border: 1px solid transparent;
+    padding: 5px 9px; color: {p['text']}; font-weight: 600;
+}}
+QPushButton#settingsSection:hover {{ background: {p['hover']}; }}
+QPushButton#settingsSection:focus {{ background: {p['hover']}; border-color: {p['accent']}; }}
 QPushButton:pressed {{ background: {p['border']}; }}
 QPushButton#clipfilter:checked {{ background: {p['nav_sel']}; color: {p['accent']}; border: 1px solid {p['accent']}; font-weight: 600; }}
 QPushButton:focus {{

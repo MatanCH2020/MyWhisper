@@ -752,6 +752,30 @@ class CloudSettingsTests(unittest.TestCase):
                 self.assertEqual(self.win._cloud_switch.isEnabled(), ready)
         self.ui.chatgpt_action.assert_not_called()
 
+    def test_cloud_setup_promotes_only_the_current_step_without_account_actions(self):
+        w = self.win
+        w.show()
+        w._goto(2)
+        w._cloud_panel.set_open(True)
+        w._refresh_cloud({"connected": False})
+        self.assertTrue(w._cloud_login.isVisible())
+        self.assertFalse(w._cloud_model.isVisible())
+        self.assertFalse(w._cloud_switch.isVisible())
+        status = {"connected": True, "eligible": True, "models": [{"slug": "demo", "display_name": "Demo"}]}
+        w._refresh_cloud(status)
+        self.assertTrue(w._cloud_model.isVisible())
+        self.assertFalse(w._cloud_switch.isVisible())
+        w._refresh_cloud({**status, "model": "demo"})
+        self.assertTrue(w._cloud_switch.isVisible())
+        self.assertFalse(w._cloud_model.isVisible())
+        w._cloud_options.header.click()
+        self.assertTrue(w._cloud_model.isVisible())
+        self.assertFalse(w._cloud_probe.isVisible())
+        w._refresh_cloud({**status, "model": "demo", "enabled": True})
+        self.assertTrue(w._cloud_probe.isVisible())
+        self.assertIn("פעילה", w._cloud_panel.header.accessibleName())
+        self.ui.chatgpt_action.assert_not_called()
+
     def test_login_failure_stays_visible_after_polling_without_hiding_existing_account(self):
         for connected_now in (False, True):
             status = {"connected": connected_now, "sign_in_error": "timeout", "email": "owner@example.test"}

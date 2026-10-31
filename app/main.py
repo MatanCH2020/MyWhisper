@@ -547,7 +547,15 @@ class Mywishper(QObject):
             state = "ready"
         else:
             state = "released"
+        setup_hint = ""
+        if IS_MAC:
+            from macos_system import accessibility_allowed, microphone_status
+            if microphone_status() != 3:
+                setup_hint = "כדי להכתיב, יש לאשר גישה למיקרופון בהכנת ה־Mac."
+            elif not accessibility_allowed():
+                setup_hint = "כדי להדביק את התמלול, יש לאשר נגישות בהכנת ה־Mac."
         return {
+            "setup_hint": setup_hint,
             "state": "paused" if getattr(self, "_fullscreen_paused", False) else state,
             "device": self.transcriber.device or "",
             "model": self.config.get("model", ""),
