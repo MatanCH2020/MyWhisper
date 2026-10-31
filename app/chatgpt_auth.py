@@ -142,6 +142,7 @@ class ChatGPTAuth:
         self._signin_cancel = threading.Event()
         self._signin_lock = threading.Lock()
         self.error = ""
+        self.catalog_error = ""
         self.signing_in = False
         self.sign_in_error = ""
         try:
@@ -160,7 +161,10 @@ class ChatGPTAuth:
                     "connected": bool(account.get("refresh_token")),
                     "eligible": REQUIRED_SCOPES <= set(account.get("scopes", [])),
                     "email": account.get("email", ""), "error": self.error,
+                    "catalog_error": self.catalog_error,
                     "signing_in": self.signing_in, "sign_in_error": self.sign_in_error,
+                    "session_expired": account.get("expires_at", 0) <= time.time() + 2,
+                    "refreshing": self._refresh is not None and not self._refresh.done(),
                     "models": list(account.get("models", [])),
                     "accounts": [{"key": key, "label": (a.get("email") or "ChatGPT")
                                   + " · " + key[-6:]} for key, a in self.data["accounts"].items()]}
@@ -191,6 +195,24 @@ class ChatGPTAuth:
             self.store.save(self.data)
             self.error = ""
             self.sign_in_error = ""
+
+    def ensure_access(self, timeout=8):
+        """Worker-only wait for the single enabled refresh; never opt in here."""
+        token = self.access()
+        if token:
+            return token
+        self.schedule_refresh()
+        with self.lock:
+            pending, generation = self._refresh, self.generation
+        if pending is not None:
+            try:
+                pending.result(timeout=max(.001, timeout))
+            except TimeoutError:
+                raise
+            except Exception:
+                return None
+        with self.lock:
+            return self.access() if generation == self.generation else None
 
     async def _json(self, method, url, **kwargs):
         response = await self.http.client.request(method, url, **kwargs)
@@ -424,27 +446,42 @@ h1{{font-size:26px;line-height:1.4}}small{{color:#9aa2ae}}p{{margin-bottom:0}}</
             self.data = candidate
             self.error = "" if REQUIRED_SCOPES <= set(account["scopes"]) else "permission"
         if not self.error:
-            self.catalog()
+            try:
+                self.catalog()
+            except Exception:
+                # A verified, saved sign-in remains successful when the model
+                # service is temporarily unavailable. Let the user retry it.
+                self.catalog_error = "catalog"
         return self.status()
 
     def catalog(self):
+        if self.enabled:
+            self.ensure_access()
         with self.lock:
             key = self.data.get("active")
             account = dict(self._active())
         if not REQUIRED_SCOPES <= set(account.get("scopes", [])):
             raise AuthError("permission")
         if account.get("expires_at", 0) <= time.time():
-            raise AuthError("authorization")
-        body = self.http.call(self._json("GET", RESOURCE + "/models", headers={
-            "Authorization": "Bearer " + account["access_token"]}))
+            raise AuthError("session_expired")
+        try:
+            body = self.http.call(self._json("GET", RESOURCE + "/models", headers={
+                "Authorization": "Bearer " + account["access_token"]}))
+            if not isinstance(body, dict) or not isinstance(body.get("models"), list):
+                raise AuthError("catalog")
+        except Exception:
+            self.catalog_error = "catalog"
+            raise
         models = [{"slug": m["slug"], "display_name": m.get("display_name")
                    if isinstance(m.get("display_name"), str) else m["slug"]}
-                  for m in body.get("models", []) if m.get("visibility") == "list"
-                  and isinstance(m.get("slug"), str)]
+                  for m in body.get("models", []) if isinstance(m, dict)
+                  and m.get("visibility") == "list"
+                  and isinstance(m.get("slug"), str) and m["slug"]]
         with self.lock:
             if self.data.get("active") == key:
                 self._active()["models"] = models
                 self.store.save(self.data)
+                self.catalog_error = ""
         return models
 
     def schedule_refresh(self):

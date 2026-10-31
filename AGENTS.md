@@ -54,7 +54,7 @@ No linter is configured. `app/check_gpu.py` is the manual smoke test for the tra
 4. `Transcriber.transcribe()` (`transcriber.py`) runs `faster-whisper` on GPU (`cuda`/`float16`, falls back to CPU/`int8`; CPU uses `beam_size_cpu` greedy for speed). `_prompt_inputs()` merges `hotwords=corrections.bias_terms()` and `glossary=corrections.english_terms()` into one deduplicated vocabulary channel, prioritizing newest English terms when `glossary_prompt` is enabled. The loaded model's tokenizer bounds `initial_prompt` to 16 tokens and vocabulary to 96, within a shared 112-token ceiling. Never duplicate the glossary into both channels: this caused spoken English to disappear in 1.13.1. Use `task=transcribe`, explicit configured language (ivrit.ai's language detection is degraded) and `condition_on_previous_text=False`. The model loads lazily (`load`/`ensure_loaded`) and can be freed (`unload`) — `main._resource_poll` (a 1s GUI-thread `QTimer`) releases it after `idle_release_minutes` idle or while a fullscreen app is foreground (`fullscreen.foreground_is_fullscreen`), reloading transparently on next use. `transcriber._add_cuda_dll_dirs()` injects the pip CUDA DLL folders into the DLL search path before importing `faster_whisper` — required or GPU load fails.
 5. Post-processing in `_worker` produces the **logical** text, then the **display** text — keep these distinct:
    - `logical = corrections.apply(text)` — deterministic learned fixes (see below).
-   - Optional, explicit `chatgpt_enabled` pass through `TextEditor` after corrections, with a two-second total deadline. Preserve the pre-edit text as optional `original_text` history metadata. Local-LLM/Ollama polish was removed in 1.12.0.
+   - Optional, explicit `chatgpt_enabled` pass through `TextEditor` after corrections, with a 20-second total deadline (including enabled session refresh). Preserve the pre-edit text as optional `original_text` history metadata. Local-LLM/Ollama polish was removed in 1.12.0.
    - The chosen logical text goes to `history.add()` **as-is**. Only the pasted copy runs through `corrections.format_bidi()` (config `bidi_isolate`), which wraps Latin runs in U+2066/U+2069 isolates so English stays LTR inside Hebrew. Never store isolate characters in history or corrections — they would leak into the learning layer.
    - `DestinationGuard` observes foreground changes on the GUI thread; a switch away/back also blocks delivery. Save and notify instead of pasting into a different window. `paste_text()` checks the destination again immediately before native `Ctrl+V`, with optional clipboard restore.
 
@@ -169,3 +169,19 @@ Fullscreen pause (`release_on_fullscreen`): always synchronize recording-hotkey 
 ## Clipboard UI updates (1.14.0)
 
 Type filters, image gallery, paging (100 items), local favourites (`pinned`), delete/undo and capture status live in `clipui.py`. Image metadata may include `name` and `sha256`; old entries remain valid. Pinning never removes user files. File-image decoding runs in the clipboard worker, only for local supported image files up to 40MP; never fetch remote URLs. Picker selection callbacks return False on failure so the window stays open. `AppUI.open_clips` and `copy_to_clipboard` are injected; internal history copies use the suppressed copy path. Navigation indices 0/1/2 remain unchanged; index 3 opens the picker. Native screenshot/privacy verification: close MyWhisper, then run `scripts/check_clipboard_capture.py` (temporary data only). Broader audit evidence is in `docs/system-review-1.14.0.md`.
+
+## Local/cloud modes (1.16.0)
+
+`chatgpt_enabled` is the persisted two-mode choice; do not introduce a second competing mode key.
+`ModeSelector` is shared by the main window and recording HUD. Explicit clicks opt in without
+another confirmation; login alone remains local. During recording, the last choice applies to
+the whole recording. Snapshot mode/model/auth generation at stop, and reject stale generations
+before sending. Never use current settings to opt an already captured local recording into cloud.
+`Overlay` accepts mouse input but must not activate (WM_MOUSEACTIVATE -> MA_NOACTIVATE).
+Destination guarding begins at recording start, including switch-away/back. Native synthetic
+validation: `scripts/check_cloud_mode_ui.py` and `scripts/check_dictation_delivery.py --auto`.
+Cloud writing follows spoken writing instructions, excludes those instructions from the result,
+and gently cleans speech with no explicit instructions. It has no tools or external actions.
+The manual history scanner retains its separate data-only prompt and 45-second deadline.
+The benchmark requires the app closed so only one process rotates refresh tokens. Its explicit
+`--allow-plan-use` flag opts in to synthetic evaluation only and never changes the saved mode.

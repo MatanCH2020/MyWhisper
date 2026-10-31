@@ -1,7 +1,8 @@
-"""Live measurement of 20 synthetic texts using the user's explicitly enabled account.
+"""Compare account models on 26 synthetic writing cases, never personal history.
 
-Never reads dictation history. Does not log credentials, enable the feature,
-refresh an OFF account, or fall back to a paid API. Output is a local report.
+Requires the app closed and explicit plan-use authorization (saved cloud mode or
+--allow-plan-use). Owns refresh rotation; never changes app mode/model or uses a
+paid API. Fragment checks are not a substitute for semantic review.
 """
 import argparse
 import json
@@ -12,7 +13,7 @@ import sys
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "app"))
 from config import load_config
 from cloud_http import CloudHTTP
-from chatgpt_auth import ChatGPTAuth
+from chatgpt_auth import ChatGPTAuth, AuthError
 from text_editor import TextEditor
 
 CASES = [
@@ -41,49 +42,96 @@ CASES = [
 ]
 
 
+# Each input is synthetic. Checks catch objective omissions/leaked instructions;
+# fluency and faithful tone still require reading the output.
+CASES += [
+    ("email", "תנסח מייל מקצועי לדני. המחיר עלה מ-500 ל-600 שקלים בגלל חומרי הגלם. אני זמין לשאלות.", ["500", "600"]),
+    ("instruction-at-end", "דני מחר לא אוכל להגיע ניפגש בחמישי אם מתאים. תנסח את זה כהודעת וואטסאפ קצרה ונעימה.", ["דני", "בחמישי"]),
+    ("tasks", "תסדר לי רשימת משימות: להכין הצעה לשלוח לדני ולקבוע שיחה ביום ראשון.", ["הצעה", "דני", "ראשון"]),
+    ("translate", "תרגם לאנגלית: המחיר הוא 600 שקלים והפגישה ביום ראשון.", ["600", "Sunday"]),
+    ("recipient-question", "מתי אתה מגיע והאם תוכל להביא מחשב?", ["מתי", "מחשב"]),
+    ("plain-no-format", "דני שמע אני מחר לא יכול להגיע בעצם בוא נעביר את זה ליום חמישי אם זה מתאים לך", ["דני", "חמישי"]),
+]
+FORBIDDEN = {
+    "email": ["תנסח", "כמובן", "הנה המייל"],
+    "instruction-at-end": ["תנסח", "כהודעת וואטסאפ"],
+    "tasks": ["תסדר לי"],
+    "translate": ["תרגם לאנגלית"],
+    "plain-no-format": ["נושא:", "בברכה", "סיכום:"],
+}
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", type=Path, required=True)
-    parser.add_argument("--model", help="Measure an available model without changing app settings")
+    parser.add_argument("--model", action="append", help="Repeat to compare available models")
+    parser.add_argument("--rounds", type=int, default=1, choices=range(1, 4))
+    parser.add_argument("--limit", type=int, default=len(CASES))
+    parser.add_argument("--allow-plan-use", action="store_true",
+                        help="Explicitly authorize synthetic benchmark only; leaves app mode unchanged")
     args = parser.parse_args()
     cfg = load_config()
-    if cfg.get("chatgpt_enabled") is not True:
-        parser.error("Connect and explicitly enable ChatGPT editing in MyWhisper first.")
+    if cfg.get("chatgpt_enabled") is not True and not args.allow_plan_use:
+        parser.error("Enable cloud mode or explicitly authorize --allow-plan-use for this run.")
+    # Own the same single-instance lock before rotating the stored refresh token.
+    # Never race the running app's stale in-memory credential record.
+    from main import _acquire_single_instance
+    if not _acquire_single_instance():
+        parser.error("Close MyWhisper before running the benchmark.")
     http = CloudHTTP()
+    auth = ChatGPTAuth(http)
+    report = {"billing": "ChatGPT plan usage; no paid API fallback", "deadline_ms": 20000,
+              "quality_requires_manual_review": True, "models": [], "blocker": ""}
     try:
-        auth = ChatGPTAuth(http)
         st = auth.status()
-        model = args.model or cfg.get("chatgpt_model", "")
-        if not st["connected"] or not st["eligible"] or model not in {m["slug"] for m in st["models"]}:
-            parser.error("An eligible account and an available model are required.")
-        auth.set_enabled(True)
-        # The running, single-instance app owns refresh-token rotation. This
-        # measurement process only reads its credentials and never rotates them.
-        if not auth.access():
-            parser.error("Wait for enabled MyWhisper to renew authorization, or sign in again in the app.")
+        if not st["connected"] or not st["eligible"]:
+            report["blocker"] = "authorization"
+            return 1
+        auth.set_enabled(True)  # explicit opt-in for synthetic requests in this process
+        if not auth.ensure_access():
+            report["blocker"] = auth.error or "session_refresh_failed"
+            return 1
+        available = {m["slug"] for m in auth.catalog()}
+        models = args.model or [cfg.get("chatgpt_model", "")]
+        if any(model not in available for model in models):
+            report["blocker"] = "model_unavailable"
+            report["available_models"] = sorted(available)
+            return 1
         editor = TextEditor(auth, http)
-        rows = []
-        for name, text, keep in CASES:
-            # Respect a user who switches the app's feature OFF during measurement.
-            if load_config().get("chatgpt_enabled") is not True:
-                auth.set_enabled(False)
-                break
-            result = editor.edit(text, model)
-            rows.append({"case": name, "input": text, "output": result.text,
-                         "status": result.status, "elapsed_ms": result.elapsed_ms,
-                         "required_fragments_present": all(fragment in result.text for fragment in keep)})
-            print(f"{name}: {result.status} {result.elapsed_ms}ms", flush=True)
-        successes = [r["elapsed_ms"] for r in rows if r["status"] in ("edited", "unchanged")]
-        report = {"model": model, "samples": len(rows), "completed": len(successes),
-                  "deadline_ms": 2000, "median_completed_ms": statistics.median(successes) if successes else None,
-                  "max_completed_ms": max(successes) if successes else None,
-                  "quality_requires_manual_review": True, "results": rows}
+        for model in models:
+            rows = []
+            report["models"].append({"model": model, "results": rows})
+            for round_index in range(args.rounds):
+                for name, text, keep in CASES[:max(1, args.limit)]:
+                    if not args.allow_plan_use and load_config().get("chatgpt_enabled") is not True:
+                        report["blocker"] = "disabled"
+                        return 1
+                    result = editor.edit(text, model)
+                    success = result.status in ("edited", "unchanged")
+                    rows.append({"round": round_index + 1, "case": name, "input": text,
+                                 "output": result.text, "status": result.status, "elapsed_ms": result.elapsed_ms,
+                                 "checks_passed": success and all(f in result.text for f in keep)
+                                     and not any(f in result.text for f in FORBIDDEN.get(name, []))})
+                    print(f"{model} {name}: {result.status} {result.elapsed_ms}ms", flush=True)
+                    if result.status in ("authorization", "ineligible", "quota"):
+                        report["blocker"] = result.status
+                        return 1
+            successes = [r["elapsed_ms"] for r in rows if r["status"] in ("edited", "unchanged")]
+            report["models"][-1].update(samples=len(rows), completed=len(successes),
+                checks_passed=sum(r["checks_passed"] for r in rows),
+                median_completed_ms=statistics.median(successes) if successes else None,
+                max_completed_ms=max(successes) if successes else None)
+        return 0
+    except (AuthError, TimeoutError):
+        report["blocker"] = "authorization_or_catalog_unavailable"
+        return 1
+    finally:
+        auth.close()
+        http.close()
         args.output.parent.mkdir(parents=True, exist_ok=True)
         args.output.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
-        print(f"Report saved: {args.output}")
-    finally:
-        http.close()
+        print(f"Report saved: {args.output}; blocker={report['blocker'] or 'none'}", flush=True)
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

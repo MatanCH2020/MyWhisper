@@ -287,7 +287,7 @@ class SettingsPageMixin:
         card.vbox.addWidget(self._section("שיפור הטקסט עם ChatGPT"))
         card.vbox.addWidget(self._hint(
             "תמלול מקומי כברירת מחדל. עריכת טקסט בענן — לבחירתך. "
-            "התוספת מסירה חזרות מקריות והיסוסים ומשפרת ניסוח ופיסוק. "
+            "במצב AI בענן אפשר לומר מה לנסח ואז לדבר בחופשיות. ללא הוראות, הטקסט עובר שיפור עדין. "
             "היא אינה מבטיחה תיקון של כל טעות בזיהוי הדיבור."))
         self._cloud_busy = False
         self._cloud_connection = QLabel()
@@ -334,7 +334,7 @@ class SettingsPageMixin:
         row.addWidget(self._cloud_cancel)
         card.vbox.addLayout(row)
         row = QHBoxLayout()
-        row.addWidget(self._plain("מודל עריכת טקסט"))
+        row.addWidget(self._plain("מודל AI לעיבוד הטקסט"))
         self._cloud_model = QComboBox()
         # Ancestor transparent styles override the application popup rules on
         # Windows. Bind directly, as for the microphone picker, and retain the
@@ -349,9 +349,9 @@ class SettingsPageMixin:
         row.addWidget(self._cloud_refresh)
         card.vbox.addLayout(row)
         card.vbox.addWidget(self._hint(
-            "טקסט ההכתבה יישלח ל־OpenAI לעריכה. האודיו והתמלול נשארים במחשב. "
+            "טקסט ההכתבה יישלח ל־OpenAI לעריכה. האודיו וזיהוי הדיבור נשארים במחשב. "
             "השימוש כפוף לזכאות ולמכסת החשבון. התחברות לבדה אינה מפעילה עריכה. "
-            "בכשל או בעיכוב מעל שתי שניות יישמר ויודבק התמלול המקומי."
+            "בכשל או לאחר 20 שניות יישמר ויודבק התמלול המקומי עם חיווי ברור."
             " כשעוברים לחלון אחר בזמן העיבוד, התוצאה תמתין בהיסטוריה."))
         row = QHBoxLayout()
         row.addWidget(self._plain("הפעל עריכה בענן"))
@@ -367,6 +367,15 @@ class SettingsPageMixin:
         self._cloud_status.setObjectName("fieldlabel")
         self._cloud_status.setAccessibleName("מצב עריכת הטקסט בענן")
         card.vbox.addWidget(self._cloud_status)
+        self._cloud_probe = QPushButton("בדוק חיבור ועיבוד")
+        self._cloud_probe.setToolTip("שולח טקסט דוגמה בלבד למודל שנבחר, במסגרת מכסת החשבון.")
+        self._cloud_probe.clicked.connect(lambda: self._cloud_async("probe"))
+        card.vbox.addWidget(self._cloud_probe)
+        self._cloud_probe_label = QLabel("טרם בוצעה בדיקת עיבוד למודל שנבחר.")
+        self._cloud_probe_label.setTextFormat(Qt.PlainText)
+        self._cloud_probe_label.setWordWrap(True)
+        self._cloud_probe_label.setObjectName("hint")
+        card.vbox.addWidget(self._cloud_probe_label)
         usage = QPushButton("ניהול שימוש והרשאות ב-ChatGPT")
         usage.clicked.connect(lambda: self.ui.chatgpt_action("usage"))
         card.vbox.addWidget(usage)
@@ -383,6 +392,8 @@ class SettingsPageMixin:
         if self._cloud_busy:
             return
         st = status or self.ui.chatgpt_status()
+        self.mode_selector.update_status(st, supported=self.ui.cloud_supported,
+            busy=self.ui._overlay.state in ("transcribing", "polishing"))
         for combo, items, current in (
             (self._cloud_account, [("בחר חשבון", "")] + [(a["label"], a["key"]) for a in st.get("accounts", [])], st.get("active", "")),
             (self._cloud_model, [("בחר מודל זמין בחשבון", "")] + [(m["display_name"], m["slug"]) for m in st.get("models", [])], st.get("model", ""))):
@@ -399,7 +410,7 @@ class SettingsPageMixin:
         error = st.get("error")
         reconnect = error in ("authorization", "identity") or (bool(st.get("active")) and not connected)
         self._cloud_account.setVisible(bool(st.get("accounts")))
-        self._cloud_relogin.setVisible(reconnect or (connected and not st.get("eligible")))
+        self._cloud_relogin.setVisible(bool(reconnect or (connected and (not st.get("eligible") or st.get("session_expired")))))
         self._cloud_relogin.setEnabled(bool(st.get("active")))
         self._cloud_logout.setVisible(connected)
         self._cloud_logout.setEnabled(connected)
@@ -421,6 +432,9 @@ class SettingsPageMixin:
         elif connected:
             connection = "מצב חיבור: מחובר ל־ChatGPT"
             detail = "חשבון פעיל: " + (st.get("email") or "ChatGPT")
+            if st.get("session_expired"):
+                connection = "מצב חיבור: חשבון ChatGPT שמור"
+                detail += "\nממתין לחידוש הרשאה במצב ענן; ניתן גם לחדש התחברות ידנית."
         else:
             connection = "מצב חיבור: לא מחובר ל־ChatGPT"
             detail = "לחץ על Continue with ChatGPT והשלם את האישור בדפדפן. כניסה לדפדפן לבדה אינה מחברת את MyWhisper."
@@ -457,22 +471,19 @@ class SettingsPageMixin:
         elif connected and not model_ready:
             text += "\nבחר מודל זמין ואז הפעל עריכה בנפרד."
         elif connected and not st.get("enabled"):
-            text += "\nהחשבון מחובר. להפעלת השיפור יש להפעיל את המתג ולאשר שליחת טקסט."
+            text += "\nהחשבון מחובר. להפעלת השיפור בחר AI בענן במתג המצבים."
+        if st.get("refreshing"):
+            text += "\nמחדש הרשאה לחשבון…"
+        elif st.get("session_expired") and connected:
+            text += "\nהחשבון שמור; ההרשאה תחודש בבחירת מצב ענן."
+        if st.get("catalog_error"):
+            text += "\nרשימת המודלים לא נטענה. לחץ רענן מודלים."
+        self._cloud_probe_label.setText(st.get("probe") or "טרם בוצעה בדיקת עיבוד למודל שנבחר.")
+        self._cloud_probe.setEnabled(bool(st.get("enabled")) and not self._cloud_busy)
         self._cloud_status.setText(text)
         self._cloud_login.setToolTip("הוסף חשבון ChatGPT" if st.get("accounts") else "התחבר עם חשבון ChatGPT אישי")
 
     def _cloud_toggle(self, on):
-        if on:
-            box = QMessageBox(self)
-            box.setWindowTitle("הפעלת עריכת טקסט בענן")
-            box.setText("טקסט ההכתבה יישלח ל־OpenAI לעריכה. האודיו והתמלול נשארים במחשב. "
-                        "השימוש כפוף לזכאות ולמכסת החשבון.")
-            approve = box.addButton("הפעל עריכה בענן", QMessageBox.AcceptRole)
-            cancel = box.addButton("ביטול", QMessageBox.RejectRole)
-            box.setDefaultButton(cancel)
-            box.setEscapeButton(cancel)
-            box.exec()
-            on = box.clickedButton() is approve
         result = self.ui.chatgpt_action("enable", bool(on))
         self._refresh_cloud(result)
         if result.get("message"):
@@ -494,13 +505,13 @@ class SettingsPageMixin:
         if self._cloud_busy:
             return
         # Disabling is synchronous and cancels any edit/refresh immediately.
-        if action != "catalog":
+        if action not in ("catalog", "probe"):
             self.ui.chatgpt_action("enable", False)
         self._cloud_busy = True
         for widget in (self._cloud_login, self._cloud_relogin, self._cloud_logout,
-                       self._cloud_account, self._cloud_model, self._cloud_refresh, self._cloud_switch):
+                       self._cloud_account, self._cloud_model, self._cloud_refresh, self._cloud_switch, self._cloud_probe):
             widget.setEnabled(False)
-        self._cloud_switch.setEnabled(action == "catalog" and self.ui.chatgpt_status().get("enabled", False))
+        self._cloud_switch.setEnabled(action in ("catalog", "probe") and self.ui.chatgpt_status().get("enabled", False))
         self._cloud_browser.setEnabled(False)
         if action in ("login", "relogin"):
             self._cloud_connection.setText("מצב חיבור: ממתין לאישור בדפדפן…")
@@ -520,7 +531,7 @@ class SettingsPageMixin:
         self._cloud_cancel.hide()
         self._cloud_browser.setEnabled(True)
         for widget in (self._cloud_login, self._cloud_relogin, self._cloud_logout,
-                       self._cloud_account, self._cloud_model, self._cloud_refresh, self._cloud_switch):
+                       self._cloud_account, self._cloud_model, self._cloud_refresh, self._cloud_switch, self._cloud_probe):
             widget.setEnabled(True)
         self._refresh_cloud(result)
         message = result.get("message", "")

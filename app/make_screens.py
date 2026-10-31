@@ -103,6 +103,7 @@ def main():
                         help="Refresh only the recording HUD screenshot")
     parser.add_argument("--chatgpt-states", action="store_true",
                         help="Render connected and failed-sign-in examples with synthetic account data")
+    parser.add_argument("--mode-states", action="store_true", help="Render both dictation modes with demo data")
     parser.add_argument("--scan-states", action="store_true", help="Render synthetic scan progress and persistent results")
     parser.add_argument("--fullscreen-paused", action="store_true", help="Render fullscreen suspension with demo data")
     parser.add_argument("--support-states", action="store_true", help="Render the support preview with synthetic data only")
@@ -110,6 +111,24 @@ def main():
     if args.output_dir:
         DOCS = args.output_dir.resolve()
     DOCS.mkdir(exist_ok=True)
+    if args.mode_states:
+        for cloud in (False, True):
+            status = {"connected": True, "eligible": True, "enabled": cloud, "model": "gpt-6-luna",
+                      "models": [{"slug": "gpt-6-luna", "display_name": "GPT-6 Luna"}]}
+            win = build("dark")
+            win.ui.chatgpt_status = lambda st=status: st
+            win._refresh_cloud()
+            shoot(win, 0, DOCS / ("app-mode-cloud.png" if cloud else "app-mode-local.png"))
+            ov = win.ui._overlay
+            ov.mode.update_status(status)
+            ov.state, ov._elapsed, ov._level = "recording", 23, .7
+            ov.move(-4000, 200)
+            ov.show()
+            app.processEvents()
+            ov.grab().save(str(DOCS / ("app-overlay-cloud.png" if cloud else "app-overlay.png")), "PNG")
+            ov.close()
+            win.close()
+        return
     if args.clipboard_only:
         shoot_clipboard()
         return
@@ -179,6 +198,16 @@ def main():
             win = build("dark")
             win.ui.chatgpt_status = lambda status=status: status
             win._refresh_cloud()
+            win.resize(960, 900)
+            win._goto(2)
+            win._cloud_panel.set_open(True)
+            app.processEvents()
+            from PySide6.QtWidgets import QScrollArea
+            scroll = win._cloud_panel.parentWidget()
+            while scroll is not None and not isinstance(scroll, QScrollArea):
+                scroll = scroll.parentWidget()
+            if scroll is not None:
+                scroll.verticalScrollBar().setValue(win._cloud_panel.y())
             shoot(win, 2, DOCS / f"app-chatgpt-{name}-dark.png")
             win.close()
         return

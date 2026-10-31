@@ -607,6 +607,10 @@ class MainWindow(HistoryPageMixin, DictionaryPageMixin, SettingsPageMixin, Frame
 
         self.body.addWidget(TitleBar(palette, ui.toggle_theme,
                                      self.showMinimized, self.close, on_max=self.toggle_max))
+        from mode_controls import ModeSelector
+        self.mode_selector = ModeSelector()
+        self.mode_selector.selected.connect(ui.select_mode)
+        self.body.addWidget(self.mode_selector)
 
         mid = QWidget()
         midl = QHBoxLayout(mid)
@@ -905,7 +909,12 @@ class AppUI(QObject):
         self._overlay = Overlay(level_provider)
         self._win = None
 
-        self._overlay_sig.connect(self._overlay.set_state)
+        self._overlay_sig.connect(self._set_overlay_on_main)
+        self._overlay.mode.selected.connect(self.select_mode)
+        self._mode_timer = QTimer(self)
+        self._mode_timer.timeout.connect(self.refresh_modes)
+        self._mode_timer.start(500)
+        self._overlay.destroyed.connect(self._mode_timer.stop)
         self._settings_sig.connect(self._show_window)
         self._quit_sig.connect(self._quit_on_main_thread)
         self._history_sig.connect(self._refresh_history_page)
@@ -914,6 +923,35 @@ class AppUI(QObject):
         qapp = QApplication.instance()
         qapp.setLayoutDirection(Qt.RightToLeft)
         qapp.setStyleSheet(theme.build_qss(self.p))
+
+    def select_mode(self, cloud):
+        if self._overlay.state in ("transcribing", "polishing"):
+            return
+        if bool(cloud) == (self.chatgpt_status().get("enabled") is True):
+            self.refresh_modes()
+            return
+        result = self.chatgpt_action("enable", bool(cloud))
+        self.refresh_modes()
+        if self._win is not None:
+            self._win._refresh_cloud(result)
+        if result.get("message"):
+            self.notify("MyWhisper", result["message"])
+
+    def refresh_modes(self):
+        from shiboken6 import isValid
+        if not isValid(self._overlay):
+            self._mode_timer.stop()
+            return
+        status = self.chatgpt_status()
+        busy = self._overlay.state in ("transcribing", "polishing")
+        busy = busy or bool(self._win is not None and getattr(self._win, "_cloud_busy", False))
+        self._overlay.mode.update_status(status, busy=busy, supported=self.cloud_supported)
+        if self._win is not None and isValid(self._win):
+            self._win.mode_selector.update_status(status, busy=busy, supported=self.cloud_supported)
+
+    def _set_overlay_on_main(self, state):
+        self._overlay.set_state(state)
+        self.refresh_modes()
 
     def _show_window(self):
         fresh = self._win is None

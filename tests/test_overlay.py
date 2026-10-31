@@ -88,7 +88,10 @@ class OverlayTest(unittest.TestCase):
                     images = []
                     for direction in (Qt.LeftToRight, Qt.RightToLeft):
                         qapp.setLayoutDirection(direction)
-                        images.append(self.hud.grab().toImage())
+                        # Native buttons use Qt's platform text renderer; this
+                        # regression concerns our explicitly positioned HUD.
+                        images.append(self.hud.grab().toImage().copy(0, 0, self.hud.width(), 82))
+                        self.assertEqual(self.hud.mode.layoutDirection(), Qt.RightToLeft)
                     with self.subTest(state=state, elapsed=elapsed):
                         self.assertEqual(images[0], images[1])
         finally:
@@ -124,7 +127,8 @@ class OverlayTest(unittest.TestCase):
         self.assertEqual(self.hud.windowOpacity(), 1.0)
         self.assertTrue(self.hud.testAttribute(Qt.WA_ShowWithoutActivating))
         self.assertTrue(self.hud.windowFlags() & Qt.WindowDoesNotAcceptFocus)
-        self.assertTrue(self.hud.windowFlags() & Qt.WindowTransparentForInput)
+        self.assertFalse(self.hud.windowFlags() & Qt.WindowTransparentForInput)
+        self.assertEqual(self.hud.mode.local.focusPolicy(), Qt.NoFocus)
 
     def test_cancel_during_entrance_and_restart(self):
         with patch.object(overlay, "motion_enabled", return_value=True):

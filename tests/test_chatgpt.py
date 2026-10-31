@@ -183,7 +183,7 @@ class EditorTests(unittest.TestCase):
     def test_missing_or_unlisted_model_does_not_send(self):
         auth, editor = self.setup_editor(httpx.Response(200))
         auth.set_enabled(True)
-        self.assertEqual(editor.edit("original", "unknown").status, "authorization")
+        self.assertEqual(editor.edit("original", "unknown").status, "unsupported")
         self.assertEqual(self.requests, [])
 
     def test_switch_isolates_bearer_and_requires_reactivation(self):
@@ -719,11 +719,12 @@ class CloudSettingsTests(unittest.TestCase):
                 self.assertIn("owner@example.test", self.win._cloud_connection_detail.text())
         self.ui.chatgpt_action.assert_not_called()
 
-    def test_cancel_activation_does_not_opt_in(self):
+    def test_explicit_click_enables_without_confirmation_dialog(self):
         from PySide6.QtWidgets import QMessageBox
-        with patch.object(QMessageBox, "exec"), patch.object(QMessageBox, "clickedButton", return_value=None):
+        with patch.object(QMessageBox, "exec") as dialog:
             self.win._cloud_toggle(True)
-        self.ui.chatgpt_action.assert_called_once_with("enable", False)
+        dialog.assert_not_called()
+        self.ui.chatgpt_action.assert_called_once_with("enable", True)
 
     def test_selecting_model_does_not_enable_cloud(self):
         self.win._cloud_model.addItem("Demo", "demo-model")

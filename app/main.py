@@ -263,6 +263,7 @@ class Mywishper(QObject):
     def _chatgpt_status(self):
         status = self.chatgpt.status()
         status["model"] = self.config.get("chatgpt_model", "")
+        status["probe"] = getattr(self, "_cloud_probe", "")
         return status
 
     def _set_chatgpt_enabled(self, enabled):
@@ -302,11 +303,16 @@ class Mywishper(QObject):
                 if not self._set_chatgpt_enabled(value) and value is True:
                     message = "העריכה כבויה. יש לחבר חשבון זכאי ולבחור מודל זמין."
             elif action == "model":
+                was_enabled = self.chatgpt.enabled
                 self._set_chatgpt_enabled(False)
                 if value in {m["slug"] for m in self.chatgpt.status()["models"]}:
                     self.config["chatgpt_model"] = value
                     save_config(self.config)
+                    self._cloud_probe = ""
+                    if was_enabled:
+                        self._set_chatgpt_enabled(True)
             elif action in ("login", "relogin", "select", "disconnect"):
+                self._cloud_probe = ""
                 self._set_chatgpt_enabled(False)
                 if action in ("login", "relogin"):
                     self.chatgpt.sign_in(returning=action == "relogin", browser=lambda url:
@@ -324,7 +330,9 @@ class Mywishper(QObject):
                         message = ("נותקת במחשב. ביטול ההרשאה בשרת לא אושר; "
                                    "אפשר לנתק את MyWhisper בהגדרות ChatGPT.")
                 models = {m["slug"] for m in self.chatgpt.status()["models"]}
-                self.config["chatgpt_model"] = DEFAULT_MODEL if DEFAULT_MODEL in models else ""
+                previous = self.config.get("chatgpt_model", "")
+                self.config["chatgpt_model"] = (previous if previous in models else
+                                                 DEFAULT_MODEL if DEFAULT_MODEL in models else "")
                 save_config(self.config)
             elif action == "welcome":
                 with self.chatgpt.lock:
@@ -343,6 +351,30 @@ class Mywishper(QObject):
                     self._set_chatgpt_enabled(False)
                     self.config["chatgpt_model"] = ""
                     save_config(self.config)
+            elif action == "probe":
+                if not self.chatgpt.enabled:
+                    message = "בחר AI בענן כדי לאפשר בדיקה עם טקסט דוגמה."
+                else:
+                    generation = self.chatgpt.generation
+                    model = self.config.get("chatgpt_model", "")
+                    self.chatgpt.catalog()
+                    result = self.text_editor.edit("נסח הודעה קצרה: הפגישה ביום ראשון בשעה 10:30.",
+                                                   model, generation=generation)
+                    if generation == self.chatgpt.generation:
+                        message = (f"בדיקת עיבוד הצליחה · {model} · {result.elapsed_ms / 1000:.1f} שניות"
+                                   if result.status in ("edited", "unchanged") else
+                                   "בדיקת העיבוד לא הושלמה: " + {
+                                       "timeout": "תם זמן ההמתנה למודל",
+                                       "connection": "לא התקבלה תשובה תקינה מהשירות",
+                                       "quota": "מכסת החשבון אינה זמינה",
+                                       "authorization": "נדרשת התחברות מחדש",
+                                       "ineligible": "החשבון אינו זכאי",
+                                       "unsupported": "המודל אינו זמין לעיבוד זה",
+                                   }.get(result.status, "התשובה לא הושלמה או בוטלה"))
+                        self._cloud_probe = message
+                        if result.status in ("quota", "ineligible", "authorization", "unsupported"):
+                            self.chatgpt.error = result.status
+                            self._set_chatgpt_enabled(False)
             elif action == "cancel":
                 self.chatgpt._signin_cancel.set()
         except AuthError as error:
@@ -351,6 +383,7 @@ class Mywishper(QObject):
                 "permission": "החשבון לא אישר שימוש במסגרת ChatGPT או אינו זכאי. התמלול ממשיך מקומית.",
                 "identity": "אימות זהות החשבון נכשל. יש להתחבר מחדש.",
                 "authorization": "ההרשאה פגה או נדחתה. יש להתחבר מחדש.",
+                "session_expired": "החשבון שמור. להפעלת חידוש ההרשאה בחר AI בענן, או לחץ חדש התחברות.",
                 "storage": "לא ניתן לקרוא או לשמור את ההרשאות המוצפנות. העריכה נשארת כבויה.",
                 "timeout": "ההתחברות לא הושלמה בזמן. אפשר לנסות שוב.",
                 "cancelled": "ההתחברות בוטלה.",
@@ -646,6 +679,7 @@ class Mywishper(QObject):
                 self.open_mac_setup()
                 raise MicrophoneUnavailable("יש לאשר גישה למיקרופון במסך הכנת ה־Mac.")
         self.recorder.start()
+        self._destination_guard = DestinationGuard().start()
         self._state = State.RECORDING
         self.tray.set_state("recording", "MyWhisper — מקליט...")
         self.ui.set_overlay_state("recording")
@@ -679,6 +713,10 @@ class Mywishper(QObject):
             if self._state == State.TRANSCRIBING or not self.recorder.recording:
                 return
             self._end_recording_hooks()
+            guard = getattr(self, "_destination_guard", None)
+            if guard is not None:
+                guard.close()
+                self._destination_guard = None
             try:
                 self.recorder.stop()  # audio discarded
             except Exception:
@@ -703,7 +741,10 @@ class Mywishper(QObject):
                 self._recover_from_error()
 
     def _stop_and_transcribe(self, background=False):
-        self._destination_guard = None if background else DestinationGuard().start()
+        guard = getattr(self, "_destination_guard", None)
+        if background and guard is not None:
+            guard.close()
+        self._destination_guard = None if background else guard or DestinationGuard().start()
         destination = 0 if background else self._destination_guard
         self._state = State.TRANSCRIBING
         self._end_recording_hooks()
@@ -713,11 +754,20 @@ class Mywishper(QObject):
             self.tray.set_state("transcribing", "MyWhisper — מתמלל...")
             self.ui.set_overlay_state("transcribing")
         # Run the heavy work off the hotkey thread so the UI stays responsive.
-        threading.Thread(target=self._worker, args=(audio, destination), daemon=True).start()
+        cloud_request = (False, "", None) if IS_MAC or self.config.get("chatgpt_enabled") is not True else (
+            self.config.get("chatgpt_enabled") is True,
+            self.config.get("chatgpt_model", ""), self.chatgpt.generation)
+        threading.Thread(target=self._worker, args=(audio, destination, cloud_request), daemon=True).start()
 
-    def _worker(self, audio, destination=None):
+    def _worker(self, audio, destination=None, cloud_request=None):
         if destination is None:
             destination = foreground_window()
+        # Capture mode before transcription starts. A later opt-in/account change
+        # must never send an already captured local recording to another account.
+        if cloud_request is None:
+            cloud_request = (not IS_MAC and self.config.get("chatgpt_enabled") is True,
+                             self.config.get("chatgpt_model", ""), None)
+        cloud, cloud_model, generation = cloud_request
         try:
             text = self.transcriber.transcribe(
                 audio, hotwords=corrections.bias_terms(),
@@ -726,20 +776,22 @@ class Mywishper(QObject):
                 logical = corrections.apply(text)
                 original = logical
                 edit = None
-                if not IS_MAC and self.config.get("chatgpt_enabled") is True:
+                if cloud:
                     if not getattr(self, "_fullscreen_paused", False):
                         self.ui.set_overlay_state("polishing")
-                    edit = self.text_editor.edit(logical, self.config.get("chatgpt_model", ""))
+                    edit = self.text_editor.edit(logical, cloud_model, **(
+                        {"generation": generation} if generation is not None else {}))
                     logical = edit.text
                     if edit.status in ("quota", "ineligible", "authorization", "unsupported"):
                         self.chatgpt.error = edit.status
                         self._set_chatgpt_enabled(False)
-                    if edit.status not in ("edited", "unchanged", "disabled"):
+                    if edit.status not in ("edited", "unchanged"):
                         hint = {"timeout": "העריכה התעכבה", "quota": "מכסת ChatGPT אינה זמינה; העריכה כובתה",
                                 "ineligible": "החשבון אינו זכאי; העריכה כובתה",
                                 "authorization": "נדרש חיבור מחדש לחשבון ChatGPT; העריכה כובתה"}.get(
                                     edit.status, "העריכה לא הושלמה")
-                        self._dictation_notice("MyWhisper", hint + " — נשמר התמלול המקומי.", duration_ms=3500)
+                        self._dictation_notice("MyWhisper — חזרה לתמלול מקומי",
+                                               hint + " — התוצאה היא התמלול המקומי, ללא עיבוד ענן.", duration_ms=8000)
                 history.add(logical, **({"original_text": original, "edit_status": edit.status,
                                         "edit_ms": edit.elapsed_ms, "edit_model": edit.model} if edit else {}))
                 # Refresh an open history page so the new card appears on its

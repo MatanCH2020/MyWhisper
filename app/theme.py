@@ -283,6 +283,11 @@ QScrollBar:horizontal {{ height: 0; }}
 
 /* Named roles, so a label's look lives here instead of in an inline
    setStyleSheet at each call site. Set with setObjectName(). */
+#modebutton {{ background: {p['surface_alt']}; color: {p['text']}; border: 1px solid {p['border']};
+    border-radius: 8px; padding: 4px 12px; font-size: 14px; }}
+#modebutton:checked {{ background: {p['nav_sel']}; color: {p['accent']}; border: 2px solid {p['accent']}; font-weight: 700; }}
+#modebutton:disabled {{ color: {p['text_muted']}; }}
+#modehint {{ color: {p['text_muted']}; font-size: 12px; }}
 #hint {{ color: {p['text_muted']}; font-size: {FS['hint']}px; }}
 #fieldlabel {{ color: {p['text']}; font-size: {FS['body']}px; }}
 #connectionstatus {{ color: {p['text']}; font-size: {FS['title']}px; font-weight: 600; }}

@@ -11,6 +11,7 @@ from PySide6.QtWidgets import QApplication, QWidget
 
 import icons
 import theme
+from mode_controls import ModeSelector
 
 
 def motion_enabled():
@@ -35,18 +36,22 @@ def hud_position(available, size):
 
 
 class Overlay(QWidget):
-    CARD_W, CARD_H, SHADOW = 240, 72, 8
+    CARD_W, CARD_H, SHADOW = 360, 160, 8
 
     def __init__(self, level_provider):
         super().__init__(None, Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint
-                         | Qt.Tool | Qt.WindowDoesNotAcceptFocus
-                         | Qt.WindowTransparentForInput)
+                         | Qt.Tool | Qt.WindowDoesNotAcceptFocus)
         self.setWindowTitle("MyWhisper — Recording HUD")
+        self.setLayoutDirection(Qt.RightToLeft)
         self.setAttribute(Qt.WA_TranslucentBackground)
         self.setAttribute(Qt.WA_ShowWithoutActivating)
         self.setFocusPolicy(Qt.NoFocus)
         self.setFixedSize(self.CARD_W + self.SHADOW * 2,
                           self.CARD_H + self.SHADOW * 2)
+        self.mode = ModeSelector(self, nonactivating=True)
+        self.mode.setGeometry(self.SHADOW + 4, self.SHADOW + 78, self.CARD_W - 8, 78)
+        # The HUD always has a dark surface, independent of the main window.
+        self.mode.setStyleSheet(theme.build_qss(theme.DARK))
         self.level_provider = level_provider
         self.state = "idle"
         self.frame = 0
@@ -66,6 +71,14 @@ class Overlay(QWidget):
             animation.setEasingCurve(QEasingCurve.OutCubic)
             self._entrance.addAnimation(animation)
         QApplication.instance().screenRemoved.connect(self._screen_removed)
+
+    def nativeEvent(self, event_type, message):
+        if sys.platform == "win32":
+            from ctypes import wintypes
+            msg = wintypes.MSG.from_address(int(message))
+            if msg.message == 0x0021:  # WM_MOUSEACTIVATE: handle click, keep editor focus
+                return True, 3  # MA_NOACTIVATE
+        return super().nativeEvent(event_type, message)
 
     def _choose_screen(self, excluded=None):
         screen = QApplication.screenAt(QCursor.pos())
@@ -128,8 +141,8 @@ class Overlay(QWidget):
             self.raise_()
             if self._motion:
                 self._entrance.start()
-        self.setAccessibleName({"recording": "מקליט", "transcribing": "מתמלל",
-                                "polishing": "מסדר טקסט…"}[self.state])
+        self.setAccessibleName({"recording": "מקליט", "transcribing": "מתמלל במחשב",
+                                "polishing": "מעבד עם AI בענן"}[self.state])
         self._timer.start(33 if self._motion else 100)
         self.update()
 
@@ -190,21 +203,21 @@ class Overlay(QWidget):
         accent = QColor("#FF777D" if recording else "#F4CC77")
         p.setPen(Qt.NoPen)
         p.setBrush(QColor("#3B2832" if recording else "#3A3428"))
-        p.drawRoundedRect(QRectF(s + 200, s + 10, 26, 26), 9, 9)
+        p.drawRoundedRect(QRectF(s + 320, s + 10, 26, 26), 9, 9)
         if recording:
-            self._mic.paint(p, s + 204, s + 14, 18, 18)
+            self._mic.paint(p, s + 324, s + 14, 18, 18)
         else:
             p.setPen(QPen(accent, 2.5, Qt.SolidLine, Qt.RoundCap))
             angle = -(self.frame * 9 % 360) if self._motion else 90
-            p.drawArc(QRectF(s + 205, s + 15, 16, 16), angle * 16, 265 * 16)
+            p.drawArc(QRectF(s + 325, s + 15, 16, 16), angle * 16, 265 * 16)
         # Top row: timer | 12px gap | title | 12px gap | icon.
-        self._text(p, QRectF(s + 100, s + 10, 88, 26),
-                   "מקליט" if recording else "מסדר טקסט…" if self.state == "polishing" else "מתמלל",
+        self._text(p, QRectF(s + 100, s + 10, 208, 26),
+                   "מקליט" if recording else "מעבד עם AI בענן" if self.state == "polishing" else "מתמלל במחשב",
                    15, "#F5F6FA", rtl=True, bold=True)
         self._text(p, QRectF(s + 14, s + 10, 74, 26),
                    f"{self._elapsed // 60:02d}:{self._elapsed % 60:02d}", 16, accent)
         # Bottom row has a separate 94px waveform and a 106px Hebrew hint.
-        self._text(p, QRectF(s + 120, s + 48, 106, 18),
+        self._text(p, QRectF(s + 120, s + 48, 226, 18),
                    "\u2066Esc\u2069 לביטול" if recording else
                    "עריכת OpenAI" if self.state == "polishing" else "מעבד את ההקלטה",
                    12, "#B9BFCE", rtl=True)
