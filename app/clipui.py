@@ -1,12 +1,13 @@
 """Resizable clipboard browser with full text and zoomable image previews."""
 import logging
+import unicodedata
 
-from PySide6.QtCore import QSize, Qt, QTimer
-from PySide6.QtGui import QCursor, QIcon, QKeySequence, QPixmap, QShortcut, QTextOption
+from PySide6.QtCore import QEvent, QPointF, QRectF, QSize, Qt, QTimer
+from PySide6.QtGui import QColor, QCursor, QFont, QKeySequence, QPainter, QPixmap, QShortcut, QTextLayout, QTextOption
 from PySide6.QtWidgets import (
     QApplication, QButtonGroup, QFrame, QHBoxLayout, QLabel, QLineEdit, QListWidget, QListView,
-    QListWidgetItem, QMessageBox, QPlainTextEdit, QPushButton, QScrollArea,
-    QSizeGrip, QSplitter, QVBoxLayout, QWidget,
+    QListWidgetItem, QMenu, QMessageBox, QPlainTextEdit, QPushButton, QScrollArea,
+    QSizeGrip, QSplitter, QVBoxLayout, QWidget, QStyledItemDelegate, QStyle, QStyleOptionViewItem,
 )
 
 import clips
@@ -15,9 +16,86 @@ import theme
 from widgets import FramelessWindow, TitleBar
 
 log = logging.getLogger("clipui")
-ROW_ICON = 64
+ROW_IMAGE_HEIGHT = 140
+ENTRY_ROLE = Qt.UserRole + 1
 SEARCH_DEBOUNCE_MS = 120
 PAGE_SIZE = 100
+
+
+def _is_rtl(text):
+    return next((unicodedata.bidirectional(c) for c in text
+                 if unicodedata.bidirectional(c) in ("L", "R", "AL")), "R") != "L"
+
+
+class ClipDelegate(QStyledItemDelegate):
+    """Content-only rows, with large aspect-preserving images and three text lines."""
+
+    def __init__(self, picker):
+        super().__init__(picker.list)
+        self.picker = picker
+
+    def sizeHint(self, option, index):
+        entry = index.data(ENTRY_ROLE) or {}
+        return QSize(220, ROW_IMAGE_HEIGHT + 24 if entry.get("kind") == "image" else 88)
+
+    def paint(self, painter, option, index):
+        opt = QStyleOptionViewItem(option)
+        self.initStyleOption(opt, index)
+        opt.text = ""
+        opt.features &= ~QStyleOptionViewItem.HasDisplay
+        style = opt.widget.style() if opt.widget else QApplication.style()
+        style.drawControl(QStyle.CE_ItemViewItem, opt, painter, opt.widget)
+        entry = index.data(ENTRY_ROLE) or {}
+        rect = QRectF(option.rect.adjusted(12, 10, -12, -10))
+        painter.save()
+        painter.setClipRect(rect)
+        painter.setPen(QColor(self.picker.p["text"]))
+        if entry.get("kind") == "image":
+            pixmap = self.picker._thumb(entry.get("path"))
+            if pixmap is not None:
+                size = pixmap.size().scaled(rect.size().toSize(), Qt.KeepAspectRatio)
+                target = QRectF(0, 0, size.width(), size.height())
+                target.moveCenter(rect.center())
+                painter.setRenderHint(QPainter.SmoothPixmapTransform)
+                painter.drawPixmap(target, pixmap, QRectF(pixmap.rect()))
+            else:
+                painter.drawText(rect, Qt.AlignCenter, "התמונה אינה זמינה")
+        else:
+            text = index.data(Qt.DisplayRole) or ""
+            font = QFont(option.font)
+            font.setPixelSize(16)
+            painter.setFont(font)
+            rtl = _is_rtl(text)
+            text_option = QTextOption()
+            text_option.setTextDirection(Qt.RightToLeft if rtl else Qt.LeftToRight)
+            text_option.setAlignment(Qt.AlignRight if rtl else Qt.AlignLeft)
+            text_option.setWrapMode(QTextOption.WrapAtWordBoundaryOrAnywhere)
+            text_layout = QTextLayout(text, font)
+            utf16 = text.encode("utf-16-le")
+            text_layout.setTextOption(text_option)
+            text_layout.beginLayout()
+            y = 0
+            for number in range(3):
+                line = text_layout.createLine()
+                if not line.isValid():
+                    break
+                line.setLineWidth(rect.width())
+                line.setPosition(QPointF(0, y))
+                if number == 2 and line.textStart() + line.textLength() < len(utf16) // 2:
+                    # Draw an explicitly elided final line instead of clipping words.
+                    tail = painter.fontMetrics().elidedText(utf16[line.textStart() * 2:].decode("utf-16-le"),
+                                                           Qt.ElideRight, int(rect.width()))
+                    painter.drawText(QRectF(rect.x(), rect.y() + y, rect.width(), line.height()),
+                                     (Qt.AlignRight if rtl else Qt.AlignLeft) | Qt.AlignVCenter, tail)
+                else:
+                    line.draw(painter, rect.topLeft())
+                y += line.height() + 2
+            text_layout.endLayout()
+        if entry.get("pinned"):
+            badge = QRectF(rect.right() - 22, rect.top(), 22, 22)
+            painter.fillRect(badge, QColor(self.picker.p["surface"]))
+            painter.drawPixmap(badge.toRect(), icons.icon("star", self.picker.p["text"], 16).pixmap(16, 16))
+        painter.restore()
 
 
 class ImagePreview(QScrollArea):
@@ -41,6 +119,10 @@ class ImagePreview(QScrollArea):
 
     def fit(self):
         self._zoom = None
+        self._render()
+
+    def actual_size(self):
+        self._zoom = 1.0
         self._render()
 
     def zoom(self, factor):
@@ -97,9 +179,15 @@ class ClipPicker(FramelessWindow):
         self._thumb_cache = {}
         self._entries = []
         self._by_id = {}
+        self._expanded = False
+        self._restore_maximized = False
+        self._activation_context = None
+        self._activation_timer = QTimer(self)
+        self._activation_timer.setSingleShot(True)
+        self._activation_timer.timeout.connect(self._retry_foreground)
         self.setWindowTitle("MyWhisper — תמלולים והעתקות")
         self.setLayoutDirection(Qt.RightToLeft)
-        self.setMinimumSize(720, 460)
+        self.setMinimumSize(640, 440)
         self.resize(1000, 680)
         theme.bind_style(self.container, lambda p:
                          f"#container{{background:{p['bg']};border-radius:14px;}}", palette)
@@ -112,6 +200,12 @@ class ClipPicker(FramelessWindow):
         layout.setContentsMargins(16, 10, 16, 14)
         layout.setSpacing(10)
 
+        self._browse_controls = QWidget()
+        browse = QVBoxLayout(self._browse_controls)
+        browse.setContentsMargins(0, 0, 0, 0)
+        browse.setSpacing(10)
+        layout.addWidget(self._browse_controls)
+
         header = QHBoxLayout()
         self.search = QLineEdit()
         self.search.setPlaceholderText("חיפוש בתמלולים ובהעתקות…")
@@ -123,7 +217,24 @@ class ClipPicker(FramelessWindow):
         self._count = QLabel()
         self._count.setObjectName("hint")
         header.addWidget(self._count)
-        layout.addLayout(header)
+        self._options_btn = QPushButton("⋯")
+        self._options_btn.setAccessibleName("פעולות נוספות ומצב שמירה")
+        self._options_btn.setToolTip("פעולות נוספות ומצב שמירה")
+        self._options_btn.setFixedWidth(38)
+        menu = QMenu(self._options_btn)
+        self._menu_status = menu.addAction("")
+        self._menu_status.setEnabled(False)
+        self._menu_pause = menu.addAction("השהה שמירה", self._toggle_pause)
+        menu.addSeparator()
+        self._menu_pin = menu.addAction("הוסף למועדפים", self._toggle_pin)
+        self._menu_delete = menu.addAction("מחק פריט", self._delete_selected)
+        menu.addSeparator()
+        self._menu_clear = menu.addAction("נקה הכול…", self._clear_all)
+        menu.aboutToShow.connect(self._refresh_menu)
+        self._options_btn.setMenu(menu)
+        self._options_btn.hide()
+        header.addWidget(self._options_btn)
+        browse.addLayout(header)
 
         filters = QHBoxLayout()
         self._filters = QButtonGroup(self)
@@ -144,8 +255,10 @@ class ClipPicker(FramelessWindow):
         self._gallery_btn.toggled.connect(self._apply_filter)
         self._gallery_btn.hide()
         filters.addWidget(self._gallery_btn)
-        layout.addLayout(filters)
-        capture = QHBoxLayout()
+        browse.addLayout(filters)
+        self._capture_row = QWidget()
+        capture = QHBoxLayout(self._capture_row)
+        capture.setContentsMargins(0, 0, 0, 0)
         self._capture_status = QLabel()
         self._capture_status.setObjectName("fieldlabel")
         capture.addWidget(self._capture_status, 1)
@@ -153,13 +266,15 @@ class ClipPicker(FramelessWindow):
         self._pause_btn.clicked.connect(self._toggle_pause)
         self._pause_btn.setEnabled(capture_enabled)
         capture.addWidget(self._pause_btn)
-        layout.addLayout(capture)
+        browse.addWidget(self._capture_row)
 
         self.splitter = QSplitter(Qt.Horizontal)
         self.list = QListWidget()
         self.list.setAccessibleName("רשימת העתקות")
-        self.list.setIconSize(QSize(ROW_ICON, ROW_ICON))
-        self.list.setUniformItemSizes(True)
+        self.list.setMinimumWidth(244)
+        self.list.setItemDelegate(ClipDelegate(self))
+        self.list.setUniformItemSizes(False)
+        self.list.setVerticalScrollMode(QListView.ScrollPerPixel)
         self.list.setWordWrap(True)
         self.list.setMovement(QListView.Static)
         theme.bind_style(self.list, lambda p: f"""
@@ -176,17 +291,18 @@ QListWidget::item:hover {{ background:{p['hover']}; }}
         detail = QWidget()
         detail_layout = QVBoxLayout(detail)
         detail_layout.setContentsMargins(8, 0, 0, 0)
-        self._detail_title = QLabel("תצוגה מלאה")
+        self._detail_title = QLabel()
         self._detail_title.setObjectName("sectiontitle")
         detail_layout.addWidget(self._detail_title)
         self.text_preview = QPlainTextEdit()
         self.text_preview.setReadOnly(True)
+        self.text_preview.setObjectName("cliptextpreview")
         self.text_preview.setAccessibleName("הטקסט המלא של ההעתקה")
         self.text_preview.setPlaceholderText("בחר פריט מהרשימה כדי לראות את התוכן המלא")
         self.text_preview.setLineWrapMode(QPlainTextEdit.WidgetWidth)
         option = self.text_preview.document().defaultTextOption()
         option.setTextDirection(Qt.LayoutDirectionAuto)
-        option.setAlignment(Qt.AlignRight)
+        option.setAlignment(Qt.AlignLeading)
         self.text_preview.document().setDefaultTextOption(option)
         self.image_preview = ImagePreview()
         theme.bind_style(self.image_preview, lambda p:
@@ -197,27 +313,42 @@ QListWidget::item:hover {{ background:{p['hover']}; }}
         self._image_tools = QWidget()
         tools = QHBoxLayout(self._image_tools)
         tools.setContentsMargins(0, 0, 0, 0)
-        for label, callback in (("הגדל +", lambda: self.image_preview.zoom(1.25)),
-                                ("הקטן −", lambda: self.image_preview.zoom(0.8)),
-                                ("התאם לחלון", self.image_preview.fit)):
+        for label, tip, callback in (("+", "הגדל תמונה", lambda: self.image_preview.zoom(1.25)),
+                                     ("−", "הקטן תמונה", lambda: self.image_preview.zoom(0.8)),
+                                     ("100%", "גודל מקורי", self.image_preview.actual_size),
+                                     ("התאם", "התאם לחלון", self.image_preview.fit)):
             button = QPushButton(label)
+            button.setAccessibleName(tip)
+            button.setToolTip(tip)
             button.clicked.connect(callback)
             tools.addWidget(button)
         detail_layout.addWidget(self._image_tools)
+        self._expand_btn = QPushButton("הרחב")
+        self._expand_btn.setCheckable(True)
+        self._expand_btn.setAccessibleName("הרחב או החזר את תצוגת התוכן")
+        self._expand_btn.toggled.connect(self._set_expanded)
         self._copy_btn = QPushButton("העתק ללוח וסגור")
         self._copy_btn.setProperty("variant", "primary")
         self._copy_btn.clicked.connect(self._copy_selected)
-        detail_layout.addWidget(self._copy_btn)
-        actions = QHBoxLayout()
+        primary = QHBoxLayout()
+        primary.addWidget(self._copy_btn, 1)
+        primary.addWidget(self._expand_btn)
+        detail_layout.addLayout(primary)
+        self._secondary_actions = QWidget()
+        actions = QHBoxLayout(self._secondary_actions)
+        actions.setContentsMargins(0, 0, 0, 0)
         self._pin_btn = QPushButton("הוסף למועדפים")
         self._pin_btn.clicked.connect(self._toggle_pin)
         self._delete_btn = QPushButton("מחק פריט")
         self._delete_btn.clicked.connect(self._delete_selected)
         actions.addWidget(self._pin_btn)
         actions.addWidget(self._delete_btn)
-        detail_layout.addLayout(actions)
+        detail_layout.addWidget(self._secondary_actions)
         self.splitter.addWidget(detail)
-        self.splitter.setSizes([340, 560])
+        detail.setMinimumWidth(260)
+        self.splitter.setSizes([315, 585])
+        self.splitter.setStretchFactor(0, 35)
+        self.splitter.setStretchFactor(1, 65)
         self.splitter.setCollapsible(0, False)
         self.splitter.setCollapsible(1, False)
         layout.addWidget(self.splitter, 1)
@@ -238,28 +369,30 @@ QListWidget::item:hover {{ background:{p['hover']}; }}
         self._clear_btn.clicked.connect(self._clear_all)
         feedback.addWidget(self._clear_btn)
         layout.addLayout(feedback)
-        hint = QLabel("בחר פריט לתצוגה מלאה · Enter או לחיצה כפולה — העתקה · Delete — מחיקה · Esc — סגירה")
+        hint = QLabel("Enter — העתקה וסגירה · Esc — חזרה / סגירה")
         hint.setWordWrap(True)
         hint.setObjectName("hint")
-        footer = QHBoxLayout()
+        self._footer = QWidget()
+        footer = QHBoxLayout(self._footer)
+        footer.setContentsMargins(0, 0, 0, 0)
         footer.addWidget(hint, 1)
         grip = QSizeGrip(self)
         grip.setToolTip("גרור לשינוי גודל החלון")
         footer.addWidget(grip)
-        layout.addLayout(footer)
+        layout.addWidget(self._footer)
         self.image_preview.hide()
         self._image_tools.hide()
         self._copy_btn.setEnabled(False)
         self._filter_timer = QTimer(self)
         self._filter_timer.setSingleShot(True)
         self._filter_timer.timeout.connect(self._apply_filter)
-        QShortcut(QKeySequence("Escape"), self, activated=self.close)
+        QShortcut(QKeySequence("Escape"), self, activated=self._escape)
         delete_shortcut = QShortcut(QKeySequence("Delete"), self.list, activated=self._delete_selected)
         delete_shortcut.setContext(Qt.WidgetShortcut)
         QShortcut(QKeySequence("Ctrl+Shift+Delete"), self, activated=self._clear_all)
         QShortcut(QKeySequence("Down"), self.search, activated=self._focus_list)
         QShortcut(QKeySequence("Return"), self.search, activated=self._copy_selected)
-        QShortcut(QKeySequence("Ctrl+F"), self, activated=self.search.setFocus)
+        QShortcut(QKeySequence("Ctrl+F"), self, activated=self._focus_search)
         self.set_palette(palette)
         self.refresh_capture_status()
 
@@ -269,25 +402,113 @@ QListWidget::item:hover {{ background:{p['hover']}; }}
         self._search_action.setIcon(icons.icon("search", palette['text_muted'], 16))
         self.update()
 
-    def show_for(self, entries):
-        self._entries = list(entries or [])
-        self._by_id = {e.get('id'): e for e in self._entries}
-        self._limit = PAGE_SIZE
-        self.search.clear()
-        self._filter_timer.stop()
-        self._apply_filter()
+    def show_for(self, entries, preserve=False):
+        if preserve:
+            self.refresh_entries(entries)
+        else:
+            self._entries = list(entries or [])
+            self._by_id = {e.get('id'): e for e in self._entries}
+            self._limit = PAGE_SIZE
+            self.search.clear()
+            self._filter_timer.stop()
+            self._apply_filter()
         # Keep manual placement on this monitor; follow the cursor to a new one.
         screen = QApplication.screenAt(QCursor.pos()) or QApplication.primaryScreen()
-        if not getattr(self, '_positioned', False) or screen != self._cursor_screen:
+        move_screen = not getattr(self, '_positioned', False) or screen != self._cursor_screen
+        maximize_on_screen = move_screen and (self.isMaximized() or
+                                              (self.isMinimized() and self._restore_maximized))
+        if maximize_on_screen:
+            # Moving a maximized HWND alone leaves it at the previous monitor's size.
+            self.showNormal()
+        if move_screen:
             self._centre()
+            self._fit_screen(screen)
             self._positioned = True
             self._cursor_screen = screen
-        self.show()
-        self.raise_()
-        self.activateWindow()
+        if maximize_on_screen:
+            self.showMaximized()
+        elif self.isMinimized():
+            normal = self.normalGeometry()
+            self.showNormal()
+            if normal.isValid():
+                self.setGeometry(normal)
+            if self._restore_maximized:
+                self.showMaximized()
+        else:
+            self.show()
+        self._fit_screen(screen)
         self._force_foreground()
         self.search.setFocus()
         self.refresh_capture_status()
+
+    def _fit_screen(self, screen):
+        if screen is None or self.isMaximized() or self.isMinimized():
+            return
+        rect = screen.availableGeometry()
+        self.setMinimumSize(min(640, rect.width()), min(440, rect.height()))
+        self.resize(min(self.width(), rect.width()), min(self.height(), rect.height()))
+        self.move(max(rect.left(), min(self.x(), rect.right() - self.width() + 1)),
+                  max(rect.top(), min(self.y(), rect.bottom() - self.height() + 1)))
+
+    def _set_expanded(self, expanded):
+        self._expanded = expanded
+        if expanded:
+            self._split_sizes = self.splitter.sizes()
+        self.list.setVisible(not expanded)
+        self._browse_controls.setVisible(not expanded)
+        self._refresh_compact()
+        if not expanded and hasattr(self, "_split_sizes"):
+            self.splitter.setSizes(self._split_sizes)
+        self._expand_btn.setText("חזור לרשימה" if expanded else "הרחב")
+
+    def _refresh_compact(self):
+        compact = self.height() < 600
+        self._capture_row.setVisible(not compact)
+        self._options_btn.setVisible(compact)
+        self._secondary_actions.setVisible(not compact and not self._expanded)
+        self._clear_btn.setVisible(not compact and not self._expanded)
+        self._footer.setVisible(not compact and not self._expanded)
+        self._more_btn.setVisible(not self._expanded and
+                                  getattr(self, '_match_count', 0) > self._limit)
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        if hasattr(self, '_footer'):
+            self._refresh_compact()
+
+    def _refresh_menu(self):
+        self._menu_status.setText(self._capture_status.text())
+        self._menu_pause.setText(self._pause_btn.text())
+        self._menu_pause.setEnabled(self._pause_btn.isEnabled())
+        self._menu_pin.setText(self._pin_btn.text())
+        self._menu_pin.setEnabled(self._pin_btn.isEnabled())
+        self._menu_delete.setEnabled(self._delete_btn.isEnabled())
+        self._menu_clear.setEnabled(bool(self._entries))
+
+    def _focus_search(self):
+        self._expand_btn.setChecked(False)
+        self.search.setFocus()
+
+    def _escape(self):
+        if self._expanded:
+            self._expand_btn.setChecked(False)
+        else:
+            self.close()
+
+    def is_foreground(self):
+        from platform_support import is_foreground
+        return is_foreground(self)
+
+    def hideEvent(self, event):
+        self._activation_timer.stop()
+        self._activation_context = None
+        super().hideEvent(event)
+
+    def changeEvent(self, event):
+        if event.type() == QEvent.WindowStateChange and self.isMinimized():
+            if not event.oldState() & Qt.WindowMinimized:
+                self._restore_maximized = bool(event.oldState() & Qt.WindowMaximized)
+        super().changeEvent(event)
 
     def refresh_entries(self, entries):
         """Refresh a visible picker without losing search, selection or scroll."""
@@ -314,11 +535,35 @@ QListWidget::item:hover {{ background:{p['hover']}; }}
                       rect.center().y() - self.height() // 2)
 
     def _force_foreground(self):
+        self._activation_timer.stop()
         try:
-            from platform_support import bring_forward
-            bring_forward(self)
+            from platform_support import bring_forward, foreground_context
+            self._activation_context = foreground_context()
+            if bring_forward(self):
+                self._fit_screen(QApplication.screenAt(QCursor.pos()))
+                return True
+            self._activation_timer.start(100)
         except Exception:
-            pass
+            log.warning("Clipboard window activation failed", exc_info=True)
+            QApplication.alert(self)
+        return False
+
+    def _retry_foreground(self):
+        from platform_support import bring_forward, foreground_context
+        if not self.isVisible() or self.isMinimized() or self._activation_context is None:
+            return
+        if self.is_foreground():
+            return
+        # Do not steal focus after another input or a switch to a different window.
+        if foreground_context() != self._activation_context:
+            return
+        try:
+            if not bring_forward(self):
+                QApplication.alert(self)
+                log.warning("Windows declined clipboard window activation")
+        except Exception:
+            QApplication.alert(self)
+            log.warning("Clipboard window activation retry failed", exc_info=True)
 
     def _queue_filter(self):
         self._limit = PAGE_SIZE
@@ -342,10 +587,10 @@ QListWidget::item:hover {{ background:{p['hover']}; }}
 
     def refresh_capture_status(self):
         paused = self._is_paused()
-        self._capture_status.setText("שמירת העתקות כבויה בהגדרות" if not self._capture_enabled else
+        self._capture_status.setText("שמירה כבויה" if not self._capture_enabled else
                                      "נדרשת הרשאת לוח — פתח את הגדרות הכנת ה־Mac" if not self._capture_allowed() else
-                                     "שמירת העתקות מושהית · תמלולים ממשיכים להישמר" if paused else
-                                     "שמירת העתקות פעילה · נשמר מקומית במחשב")
+                                     "שמירה מושהית" if paused else "שמירה מקומית פעילה")
+        self._capture_status.setToolTip("ההשהיה חלה על העתקות חיצוניות; תמלולים ממשיכים להישמר.")
         self._pause_btn.setText("המשך שמירה" if paused else "השהה שמירה")
 
     def _toggle_pause(self):
@@ -356,30 +601,24 @@ QListWidget::item:hover {{ background:{p['hover']}; }}
         query = self.search.text()
         selected = self._current_id()
         matches = clips.search(query, self._entries, self._kind)
+        self._match_count = len(matches)
         gallery = self._kind == "image" and self._gallery_btn.isChecked()
         self.list.setViewMode(QListView.IconMode if gallery else QListView.ListMode)
         self.list.setFlow(QListView.LeftToRight if gallery else QListView.TopToBottom)
         self.list.setWrapping(gallery)
         self.list.setResizeMode(QListView.Adjust)
-        self.list.setIconSize(QSize(112, 90) if gallery else QSize(ROW_ICON, ROW_ICON))
-        self.list.setGridSize(QSize(158, 146) if gallery else QSize())
+        self.list.setGridSize(QSize(220, ROW_IMAGE_HEIGHT + 24) if gallery else QSize())
         self.list.setUpdatesEnabled(False)
         self.list.blockSignals(True)
         try:
             self.list.clear()
             for entry in matches[:self._limit]:
-                kind = clips.category(entry)
-                label = {"image": "תמונה", "link": "קישור", "text": "טקסט"}[kind]
-                prefix = "מועדף · " if entry.get("pinned") else ""
-                snippet = (entry.get("name") or "תמונה") if kind == "image" else clips.preview(entry, 100)
-                item = QListWidgetItem(f"{prefix}{label} · {entry.get('time', '')}\n{snippet}")
+                snippet = "" if entry.get("kind") == "image" else " ".join(entry.get("text", "").split())[:1000]
+                item = QListWidgetItem(snippet)
                 item.setData(Qt.UserRole, entry.get("id"))
-                if entry.get("kind") == "image":
-                    thumb = self._thumb(entry.get("path"))
-                    if thumb is not None:
-                        item.setIcon(thumb)
-                item.setSizeHint(QSize(158, 146) if gallery else QSize(0, 70))
-                item.setToolTip("בחר לתצוגה מלאה")
+                item.setData(ENTRY_ROLE, entry)
+                item.setData(Qt.AccessibleTextRole,
+                             ("מועדף. " if entry.get("pinned") else "") + (snippet or "תמונה שמורה"))
                 self.list.addItem(item)
             if self.list.count():
                 chosen = next((i for i in range(self.list.count()) if self.list.item(i).data(Qt.UserRole) == selected), 0)
@@ -390,7 +629,7 @@ QListWidget::item:hover {{ background:{p['hover']}; }}
         self._preview_item(self.list.currentItem())
         total = len(self._entries)
         self._count.setText(f"{len(matches)} מתוך {total}")
-        self._more_btn.setVisible(len(matches) > self._limit)
+        self._more_btn.setVisible(not self._expanded and len(matches) > self._limit)
         self._more_btn.setText(f"הצג עוד · מוצגים {min(self._limit, len(matches))} מתוך {len(matches)}")
         images = sum(e.get("kind") == "image" for e in self._entries)
         self._filter_buttons["image"].setText(f"תמונות ({images})")
@@ -400,8 +639,9 @@ QListWidget::item:hover {{ background:{p['hover']}; }}
         if path in self._thumb_cache:
             return self._thumb_cache[path]
         pixmap = QPixmap(str(path)) if path else QPixmap()
-        result = None if pixmap.isNull() else QIcon(pixmap.scaled(
-            144, 112, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+        # Cache enough pixels for a 2x display, without caching original large files.
+        result = None if pixmap.isNull() else pixmap.scaled(
+            800, ROW_IMAGE_HEIGHT * 2, Qt.KeepAspectRatio, Qt.SmoothTransformation)
         if len(self._thumb_cache) >= 128:
             self._thumb_cache.clear()
         self._thumb_cache[path] = result
@@ -416,15 +656,24 @@ QListWidget::item:hover {{ background:{p['hover']}; }}
         self._copy_btn.setEnabled(entry is not None)
         self._pin_btn.setEnabled(entry is not None)
         self._delete_btn.setEnabled(entry is not None)
+        self._expand_btn.setEnabled(entry is not None or self._expanded)
         self._pin_btn.setText("הסר ממועדפים" if entry and entry.get("pinned") else "הוסף למועדפים")
-        self.text_preview.setPlainText(entry.get('text', '') if entry and not image else '')
-        self.image_preview.set_pixmap(QPixmap(entry.get('path', '')) if image else QPixmap())
+        text = entry.get('text', '') if entry and not image else ''
+        if self.text_preview.toPlainText() != text:
+            option = self.text_preview.document().defaultTextOption()
+            option.setAlignment(Qt.AlignRight if _is_rtl(text) else Qt.AlignLeft)
+            self.text_preview.document().setDefaultTextOption(option)
+            self.text_preview.setPlainText(text)
+        image_path = entry.get('path', '') if image else None
+        if image_path != getattr(self, '_preview_path', None) or self.image_preview._pixmap.isNull():
+            self.image_preview.set_pixmap(QPixmap(image_path) if image else QPixmap())
+        self._preview_path = image_path
         if image and self.image_preview._pixmap.isNull():
             self._detail_title.setText("התמונה אינה זמינה בדיסק")
             self._copy_btn.setEnabled(False)
         else:
-            self._detail_title.setText("תצוגת תמונה" if image else "הטקסט המלא" if entry else
-                                       "לא נמצאו פריטים" if self._entries else "עדיין אין העתקות שמורות")
+            self._detail_title.setText("" if entry else "לא נמצאו פריטים" if self._entries else "עדיין אין העתקות שמורות")
+        self._detail_title.setVisible(bool(self._detail_title.text()))
         self.text_preview.setPlaceholderText("נסה מסנן אחר או נקה את החיפוש. תמונות ניתנות לחיפוש לפי שם ותאריך, ללא זיהוי טקסט בתמונה."
                                              if self._entries else "העתק טקסט או צלם מסך כדי להתחיל. פריטים שסומנו כפרטיים אינם נשמרים.")
 

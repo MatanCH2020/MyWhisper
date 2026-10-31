@@ -8,12 +8,12 @@ from unittest.mock import Mock, patch
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "app"))
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QRect
 from PySide6.QtGui import QColor, QPixmap
 from PySide6.QtTest import QTest
 from PySide6.QtWidgets import QApplication, QMessageBox
 import theme
-from clipui import ClipPicker
+from clipui import ClipPicker, ROW_IMAGE_HEIGHT
 
 qapp = QApplication.instance() or QApplication([])
 
@@ -25,7 +25,7 @@ class ClipboardWindowTest(unittest.TestCase):
         self.addCleanup(self.window.close)
 
     def show_entries(self, entries):
-        with patch.object(self.window, "_force_foreground"):
+        with patch.object(self.window, "_force_foreground"), patch.object(self.window, "_fit_screen"):
             self.window.show_for(entries)
         qapp.processEvents()
 
@@ -56,7 +56,10 @@ class ClipboardWindowTest(unittest.TestCase):
             preview.fit()
             self.assertIsNone(preview._zoom)
             self.assertFalse(self.window.text_preview.isVisible())
-            self.assertEqual(self.window.list.iconSize().width(), 64)
+            self.assertGreaterEqual(self.window.list.sizeHintForRow(0), ROW_IMAGE_HEIGHT)
+            self.assertEqual(self.window.list.item(0).text(), '')
+            preview.actual_size()
+            self.assertEqual(preview._label.pixmap().width(), 1600)
 
     def test_escape_closes_and_size_survives_reopen(self):
         self.show_entries([])
@@ -138,6 +141,109 @@ class ClipboardWindowTest(unittest.TestCase):
         self.window._toggle_pause()
         self.assertTrue(state[0])
         self.assertIn('מושהית', self.window._capture_status.text())
+
+    def test_rows_show_content_only_and_keep_metadata_searchable(self):
+        self.show_entries([{'id': 'one', 'kind': 'text', 'text': 'hello שלום', 'time': '2026-10-31 10:23'}])
+        self.assertEqual(self.window.list.item(0).text(), 'hello שלום')
+        self.assertFalse(self.window._detail_title.isVisible())
+        self.window.search.setText('2026-10-31')
+        self.window._apply_filter()
+        self.assertEqual(self.window.list.count(), 1)
+
+    def test_expansion_and_escape_restore_splitter_before_closing(self):
+        self.show_entries([{'id': 'one', 'kind': 'text', 'text': 'hello'}])
+        sizes = self.window.splitter.sizes()
+        self.window._expand_btn.click()
+        qapp.processEvents()
+        self.assertFalse(self.window.list.isVisible())
+        QTest.keyClick(self.window, Qt.Key_Escape)
+        qapp.processEvents()
+        self.assertTrue(self.window.list.isVisible())
+        self.assertTrue(self.window.isVisible())
+        self.assertEqual(self.window.splitter.sizes(), sizes)
+        QTest.keyClick(self.window, Qt.Key_Escape)
+        self.assertFalse(self.window.isVisible())
+
+    def test_raise_preserves_search_selection_scroll_and_full_text(self):
+        entries = [{'id': str(i), 'kind': 'text', 'text': f'hello {i}\n' * 100} for i in range(100)]
+        self.show_entries(entries)
+        self.window.search.setText('hello')
+        self.window._apply_filter()
+        self.window.list.setCurrentRow(50)
+        self.window.list.scrollToItem(self.window.list.item(50))
+        self.window.text_preview.verticalScrollBar().setValue(20)
+        scroll = self.window.list.verticalScrollBar().value()
+        with patch.object(self.window, '_force_foreground'), patch.object(self.window, '_fit_screen'):
+            self.window.show_for(entries, preserve=True)
+        self.assertEqual(self.window.search.text(), 'hello')
+        self.assertEqual(self.window._current_id(), '50')
+        self.assertEqual(self.window.list.verticalScrollBar().value(), scroll)
+        self.assertEqual(self.window.text_preview.verticalScrollBar().value(), 20)
+
+    def test_window_is_clamped_to_smaller_monitor(self):
+        screen = Mock()
+        screen.availableGeometry.return_value = QRect(-800, 0, 800, 600)
+        self.window.resize(1200, 800)
+        self.window.move(1500, 700)
+        self.window._fit_screen(screen)
+        self.assertTrue(screen.availableGeometry().contains(self.window.geometry()))
+
+    def test_compact_window_keeps_image_space_and_secondary_actions(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / 'demo.png'
+            image = QPixmap(1600, 900)
+            image.fill(QColor('#3575e5'))
+            image.save(str(path))
+            self.show_entries([{'id': 'one', 'kind': 'image', 'path': str(path)}])
+            self.window.resize(640, 440)
+            qapp.processEvents()
+            self.assertGreaterEqual(self.window.image_preview.viewport().height(), 120)
+            self.assertTrue(self.window._options_btn.isVisible())
+            self.window._refresh_menu()
+            self.assertTrue(self.window._menu_delete.isEnabled())
+            self.assertTrue(self.window._menu_pause.isEnabled())
+            self.window._menu_pause.trigger()
+            self.window.resize(1000, 680)
+            qapp.processEvents()
+            self.assertTrue(self.window._secondary_actions.isVisible())
+
+    def test_maximized_minimized_window_restores_then_can_return_to_normal(self):
+        self.show_entries([])
+        normal = self.window.geometry()
+        self.window.showMaximized()
+        qapp.processEvents()
+        self.window.showMinimized()
+        qapp.processEvents()
+        self.show_entries([])
+        self.assertTrue(self.window.isMaximized())
+        self.window.showNormal()
+        qapp.processEvents()
+        self.assertFalse(self.window.isMaximized())
+        self.assertEqual(self.window.geometry(), normal)
+
+    def test_activation_retries_once_and_alerts_on_denial(self):
+        self.show_entries([])
+        with patch('platform_support.foreground_context', return_value=(123, 7)), \
+             patch('platform_support.bring_forward', return_value=False) as activate, \
+             patch.object(self.window, 'is_foreground', return_value=False), \
+             patch.object(QApplication, 'alert') as alert:
+            self.window._force_foreground()
+            QTest.qWait(160)
+        self.assertEqual(activate.call_count, 2)
+        alert.assert_called_once_with(self.window)
+        self.assertFalse(self.window._activation_timer.isActive())
+
+    def test_activation_retry_is_cancelled_by_input_or_close(self):
+        for close in (False, True):
+            self.show_entries([])
+            with patch('platform_support.foreground_context', side_effect=[(123, 7), (456, 8)]), \
+                 patch('platform_support.bring_forward', return_value=False) as activate, \
+                 patch.object(self.window, 'is_foreground', return_value=False):
+                self.window._force_foreground()
+                if close:
+                    self.window.close()
+                QTest.qWait(160)
+            activate.assert_called_once()
 
 
 if __name__ == "__main__":

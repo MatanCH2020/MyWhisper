@@ -456,10 +456,10 @@ class Mywishper(QObject):
                 is_paused=self.ui.clip_paused, on_pause=self._set_clip_paused,
                 capture_enabled=self.config.get("clipboard_history", True),
                 capture_allowed=self._clipboard_allowed)
-        if toggle and self._clip_picker.isVisible() and not self._clip_picker.isMinimized():
+        if toggle and self._clip_picker.is_foreground():
             self._clip_picker.hide()   # same key closes it again
             return
-        self._clip_picker.show_for(clips.load())
+        self._clip_picker.show_for(clips.load(), preserve=self._clip_picker.isVisible())
 
     def _use_clip(self, entry):
         """Put a chosen clip back on the clipboard for the user to paste."""

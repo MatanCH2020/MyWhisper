@@ -95,7 +95,10 @@ def shoot(win, page, path):
 
 
 def main():
+    global DOCS
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--clipboard-only", action="store_true", help="Render only synthetic clipboard examples")
+    parser.add_argument("--output-dir", type=Path, help="Optional screenshot destination")
     parser.add_argument("--overlay-only", action="store_true",
                         help="Refresh only the recording HUD screenshot")
     parser.add_argument("--chatgpt-states", action="store_true",
@@ -104,7 +107,12 @@ def main():
     parser.add_argument("--fullscreen-paused", action="store_true", help="Render fullscreen suspension with demo data")
     parser.add_argument("--support-states", action="store_true", help="Render the support preview with synthetic data only")
     args = parser.parse_args()
+    if args.output_dir:
+        DOCS = args.output_dir.resolve()
     DOCS.mkdir(exist_ok=True)
+    if args.clipboard_only:
+        shoot_clipboard()
+        return
     if args.support_states:
         from support_ui import SupportDialog
         from version import __version__
@@ -202,11 +210,13 @@ def shoot_clipboard():
     picker = ClipPicker(ui_mod.theme.DARK, on_pick=lambda entry: None)
     picker._force_foreground = lambda: None
     picker._centre = lambda: picker.move(-4000, 200)
+    picker._fit_screen = lambda screen: None
+    source_docs = Path(__file__).resolve().parent.parent / "docs"
     picker.show_for([
         {"id": "demo-image-1", "kind": "image", "time": "2026-10-25 10:12",
-         "name": "תמלול לדוגמה", "path": str(DOCS / "app-history-light.png"), "pinned": True},
+         "name": "תמלול לדוגמה", "path": str(source_docs / "app-history-light.png"), "pinned": True},
         {"id": "demo-image-2", "kind": "image", "time": "2026-10-25 10:11",
-         "name": "הגדרות המיקרופון", "path": str(DOCS / "app-settings-light.png")},
+         "name": "הגדרות המיקרופון", "path": str(source_docs / "app-settings-light.png")},
         {"id": "demo-link", "kind": "text", "time": "2026-10-25 10:10",
          "text": "https://github.com/MatanCH2020/MyWhisper"},
         {"id": "demo-long", "kind": "text", "time": "2026-10-03 10:00",
@@ -221,6 +231,9 @@ def shoot_clipboard():
     ])
     app.processEvents()
     picker.grab().save(str(DOCS / "app-clipboard-dark.png"), "PNG")
+    picker.list.setCurrentRow(3)
+    app.processEvents()
+    picker.grab().save(str(DOCS / "app-clipboard-text-dark.png"), "PNG")
     picker._set_filter("image")
     app.processEvents()
     picker.grab().save(str(DOCS / "app-clipboard-gallery-dark.png"), "PNG")
@@ -228,6 +241,10 @@ def shoot_clipboard():
     picker.set_palette(ui_mod.theme.LIGHT)
     app.processEvents()
     picker.grab().save(str(DOCS / "app-clipboard-gallery-light.png"), "PNG")
+    picker._set_filter("all")
+    picker.list.setCurrentRow(3)
+    app.processEvents()
+    picker.grab().save(str(DOCS / "app-clipboard-text-light.png"), "PNG")
     picker.close()
 
 

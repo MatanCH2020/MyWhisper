@@ -277,6 +277,7 @@ QScrollBar:horizontal {{ height: 0; }}
 #navitem:checked {{ background: {p['nav_sel']}; color: {p['accent']}; font-weight: 600; }}
 #navitem:focus {{ border: 1px solid {p['accent']}; padding: 8px 11px; }}
 
+#cliptextpreview {{ font-size: 18px; padding: 12px; }}
 #sectiontitle {{ color: {p['text_muted']}; font-size: {FS['small']}px; font-weight: 600; }}
 #muted {{ color: {p['text_muted']}; }}
 

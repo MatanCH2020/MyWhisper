@@ -145,6 +145,19 @@ def _close(p, s, color):
     p.drawLine(QPointF(s - m, m), QPointF(m, s - m))
 
 
+def _star(p, s, color):
+    import math
+    _pen(p, color, s)
+    path = QPainterPath()
+    for i in range(10):
+        angle = math.radians(i * 36 - 90)
+        radius = s * (0.4 if i % 2 == 0 else 0.18)
+        point = QPointF(s / 2 + radius * math.cos(angle), s / 2 + radius * math.sin(angle))
+        path.moveTo(point) if i == 0 else path.lineTo(point)
+    path.closeSubpath()
+    p.drawPath(path)
+
+
 def _maximize(p, s, color):
     _pen(p, color, s)
     p.drawRect(QRectF(s * 0.25, s * 0.25, s * 0.5, s * 0.5))
@@ -154,7 +167,7 @@ _DRAW = {
     "history": _clock, "clock": _clock, "dictionary": _book, "book": _book,
     "settings": _sliders, "copy": _copy, "trash": _trash, "refresh": _refresh,
     "search": _search, "mic": _mic, "sun": _sun, "moon": _moon,
-    "minimize": _minimize, "close": _close, "maximize": _maximize,
+    "minimize": _minimize, "close": _close, "maximize": _maximize, "star": _star,
 }
 
 
