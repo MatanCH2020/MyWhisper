@@ -210,7 +210,11 @@ irm https://raw.githubusercontent.com/MatanCH2020/MyWhisper/main/scripts/uninsta
 `%LOCALAPPDATA%/MatanDigital/MyWhisper/chatgpt.dpapi`. התוכנה אינה קוראת סיסמאות או עוגיות דפדפן.
 בקשות העיבוד משתמשות ב־Responses עם `store=false` ו־`stream=true`; מתקבלת רק תשובה שהושלמה.
 [ניהול שימוש והרשאות ב־ChatGPT](https://chatgpt.com/settings/usage).
-ראו [בדיקות מצב ענן והשוואת מודלים](docs/cloud-modes-validation.md).
+להתחלה מומלץ לבדוק **GPT-6.1 Terra**, אם הוא זמין בחשבון: בהשוואה על 38 דוגמאות
+הוא שמר על הפרטים וההסתייגויות, עם תוצאות דומות ל־Sol ול־Astra בדוגמאות הכתיבה.
+זו המלצה מהמדגם, לא שינוי אוטומטי של הבחירה או הבטחת דיוק. Luna היה מהיר יותר,
+אך נמצאה בו גם טעות משמעות. מחירי API אינם מדידה של צריכת מכסת ChatGPT.
+ראו [בדיקות מצב ענן והשוואת כל שמונת המודלים](docs/cloud-modes-validation.md).
 
 ### הכתבה עם עברית ואנגלית
 
