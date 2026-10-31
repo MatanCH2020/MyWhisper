@@ -134,7 +134,8 @@ class RestartPolicyTest(unittest.TestCase):
 
     def test_success_rollback_opt_out_and_failed_recovery(self):
         with tempfile.TemporaryDirectory() as folder:
-            root = Path(folder)
+            # Windows runners may expose TEMP through an 8.3 short path.
+            root = Path(folder).resolve()
             for enabled, no_restart, failure, recovered, expected in (
                 (True, False, False, True, True),
                 (False, False, False, True, False),
