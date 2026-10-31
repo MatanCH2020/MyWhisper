@@ -63,9 +63,13 @@ class PagesTest(unittest.TestCase):
         QTest.keyClick(w._help_panel.header, Qt.Key_Space)
         qapp.processEvents()
         self.assertTrue(w._upd_btn.isVisible())
-        scroll.ensureWidgetVisible(w._upd_btn)
+        # Mac has fewer sections and different font metrics. Create overflow
+        # deliberately before testing restoration of a nonzero scroll offset.
+        w._hk_change.click()
+        w._technical.set_open(True)
         w._upd_btn.setFocus()
         qapp.processEvents()
+        scroll.verticalScrollBar().setValue(scroll.verticalScrollBar().maximum())
         offset = scroll.verticalScrollBar().value()
         self.assertGreater(offset, 0)
         ui.set_theme("dark")
