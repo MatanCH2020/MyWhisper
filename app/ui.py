@@ -587,7 +587,7 @@ class MainWindow(HistoryPageMixin, DictionaryPageMixin, SettingsPageMixin, Frame
         super().__init__()
         self.ui = ui
         self.p = palette
-        self._force_close = False  # tests can close instead of hiding to tray
+        self._force_close = False  # explicit quit accepts close; X still hides to tray
         self._update_result.connect(self._on_update_result)
         self._cloud_result.connect(self._on_cloud_result)
         self._scan_progress.connect(self._on_scan_progress)
@@ -907,7 +907,7 @@ class AppUI(QObject):
 
         self._overlay_sig.connect(self._overlay.set_state)
         self._settings_sig.connect(self._show_window)
-        self._quit_sig.connect(QApplication.instance().quit)
+        self._quit_sig.connect(self._quit_on_main_thread)
         self._history_sig.connect(self._refresh_history_page)
 
     def _apply_global_style(self):
@@ -973,6 +973,13 @@ class AppUI(QObject):
 
     def open_settings(self):
         self._settings_sig.emit()
+
+    def _quit_on_main_thread(self):
+        # QApplication.quit() sends close events. The normal X-to-tray handler
+        # otherwise rejects that event, leaving an updater waiting for exit.
+        if self._win is not None:
+            self._win._force_close = True
+        QApplication.instance().quit()
 
     def request_quit(self):
         self._quit_sig.emit()

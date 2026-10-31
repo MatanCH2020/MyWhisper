@@ -3,6 +3,7 @@ import os
 from pathlib import Path
 import sys
 import unittest
+import subprocess
 from unittest.mock import Mock, patch
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
@@ -14,6 +15,14 @@ qapp = QApplication.instance() or QApplication([])
 
 
 class StartupTest(unittest.TestCase):
+    def test_real_qt_event_loop_exits_for_explicit_quit(self):
+        root = Path(__file__).resolve().parent.parent
+        for args in ([], ['--hidden'], ['--modal'], ['--worker', '--modal']):
+            with self.subTest(args=args):
+                result = subprocess.run([sys.executable, str(root / 'scripts/check_quit_lifecycle.py'), *args],
+                                        cwd=root, capture_output=True, timeout=15)
+                self.assertEqual(result.returncode, 0, result.stderr.decode(errors='replace'))
+
     def app(self, startup=True, hotkey=True):
         app = Mock()
         app._closing = False

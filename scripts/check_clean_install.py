@@ -13,10 +13,11 @@ temp_root = Path(tempfile.gettempdir()).resolve()
 target = Path(tempfile.mkdtemp(prefix="mywhisper-clean-", dir=temp_root)).resolve()
 print(f"Isolated installation: {target}", flush=True)
 try:
-    for folder in ("app", "scripts", "tests"):
+    # Regression contracts also read public website assets and workflow files.
+    for folder in ("app", "scripts", "tests", "docs", ".github"):
         shutil.copytree(source / folder, target / folder,
                         ignore=shutil.ignore_patterns("__pycache__", "split_ui.py"))
-    for file in ("requirements.txt", "requirements-cuda.txt", "CHANGELOG.md"):
+    for file in ("requirements.txt", "requirements-cuda.txt", "CHANGELOG.md", "README.md"):
         shutil.copy2(source / file, target / file)
     venv.EnvBuilder(with_pip=True).create(target / ".venv")
     python = target / ".venv/Scripts/python.exe"

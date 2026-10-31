@@ -802,10 +802,10 @@ footer a{color:var(--muted);transition:color 0.2s}footer a:hover{color:var(--tex
 
     <div class="stage">
       <div class="halo" aria-hidden="true"></div>
-      <img class="overlay-float" src="app-overlay.png?v=1.15.1" alt="מחוון ההקלטה הצף">
+      <img class="overlay-float" src="app-overlay.png?v=1.15.2" alt="מחוון ההקלטה הצף">
       <div class="window">
         <div class="winbar"><span class="d r"></span><span class="d y"></span><span class="d g"></span><span>MyWhisper — Matan Digital</span></div>
-        <img class="shot" src="app-history-dark.png?v=1.15.1" alt="חלון ההיסטוריה של MyWhisper עם תמלולים בעברית">
+        <img class="shot" src="app-history-dark.png?v=1.15.2" alt="חלון ההיסטוריה של MyWhisper עם תמלולים בעברית">
       </div>
     </div>
   </div>
@@ -931,7 +931,7 @@ footer a{color:var(--muted);transition:color 0.2s}footer a:hover{color:var(--tex
       <div class="pt"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg><span>המודל מקבל את המילה כרמז ומפיק אותה נכון מראש</span></div>
       <div class="pt"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg><span>מילים באנגלית נשארות LTR בתוך העברית — בלי בלגן כיווניות</span></div>
     </div>
-    <div class="media"><img class="shot" src="app-dictionary-dark.png?v=1.15.1" alt="מילון התיקונים הנלמדים של MyWhisper"></div>
+    <div class="media"><img class="shot" src="app-dictionary-dark.png?v=1.15.2" alt="מילון התיקונים הנלמדים של MyWhisper"></div>
   </div>
 </section>
 
@@ -944,27 +944,26 @@ footer a{color:var(--muted);transition:color 0.2s}footer a:hover{color:var(--tex
       <p>כל תמלול נשמר לפני ההדבקה, גם אם חלון היעד השתנה. תמלולים קיימים מיובאים פעם אחת ללא כפילויות. כפתור ההעתקה, Enter או לחיצה כפולה מחזירים את הפריט ללוח. Esc סוגר את החלון.</p>
       <p>התקנות חדשות משתמשות במודל ivrit.ai Large v3 המלא; בחירת מודל קיימת נשמרת בשדרוג. השהיית מעקב ההעתקות אינה עוצרת שמירת תמלולים.</p>
     </div>
-    <div class="media"><img class="shot" src="app-clipboard-dark.png?v=1.15.1" alt="חלון העתקות נקי עם תמונות גדולות ותצוגה מלאה"></div>
+    <div class="media"><img class="shot" src="app-clipboard-dark.png?v=1.15.2" alt="חלון העתקות נקי עם תמונות גדולות ותצוגה מלאה"></div>
   </div>
 </section>
 
 <!-- release:start -->
-<section id="updates" data-release-version="1.15.1">
+<section id="updates" data-release-version="1.15.2">
   <div class="wrap">
     <span class="eyebrow">מה חדש</span>
-    <h2 class="h2">גרסת Windows היציבה: <bdi>v1.15.1</bdi></h2>
+    <h2 class="h2">גרסת Windows היציבה: <bdi>v1.15.2</bdi></h2>
     <p class="sub">העדכונים האחרונים מתוך יומן השינויים של התוכנה.</p>
     <div class="release-notes">
       <ul>
-        <li><strong>חלון ההעתקות חוזר לחזית</strong>: הקיצור מחזיר חלון מכוסה או ממוזער, וסוגר אותו רק כשהוא כבר פעיל. החיפוש, הבחירה והגלילה נשמרים בהחזרה לחזית.</li>
-        <li><strong>התוכן במרכז</strong>: רשימה נקייה ללא תאריך, שעה או תיאורים חוזרים, תמונות גדולות וטקסט קריא יותר. רוב שטח החלון מוקדש לתצוגה המלאה.</li>
-        <li><strong>הרחבה ודיוק בתמונות</strong>: כפתור הרחבה, תצוגה בגודל מקורי 100% והתאמה לחלון. Esc חוזר מהרחבה לרשימה, ולחיצה נוספת סוגרת.</li>
-        <li><strong>התאמה למסכים</strong>: מיקום וגודל החלון מותאמים לשטח המסך הזמין. בחלון נמוך פעולות משניות עוברות לתפריט ⋯ כדי לפנות מקום לתמונה; מצב בהיר וכהה, מסננים, מועדפים והעתקה ידנית נשמרים.</li>
+        <li><strong>סיום מסודר לפני עדכון</strong>: יציאה מפורשת מסיימת את האפליקציה גם כשהחלון הראשי פתוח. לחיצה על X עדיין מסתירה למגש. התיקון מונע ביטול עדכון בגלל תהליך ישן שלא נסגר.</li>
+        <li><strong>פתיחה מחדש אחרי עדכון</strong>: האפליקציה מופעלת מחדש לאחר עדכון תקין או שחזור תקין. ניתן לבטל במפורש באמצעות `restart_after_update=false`, או לעדכון יחיד באמצעות `--no-restart` בכלי העדכון.</li>
+        <li><strong>שמירת בחירת ההפעלה עם Windows</strong>: העדכון אינו משנה את קיצור ההפעלה האוטומטית או מפעיל מחדש רשומה שכובתה ב־Windows. ההפעלה בכניסה למחשב ממשיכה ברקע, דרך הקיצור הקיים.</li>
       </ul>
     </div>
     <div class="cta-row">
-      <a class="btn btn-lg btn-primary" href="https://github.com/MatanCH2020/MyWhisper/releases/download/v1.15.1/MyWhisper-Setup.cmd">הורדת המתקין</a>
-      <a class="btn btn-lg btn-ghost" href="https://github.com/MatanCH2020/MyWhisper/releases/tag/v1.15.1">כל פרטי הגרסה</a>
+      <a class="btn btn-lg btn-primary" href="https://github.com/MatanCH2020/MyWhisper/releases/download/v1.15.2/MyWhisper-Setup.cmd">הורדת המתקין</a>
+      <a class="btn btn-lg btn-ghost" href="https://github.com/MatanCH2020/MyWhisper/releases/tag/v1.15.2">כל פרטי הגרסה</a>
     </div>
   </div>
 </section>

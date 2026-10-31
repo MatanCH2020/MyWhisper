@@ -17,7 +17,7 @@
 ### 🌐 [דף הבית ← matanch2020.github.io/MyWhisper](https://matanch2020.github.io/MyWhisper/) · ⬇️ [הורדת מתקין](https://github.com/MatanCH2020/MyWhisper/releases/latest/download/MyWhisper-Setup.cmd)
 
 <!-- release-version:start -->
-**גרסה נוכחית: [v1.15.1](https://github.com/MatanCH2020/MyWhisper/releases/tag/v1.15.1)** · [היסטוריית העדכונים](CHANGELOG.md)
+**גרסה נוכחית: [v1.15.2](https://github.com/MatanCH2020/MyWhisper/releases/tag/v1.15.2)** · [היסטוריית העדכונים](CHANGELOG.md)
 <!-- release-version:end -->
 
 <br>
@@ -270,6 +270,7 @@ irm https://raw.githubusercontent.com/MatanCH2020/MyWhisper/main/scripts/uninsta
 | `vad_filter` | סינון שקט אוטומטי |
 | `input_device` | שם המיקרופון להקלטה (`""` = ברירת מחדל של המערכת). ניתן לבחור מ**הגדרות ← מיקרופון** |
 | `restore_clipboard` | שחזור ה-clipboard המקורי אחרי ההדבקה |
+| `restart_after_update` | פתיחה מחדש אחרי עדכון Windows או שחזור תקין (ברירת מחדל `true`). `false` משאיר את האפליקציה סגורה; אינו משנה את ההפעלה עם Windows |
 | `clipboard_restore_delay` | שניות המתנה לפני שחזור ה-clipboard (הגדל לאפליקציות איטיות) |
 | `max_record_seconds` | תקרת הקלטה — עצירה אוטומטית להקלטה שנשכחה (0 = כבוי) |
 | `sounds` / `sound_volume` | צלילי התחלה/סיום ועוצמתם (0–1) |
@@ -317,6 +318,12 @@ MyWhisper עולה ברקע ללא החלון הראשי ומציג הודעה �
 הרצה חוזרת של סקריפט ההפעלה מעדכנת ומפעילה את אותו קיצור; לביטול ניתן
 להשבית את MyWhisper באפליקציות האתחול של Windows או למחוק את `MyWhisper.lnk`
 מתיקיית `shell:startup`.
+
+עדכון גרסה אינו משנה את בחירת ההפעלה עם Windows: רשומה פעילה נשארת פעילה,
+ורשומה שכובתה או הוסרה אינה מופעלת מחדש. אחרי עדכון האפליקציה נפתחת מחדש
+כברירת מחדל; אפשר לבטל בנפרד עם `restart_after_update=false` בקובץ `config.json`.
+לכלי העדכון יש גם `--no-restart` עבור הרצה יחידה. יציאה מפורשת מסיימת את התהליך;
+לחיצה רגילה על X ממשיכה להסתיר למגש.
 
 </details>
 

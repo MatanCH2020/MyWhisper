@@ -43,6 +43,7 @@ DEFAULTS = {
     "highlight_unknown": True,
     "bidi_isolate": True,
     "theme": "dark",
+    "restart_after_update": True,    # Windows updater; independent of login startup
     # Sign-in alone never opts a user into sending dictated text to OpenAI.
     "chatgpt_enabled": False,
     "chatgpt_model": "",

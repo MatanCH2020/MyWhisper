@@ -25,6 +25,7 @@
   "highlight_unknown": true,
   "bidi_isolate": true,
   "theme": "dark",
+  "restart_after_update": true,
   "chatgpt_enabled": false,
   "chatgpt_model": "",
   "chatgpt_browser": "system",

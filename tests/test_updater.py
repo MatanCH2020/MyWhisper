@@ -1,5 +1,7 @@
 """Exercise update transactions in disposable Git repositories and fake venvs."""
 from pathlib import Path
+from contextlib import contextmanager
+import json
 import shutil
 import subprocess
 import sys
@@ -115,6 +117,58 @@ class PowerShellScriptsTest(unittest.TestCase):
                        "if ($errs.Count) { $errs | Out-String | Write-Error; exit 1 }")
             result = subprocess.run(["powershell", "-NoProfile", "-Command", command], capture_output=True)
             self.assertEqual(result.returncode, 0, (script.name, result.stderr.decode(errors="replace")))
+
+
+class RestartPolicyTest(unittest.TestCase):
+    def test_only_explicit_false_disables_restart_without_rewriting_config(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            self.assertTrue(updater._restart_enabled(root))
+            for value in (False, True, None, 0, 'false'):
+                data = json.dumps({'restart_after_update': value, 'other': 'keep'})
+                (root / 'config.json').write_text(data, encoding='utf-8')
+                self.assertEqual(updater._restart_enabled(root), value is not False)
+                self.assertEqual((root / 'config.json').read_text(), data)
+            (root / 'config.json').write_text('{broken', encoding='utf-8')
+            self.assertTrue(updater._restart_enabled(root))
+
+    def test_success_rollback_opt_out_and_failed_recovery(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            for enabled, no_restart, failure, recovered, expected in (
+                (True, False, False, True, True),
+                (False, False, False, True, False),
+                (True, True, False, True, False),
+                (True, False, True, True, True),
+                (True, False, True, False, False),
+            ):
+                with self.subTest(enabled=enabled, no_restart=no_restart, failure=failure, recovered=recovered):
+                    (root / 'config.json').write_text(json.dumps({'restart_after_update': enabled}))
+                    held = []
+                    @contextmanager
+                    def guard(*args):
+                        held.append(True)
+                        try:
+                            yield
+                        finally:
+                            held.pop()
+                    def launch(*args, **kwargs):
+                        self.assertFalse(held, 'Restart raced the updater mutex')
+                        self.assertEqual(args[0], ['wscript.exe', str(root / 'scripts/run_mywishper.vbs')])
+                        self.assertEqual(kwargs['cwd'], root)
+                    argv = ['updater.py', '--root', str(root), '--tag', 'v1.0.0']
+                    if no_restart:
+                        argv.append('--no-restart')
+                    with patch.object(sys, 'argv', argv), \
+                         patch.object(updater, '_ensure_stopped'), \
+                         patch.object(updater, '_app_guard', guard), \
+                         patch.object(updater, '_update_lock', guard), \
+                         patch.object(updater, 'prepare', return_value='v1.0.0'), \
+                         patch.object(updater, 'apply_update', side_effect=RuntimeError('synthetic failure') if failure else None), \
+                         patch.object(updater, 'run', side_effect=None if recovered else RuntimeError('unusable')), \
+                         patch.object(updater.subprocess, 'Popen', side_effect=launch) as start:
+                        self.assertEqual(updater.main(), int(failure))
+                    self.assertEqual(start.called, expected)
 
 
 if __name__ == "__main__":

@@ -193,11 +193,26 @@ def _update_lock(root):
             msvcrt.locking(lock.fileno(), msvcrt.LK_UNLCK, 1)
 
 
+def _restart_enabled(root):
+    """Only an explicit boolean false opts out; never rewrite user preferences.
+
+    Keep this stdlib-only: the updater also runs using the base interpreter
+    while replacing the virtual environment, or from an installer bootstrap.
+    """
+    try:
+        config = json.loads((root / "config.json").read_text(encoding="utf-8-sig"))
+        return not (isinstance(config, dict) and config.get("restart_after_update") is False)
+    except (OSError, ValueError):
+        return True
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--tag")
     parser.add_argument("--parent-pid", type=int)
     parser.add_argument("--root", type=Path)
+    parser.add_argument("--no-restart", action="store_true",
+                        help="Leave the app closed after this update only")
     args = parser.parse_args()
     root = (args.root or Path(__file__).resolve().parent.parent).resolve()
     if args.parent_pid:
@@ -220,7 +235,7 @@ def main():
             except Exception:
                 pass
     # Release both locks before the silent launcher attempts to acquire the mutex.
-    if restart:
+    if restart and not args.no_restart and _restart_enabled(root):
         subprocess.Popen(["wscript.exe", str(root / "scripts/run_mywishper.vbs")], cwd=root)
     return code
 
