@@ -178,12 +178,7 @@ class DictionaryPageMixin:
         # click time too: account/opt-in state may have changed since rendering.
         self._refresh_scan_controls()
         if not self._scan_ready:
-            self._goto(2, from_nav=False)
-            self._cloud_panel.set_open(True)
-            target = (self._cloud_switch if self._cloud_switch.isEnabled() else
-                      self._cloud_model if self._cloud_model.isEnabled() else self._cloud_login)
-            self.stack.widget(2).ensureWidgetVisible(target)
-            target.setFocus()
+            self._open_cloud_setup()
             return
         self._scan_busy = True
         self._scan_cancelling = False

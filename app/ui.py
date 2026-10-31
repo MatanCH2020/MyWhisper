@@ -608,8 +608,9 @@ class MainWindow(HistoryPageMixin, DictionaryPageMixin, SettingsPageMixin, Frame
         self.body.addWidget(TitleBar(palette, ui.toggle_theme,
                                      self.showMinimized, self.close, on_max=self.toggle_max))
         from mode_controls import ModeSelector
-        self.mode_selector = ModeSelector()
+        self.mode_selector = ModeSelector(offer_setup=True)
         self.mode_selector.selected.connect(ui.select_mode)
+        self.mode_selector.setup_requested.connect(self._open_cloud_setup)
         self.body.addWidget(self.mode_selector)
 
         mid = QWidget()

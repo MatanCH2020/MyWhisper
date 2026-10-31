@@ -88,7 +88,7 @@ from ui import AppUI
 from tray import Tray
 if not IS_MAC:
     from cloud_http import CloudHTTP
-    from chatgpt_auth import ChatGPTAuth, AuthError, DEFAULT_MODEL
+    from chatgpt_auth import ChatGPTAuth, AuthError, initial_model
     from history_scanner import HistoryScanner
     from text_editor import TextEditor
     from external_browser import browser_choices, open_external_browser
@@ -329,11 +329,10 @@ class Mywishper(QObject):
                     if not self.chatgpt.disconnect():
                         message = ("נותקת במחשב. ביטול ההרשאה בשרת לא אושר; "
                                    "אפשר לנתק את MyWhisper בהגדרות ChatGPT.")
-                models = {m["slug"] for m in self.chatgpt.status()["models"]}
-                previous = self.config.get("chatgpt_model", "")
-                self.config["chatgpt_model"] = (previous if previous in models else
-                                                 DEFAULT_MODEL if DEFAULT_MODEL in models else "")
-                save_config(self.config)
+                status = self.chatgpt.status()
+                if action == "disconnect" or not status.get("catalog_error"):
+                    self.config["chatgpt_model"] = initial_model(self.config.get("chatgpt_model", ""), status["models"])
+                    save_config(self.config)
             elif action == "welcome":
                 with self.chatgpt.lock:
                     self.chatgpt.data["welcome_seen"] = True
@@ -347,9 +346,11 @@ class Mywishper(QObject):
                     message = "לא ניתן לפתוח דפדפן חיצוני. בחר דפדפן מותקן בהגדרות ההתחברות."
             elif action == "catalog":
                 self.chatgpt.catalog()
-                if self.config.get("chatgpt_model") not in {m["slug"] for m in self.chatgpt.status()["models"]}:
+                models = self.chatgpt.status()["models"]
+                previous = self.config.get("chatgpt_model", "")
+                if previous not in {m["slug"] for m in models}:
                     self._set_chatgpt_enabled(False)
-                    self.config["chatgpt_model"] = ""
+                    self.config["chatgpt_model"] = "" if previous else initial_model("", models)
                     save_config(self.config)
             elif action == "probe":
                 if not self.chatgpt.enabled:

@@ -385,6 +385,17 @@ class SettingsPageMixin:
         self._refresh_cloud()
         return card
 
+    def _open_cloud_setup(self):
+        self._goto(2, from_nav=False)
+        self._cloud_panel.set_open(True)
+        target = (self._cloud_switch if self._cloud_switch.isEnabled() else
+                  self._cloud_relogin if self._cloud_relogin.isVisible() else
+                  self._cloud_model if self._cloud_model.isEnabled() else self._cloud_login)
+        target.setFocus()
+        # Expansion relayouts the scroll area on the next Qt event cycle.
+        area = self.stack.widget(2)
+        QTimer.singleShot(0, area, lambda: area.ensureWidgetVisible(target))
+
     def _refresh_cloud(self, status=None):
         if not self.ui.cloud_supported:
             return

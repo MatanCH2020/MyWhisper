@@ -5,7 +5,7 @@ from pathlib import Path
 import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "app"))
-from chatgpt_auth import AuthError, ChatGPTAuth, DEFAULT_MODEL
+from chatgpt_auth import AuthError, ChatGPTAuth, initial_model
 from cloud_http import CloudHTTP
 from config import load_config, save_config
 from external_browser import open_external_browser
@@ -27,8 +27,9 @@ def main():
                 raise AuthError("storage")
             print("Waiting for approval in the selected external browser.", flush=True)
             auth.sign_in(browser=lambda url: open_external_browser(url, cfg.get("chatgpt_browser", "system")))
-            models = {m["slug"] for m in auth.status()["models"]}
-            cfg["chatgpt_model"] = DEFAULT_MODEL if DEFAULT_MODEL in models else ""
+            status = auth.status()
+            if not status.get("catalog_error"):
+                cfg["chatgpt_model"] = initial_model(cfg.get("chatgpt_model", ""), status["models"])
             if not save_config(cfg):
                 raise AuthError("storage")
         status = auth.status()

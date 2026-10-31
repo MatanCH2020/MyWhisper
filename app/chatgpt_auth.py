@@ -31,7 +31,13 @@ AUTH = "https://auth.openai.com"
 RESOURCE = "https://api.openai.com/v1"
 SCOPES = "openid profile email offline_access resource.invoke chatgpt.tokens.use.direct"
 REQUIRED_SCOPES = {"resource.invoke", "chatgpt.tokens.use.direct"}
-DEFAULT_MODEL = "gpt-6-luna"
+DEFAULT_MODEL = "gpt-6.1-terra"
+
+
+def initial_model(previous, models):
+    """Choose only from this account's visible catalog; keep a valid preference."""
+    available = {m["slug"] for m in models}
+    return previous if previous in available else DEFAULT_MODEL if DEFAULT_MODEL in available else ""
 
 
 class AuthError(Exception):

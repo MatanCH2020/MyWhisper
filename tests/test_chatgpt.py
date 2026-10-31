@@ -207,7 +207,7 @@ class OAuthTests(unittest.TestCase):
         cls.jwk = json.loads(jwt.algorithms.RSAAlgorithm.to_jwk(cls.private.public_key()))
         cls.jwk.update(kid="test-key", use="sig", alg="RS256")
 
-    def setup_auth(self, identity_changes=None, callback_changes=None, scopes=None):
+    def setup_auth(self, identity_changes=None, callback_changes=None, scopes=None, catalog_models=None):
         self.callback_pages = []
         self.callback_done = threading.Event()
         self.params, self.calls = {}, []
@@ -217,7 +217,7 @@ class OAuthTests(unittest.TestCase):
             if path.endswith("jwks.json"):
                 return httpx.Response(200, json={"keys": [self.jwk]})
             if path.endswith("/models"):
-                return httpx.Response(200, json={"models": [
+                return httpx.Response(200, json={"models": catalog_models if catalog_models is not None else [
                     {"slug": "hidden", "visibility": "hide"},
                     {"slug": "gpt-6-luna", "display_name": "Luna", "visibility": "list"}]})
             if path.endswith("/token"):
@@ -274,6 +274,30 @@ class OAuthTests(unittest.TestCase):
         self.assertEqual(exchange["client_id"], ["oaiapp_test"])
         self.assertEqual(exchange["redirect_uri"], [self.params["redirect_uri"]])
         self.assertNotIn("client_secret", exchange)
+
+    def test_new_install_model_selection_and_manual_choice_survive_signin(self):
+        terra, other = "gpt-6.1-terra", "other-account-model"
+        catalog = [{"slug": other, "visibility": "list"}, {"slug": terra, "visibility": "hide"}]
+        auth, browser = self.setup_auth(catalog_models=catalog)
+        app = main.Mywishper.__new__(main.Mywishper)
+        QObject.__init__(app)
+        app.chatgpt, app.text_editor = auth, Mock()
+        with tempfile.TemporaryDirectory() as folder, \
+             patch.object(config, "CONFIG_PATH", Path(folder) / "config.json"), \
+             patch.object(main, "open_external_browser", side_effect=lambda url, _: browser(url)):
+            app.config = config.load_config()
+            first = app._chatgpt_action("login")
+            self.assertTrue(first["eligible"])
+            self.assertEqual(first["model"], "")  # hidden Terra cannot become the default
+            catalog[1]["visibility"] = "list"
+            self.assertEqual(app._chatgpt_action("catalog")["model"], terra)
+            app.config = config.DEFAULTS.copy()  # simulate a new configuration with Terra available
+            self.assertEqual(app._chatgpt_action("login")["model"], terra)
+            self.assertFalse(auth.enabled)
+            self.assertEqual(app._chatgpt_action("model", other)["model"], other)
+            self.assertEqual(app._chatgpt_action("relogin")["model"], other)
+            self.assertEqual(config.load_config()["chatgpt_model"], other)
+            self.assertFalse(config.load_config()["chatgpt_enabled"])
 
     def test_nonce_issuer_audience_expiry_and_subject_are_checked(self):
         for changes in ({"nonce": "wrong"}, {"iss": "https://evil.test"}, {"aud": "other"},
@@ -717,6 +741,20 @@ class CloudSettingsTests(unittest.TestCase):
                 self.assertIn("מחובר ל־ChatGPT" if connected_now else "לא מחובר", self.win._cloud_connection.text())
             if connected_now:
                 self.assertIn("owner@example.test", self.win._cloud_connection_detail.text())
+        self.ui.chatgpt_action.assert_not_called()
+
+    def test_first_run_cloud_button_opens_login_and_keeps_local_mode(self):
+        self.win.show()
+        self.qapp.processEvents()
+        self.win._refresh_cloud({"connected": False})
+        self.win.mode_selector.cloud.click()
+        self.qapp.processEvents()
+        self.assertEqual(self.win.stack.currentIndex(), 2)
+        viewport = self.win.stack.widget(2).viewport()
+        login = self.win._cloud_login
+        self.assertTrue(login.isVisible() and viewport.rect().contains(login.mapTo(viewport, login.rect().center())))
+        self.assertTrue(self.win.mode_selector.local.isChecked())
+        self.assertFalse(self.win.mode_selector.cloud.isChecked())
         self.ui.chatgpt_action.assert_not_called()
 
     def test_explicit_click_enables_without_confirmation_dialog(self):
