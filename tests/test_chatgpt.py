@@ -554,6 +554,27 @@ class CloudSettingsTests(unittest.TestCase):
         self.assertFalse(self.win._cloud_switch.isChecked())
         self.ui.chatgpt_action.assert_not_called()
 
+    def test_connection_message_paints_matching_background_and_text_in_both_themes(self):
+        from PySide6.QtWidgets import QLabel, QMessageBox
+        from PySide6.QtGui import QColor, QPalette
+        import theme
+
+        self.ui._win = self.win
+        message = "החשבון מחובר. ניתן להפעיל עיבוד בענן."
+        for name in ("light", "dark"):
+            with self.subTest(theme=name):
+                self.ui.set_theme(name)
+                def inspect(box):
+                    box.show()
+                    self.qapp.processEvents()
+                    label = box.findChild(QLabel, "qt_msgbox_label")
+                    self.assertEqual(label.text(), message)
+                    self.assertEqual(label.palette().color(QPalette.WindowText), QColor(theme.palette(name)["text"]))
+                    self.assertEqual(box.grab().toImage().pixelColor(4, 4), QColor(theme.palette(name)["surface"]))
+                    box.close()
+                with patch.object(QMessageBox, "exec", inspect):
+                    self.win._on_cloud_result({"connected": True, "needs_welcome": True, "message": message})
+
     def test_cloud_popups_render_theme_background_after_theme_switch(self):
         import theme
         from PySide6.QtGui import QColor

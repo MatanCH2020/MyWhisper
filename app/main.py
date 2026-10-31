@@ -10,7 +10,6 @@ import os
 from platform_support import IS_MAC
 if not IS_MAC:
     import updater
-import subprocess
 import sys
 import threading
 import time
@@ -108,6 +107,7 @@ class Mywishper(QObject):
     _load_finished = Signal(bool)
     _storage_error = Signal(str)
     _update_prepared = Signal(str, str)
+    _update_stage = Signal(str, int)
 
     def __init__(self, startup=False):
         super().__init__()
@@ -205,6 +205,7 @@ class Mywishper(QObject):
         self.ui.submit_support_report = support.submit_report
         self.ui.check_update = self._check_update
         self.ui.do_update = self._do_update
+        self._update_stage.connect(self.ui.show_update_stage)
         self.ui.open_mac_setup = self.open_mac_setup
         self.ui.set_clip_hotkey = self._set_clip_hotkey
         if not IS_MAC:
@@ -584,10 +585,21 @@ class Mywishper(QObject):
         root = Path(__file__).resolve().parent.parent
         def prepare():
             try:
-                tag = updater.prepare(root)
+                tag, backup = updater.prepare_window_update(
+                    root, lambda pct: self._update_stage.emit("מגבה את הגרסה המותקנת…", pct))
+                self._update_stage.emit("מעביר את ההתקנה לחלון העדכון…", -1)
+                updater.launch_window(root, tag, backup)
                 self._update_prepared.emit(tag, "")
             except Exception as exc:
-                self._update_prepared.emit("", str(exc))
+                log.exception("Update preparation failed")
+                detail = "לא ניתן להשלים את ההכנה לעדכון. אפשר לנסות שוב מתוך ההגדרות."
+                if "Local changes" in str(exc):
+                    detail = "העדכון נעצר כי נמצאו שינויים מקומיים בתיקיית ההתקנה."
+                elif "disk space" in str(exc) or getattr(exc, "winerror", None) == 112:
+                    detail = "אין מספיק מקום פנוי לגיבוי. פנה מקום ונסה שוב."
+                elif "window could not start" in str(exc):
+                    detail = "חלון העדכון לא נפתח. סגור ופתח את האפליקציה ונסה שוב."
+                self._update_prepared.emit("", detail)
         threading.Thread(target=prepare, daemon=True).start()
         return True
 
@@ -597,19 +609,8 @@ class Mywishper(QObject):
             return
         if error:
             self._updating = False
-            log.warning("Update preflight failed: %s", error)
+            self.ui.show_update_stage(error, failed=True)
             self.tray.notify("MyWhisper — העדכון נעצר", error, "warning")
-            return
-        script = Path(__file__).resolve().parent.parent / "scripts" / "update.ps1"
-        try:
-            subprocess.Popen(
-                ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File",
-                 str(script), "-Tag", tag, "-ParentPid", str(os.getpid())],
-                cwd=str(script.parent), creationflags=subprocess.CREATE_NEW_CONSOLE)
-        except OSError:
-            self._updating = False
-            log.exception("Could not start updater")
-            self.tray.notify("MyWhisper", "לא ניתן להפעיל את העדכון.", "warning")
             return
         self.quit()
 

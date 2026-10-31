@@ -8,6 +8,7 @@ import re
 import shutil
 import subprocess
 import sys
+import threading
 import time
 import urllib.request
 import uuid
@@ -18,7 +19,8 @@ TAG_RE = re.compile(r"v?(\d+\.\d+\.\d+)")
 
 def run(root, *args, timeout=120):
     result = subprocess.run(args, cwd=root, capture_output=True, text=True,
-                            encoding="utf-8", errors="replace", timeout=timeout)
+                            encoding="utf-8", errors="replace", timeout=timeout,
+                            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
     if result.returncode:
         raise RuntimeError(f"{args[0]} failed ({result.returncode}): {result.stderr[-2000:]}")
     return result.stdout.strip()
@@ -45,6 +47,10 @@ def _clean(root):
 
 def prepare(root, tag=None):
     """Validate while the app remains running. Return an exact verified tag."""
+    return _prepare_release(root, tag)[0]
+
+
+def _prepare_release(root, tag):
     root = Path(root).resolve()
     _clean(root)
     if tag is None:
@@ -67,27 +73,99 @@ def prepare(root, tag=None):
     required = sum(p.stat().st_size for p in env.rglob("*") if p.is_file())
     if shutil.disk_usage(root).free < required * 2 + 2 * 1024**3:
         raise RuntimeError("Not enough free disk space for an environment backup and rollback")
-    return tag
+    return tag, required
 
 
-def _backup(root):
+def _backup(root, tag=None, copy_file=shutil.copy2):
     parent = _child(root, root / ".update-backups")
     backup = _child(root, parent / uuid.uuid4().hex)
     backup.mkdir(parents=True)
-    old_ref = _git(root, "rev-parse", "HEAD")
-    branch = _git(root, "rev-parse", "--abbrev-ref", "HEAD")
-    (backup / "state.json").write_text(json.dumps({"commit": old_ref, "branch": branch}), encoding="utf-8")
-    _git(root, "archive", "--format=zip", "-o", str(backup / "code.zip"), "HEAD")
-    env = _child(root, root / ".venv")
-    if env.exists():
-        shutil.copytree(env, _child(root, backup / ".venv"))
+    try:
+        old_ref = _git(root, "rev-parse", "HEAD")
+        branch = _git(root, "rev-parse", "--abbrev-ref", "HEAD")
+        _git(root, "archive", "--format=zip", "-o", str(backup / "code.zip"), old_ref)
+        env = _child(root, root / ".venv")
+        if env.exists():
+            shutil.copytree(env, _child(root, backup / ".venv"), copy_function=copy_file)
+        state = {"commit": old_ref, "branch": branch}
+        if tag:
+            state["target"] = _git(root, "rev-parse", tag + "^{commit}")
+        (backup / "state.json").write_text(json.dumps(state), encoding="utf-8")
+    except Exception:
+        # No checkout has taken place. Discard only this incomplete UUID backup.
+        shutil.rmtree(_child(parent, backup), ignore_errors=True)
+        raise
     return backup, old_ref, branch
 
 
-def _install(root):
+def prepare_window_update(root, on_percent, tag=None):
+    """Report the proportion of environment bytes backed up before shutdown."""
+    tag, total = _prepare_release(root, tag)
+    copied = percent = 0
+    on_percent(0)
+
+    def copy_file(source, destination):
+        nonlocal copied, percent
+        result = shutil.copy2(source, destination)
+        copied += os.path.getsize(destination)
+        current = min(99, copied * 100 // max(1, total))
+        if current > percent:
+            percent = current
+            on_percent(percent)
+        return result
+
+    backup, _, _ = _backup(root, tag, copy_file)
+    on_percent(100)
+    return tag, backup.name
+
+
+def launch_window(root, tag, backup_id):
+    """Keep the app alive until the graphical installer has started its worker."""
+    env = os.environ.copy()
+    env.pop("__PYVENV_LAUNCHER__", None)
+    proc = subprocess.Popen(
+        ["powershell.exe", "-NoProfile", "-NonInteractive", "-STA", "-WindowStyle", "Hidden",
+         "-ExecutionPolicy", "Bypass", "-File", str(root / "scripts/update_window.ps1"),
+         "-Tag", tag, "-ParentPid", str(os.getpid()), "-BackupId", backup_id],
+        cwd=root, env=env, creationflags=subprocess.CREATE_NO_WINDOW,
+        stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+    reported = threading.Event()
+    ready = False
+
+    def read_ready():
+        nonlocal ready
+        try:
+            with proc.stdout:
+                ready = proc.stdout.readline().strip() == b"ready"
+        finally:
+            reported.set()
+        proc.wait()
+
+    threading.Thread(target=read_ready, daemon=True).start()
+    if not reported.wait(45) or not ready:
+        if proc.poll() is None:
+            proc.terminate()
+        raise RuntimeError("Update window could not start")
+
+
+def _prepared_backup(root, tag, backup_id):
+    if not re.fullmatch(r"[0-9a-f]{32}", backup_id):
+        raise ValueError("Invalid backup identifier")
+    backup = _child(root, root / ".update-backups" / backup_id)
+    state = json.loads((backup / "state.json").read_text(encoding="utf-8"))
+    if (state["commit"] != _git(root, "rev-parse", "HEAD")
+            or state["branch"] != _git(root, "rev-parse", "--abbrev-ref", "HEAD")
+            or state["target"] != _git(root, "rev-parse", tag + "^{commit}")
+            or not (backup / "code.zip").is_file() or not (backup / ".venv").is_dir()):
+        raise RuntimeError("Installation changed since backup; update cancelled")
+    return backup, state["commit"], state["branch"]
+
+
+def _install(root, progress):
     run(root, "powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File",
         str(root / "scripts" / "setup.ps1"), timeout=3600)
     python = root / ".venv" / "Scripts" / "python.exe"
+    progress("verify")
     run(root, str(python), "-m", "pip", "check")
     run(root, str(python), str(root / "scripts" / "verify_install.py"))
 
@@ -102,18 +180,20 @@ def _restore(root, backup, old_ref, branch):
         shutil.copytree(saved, env)
 
 
-def apply_update(root, tag):
+def apply_update(root, tag, *, backup_id=None, progress=lambda stage: None):
     """Called only after shutdown. Keep backups on disk for manual recovery too."""
     if not TAG_RE.fullmatch(tag):
         raise ValueError("Invalid release tag")
     root = Path(root).resolve()
     _clean(root)
-    backup, old_ref, branch = _backup(root)
+    backup, old_ref, branch = (_prepared_backup(root, tag, backup_id) if backup_id else _backup(root))
     try:
+        progress("install")
         _git(root, "checkout", "--detach", tag)
-        _install(root)
+        _install(root, progress)
     except Exception as original:
         try:
+            progress("restore")
             _restore(root, backup, old_ref, branch)
         except Exception as recovery:
             raise RuntimeError(f"Update and rollback failed. Backup: {backup}. {recovery}") from original
@@ -211,19 +291,28 @@ def main():
     parser.add_argument("--tag")
     parser.add_argument("--parent-pid", type=int)
     parser.add_argument("--root", type=Path)
+    parser.add_argument("--prepared-backup", help="Completed in-app backup identifier")
+    parser.add_argument("--progress", action="store_true", help="Emit stage names for the graphical updater")
     parser.add_argument("--no-restart", action="store_true",
                         help="Leave the app closed after this update only")
     args = parser.parse_args()
     root = (args.root or Path(__file__).resolve().parent.parent).resolve()
+    def progress(stage):
+        if args.progress:
+            print("stage:" + stage, flush=True)
     if args.parent_pid:
         _wait_for_exit(args.parent_pid)
     _ensure_stopped()
     restart, code = False, 0
     with _app_guard(), _update_lock(root):
         try:
-            tag = prepare(root, args.tag)
-            backup = apply_update(root, tag)
-            print(f"Update verified. Previous installation backed up at {backup}")
+            if args.prepared_backup:
+                backup = apply_update(root, args.tag, backup_id=args.prepared_backup, progress=progress)
+            else:
+                tag = prepare(root, args.tag)
+                backup = apply_update(root, tag)
+            if not args.progress:
+                print(f"Update verified. Previous installation backed up at {backup}")
             restart = True
         except Exception as exc:
             print(str(exc), file=sys.stderr)
@@ -232,10 +321,12 @@ def main():
             try:
                 run(root, str(root / ".venv/Scripts/python.exe"), str(root / "scripts/verify_install.py"))
                 restart = True
+                progress("recovered")
             except Exception:
                 pass
     # Release both locks before the silent launcher attempts to acquire the mutex.
     if restart and not args.no_restart and _restart_enabled(root):
+        progress("restart")
         subprocess.Popen(["wscript.exe", str(root / "scripts/run_mywishper.vbs")], cwd=root)
     return code
 

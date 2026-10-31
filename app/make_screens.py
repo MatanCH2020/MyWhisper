@@ -104,6 +104,7 @@ def main():
     parser.add_argument("--chatgpt-states", action="store_true",
                         help="Render connected and failed-sign-in examples with synthetic account data")
     parser.add_argument("--mode-states", action="store_true", help="Render both dictation modes with demo data")
+    parser.add_argument("--update-states", action="store_true", help="Render update progress and the account welcome")
     parser.add_argument("--scan-states", action="store_true", help="Render synthetic scan progress and persistent results")
     parser.add_argument("--fullscreen-paused", action="store_true", help="Render fullscreen suspension with demo data")
     parser.add_argument("--support-states", action="store_true", help="Render the support preview with synthetic data only")
@@ -111,6 +112,29 @@ def main():
     if args.output_dir:
         DOCS = args.output_dir.resolve()
     DOCS.mkdir(exist_ok=True)
+    if args.update_states:
+        from PySide6.QtCore import QTimer
+        for name in ("dark", "light"):
+            win = build(name)
+            win._goto(2, from_nav=False)
+            def capture():
+                box = app.activeModalWidget()
+                box.grab().save(str(DOCS / f"app-welcome-{name}.png"))
+                box.accept()
+            QTimer.singleShot(60, capture)
+            win._on_cloud_result({"connected": True, "needs_welcome": True, "message":
+                "החשבון מחובר. השימוש במסגרת חשבון ChatGPT ובכפוף למכסתו. העריכה עדיין כבויה; אפשר להפעיל אותה בנפרד."})
+            if name == "dark":
+                card = win._upd_btn.parentWidget()
+                while not hasattr(card, "set_open"):
+                    card = card.parentWidget()
+                card.set_open(True)
+                win._show_update_stage("מגבה את הגרסה המותקנת…", 48)
+                app.processEvents()
+                win.stack.widget(2).ensureWidgetVisible(win._upd_progress)
+                shoot(win, 2, DOCS / "app-update-progress.png")
+            win.close()
+        return
     if args.mode_states:
         for cloud in (False, True):
             status = {"connected": True, "eligible": True, "enabled": cloud, "model": "gpt-6.1-terra",

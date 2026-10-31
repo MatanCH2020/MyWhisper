@@ -17,7 +17,7 @@
 ### 🌐 [דף הבית ← matanch2020.github.io/MyWhisper](https://matanch2020.github.io/MyWhisper/) · ⬇️ [הורדת מתקין](https://github.com/MatanCH2020/MyWhisper/releases/latest/download/MyWhisper-Setup.cmd)
 
 <!-- release-version:start -->
-**גרסה נוכחית: [v1.16.1](https://github.com/MatanCH2020/MyWhisper/releases/tag/v1.16.1)** · [היסטוריית העדכונים](CHANGELOG.md)
+**גרסה נוכחית: [v1.16.2](https://github.com/MatanCH2020/MyWhisper/releases/tag/v1.16.2)** · [היסטוריית העדכונים](CHANGELOG.md)
 <!-- release-version:end -->
 
 <br>
@@ -341,6 +341,10 @@ MyWhisper עולה ברקע ללא החלון הראשי ומציג הודעה �
 הרצה חוזרת של סקריפט ההפעלה מעדכנת ומפעילה את אותו קיצור; לביטול ניתן
 להשבית את MyWhisper באפליקציות האתחול של Windows או למחוק את `MyWhisper.lnk`
 מתיקיית `shell:startup`.
+
+כדי לעדכן מתוך האפליקציה פתחו **הגדרות ← עדכונים וגרסה**, לחצו **בדוק עדכונים** ואז **עדכן עכשיו**.
+מגרסה 1.16.2 מופיע פס התקדמות בהגדרות בזמן ההורדה והגיבוי. בזמן החלפת הקבצים חלון עדכון של MyWhisper מציג את שלב ההתקנה והבדיקה. עדכון שמתחיל בגרסה ישנה יותר משתמש בממשק העדכון של אותה גרסה.
+[תצוגת העדכון בהגדרות](docs/app-update-progress.png)
 
 עדכון גרסה אינו משנה את בחירת ההפעלה עם Windows: רשומה פעילה נשארת פעילה,
 ורשומה שכובתה או הוסרה אינה מופעלת מחדש. אחרי עדכון האפליקציה נפתחת מחדש

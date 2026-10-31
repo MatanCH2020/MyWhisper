@@ -123,6 +123,8 @@ QToolTip {{
     border-radius: 6px;
     padding: 4px 8px;
 }}
+QMessageBox {{ background-color: {p['surface']}; }}
+QMessageBox QLabel {{ color: {p['text']}; background-color: transparent; }}
 
 /* default = secondary button */
 QPushButton {{

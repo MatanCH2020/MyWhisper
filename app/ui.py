@@ -925,6 +925,10 @@ class AppUI(QObject):
         qapp.setLayoutDirection(Qt.RightToLeft)
         qapp.setStyleSheet(theme.build_qss(self.p))
 
+    def show_update_stage(self, text, percent=-1, failed=False):
+        if self._win is not None:
+            self._win._show_update_stage(text, percent, failed)
+
     def select_mode(self, cloud):
         if self._overlay.state in ("transcribing", "polishing"):
             return

@@ -72,7 +72,7 @@ class UpdaterTest(unittest.TestCase):
             updater.prepare(self.root, "v7.7.7")
 
     def test_dependency_failure_restores_code_and_environment(self):
-        def fail(root):
+        def fail(root, progress):
             (root / ".venv/marker").write_text("partially installed")
             raise RuntimeError("pip failed")
         with patch.object(updater, "_install", side_effect=fail):
@@ -84,7 +84,7 @@ class UpdaterTest(unittest.TestCase):
         self.assertTrue(list(self.root.glob(".update-backups/*/code.zip")))
 
     def test_success_installs_exact_tag_and_keeps_backup(self):
-        def install(root):
+        def install(root, progress):
             self.assertIn("1.1.0", (root / "app/version.py").read_text())
             (root / ".venv/marker").write_text("new environment")
         with patch.object(updater, "_install", side_effect=install):
@@ -98,6 +98,29 @@ class UpdaterTest(unittest.TestCase):
             updater._child(self.root, self.root / "../other")
         with self.assertRaises(ValueError):
             updater._child(self.root, self.root)
+
+    def test_graphical_handoff_reuses_complete_backup_and_reports_rollback(self):
+        percentages = []
+        tag, backup_id = updater.prepare_window_update(self.root, percentages.append, "v1.1.0")
+        self.assertEqual(percentages[0], 0)
+        self.assertEqual(percentages[-1], 100)
+        self.assertEqual(percentages, sorted(set(percentages)))
+        self.assertEqual(self.git("rev-parse", "HEAD"), self.old)
+        stages = []
+        with patch.object(updater, "_backup", side_effect=AssertionError("duplicate backup")), \
+             patch.object(updater, "_install", side_effect=RuntimeError("install failed")):
+            with self.assertRaisesRegex(RuntimeError, "previous version restored"):
+                updater.apply_update(self.root, tag, backup_id=backup_id, progress=stages.append)
+        self.assertEqual(stages, ["install", "restore"])
+        self.assertEqual(self.git("rev-parse", "HEAD"), self.old)
+        self.assertEqual((self.root / ".venv/marker").read_text(), "old environment")
+
+    def test_graphical_handoff_rejects_changed_checkout_before_installing(self):
+        _, backup_id = updater.prepare_window_update(self.root, lambda pct: None, "v1.1.0")
+        self.git("checkout", "-b", "changed")
+        with self.assertRaisesRegex(RuntimeError, "changed since backup"):
+            updater.apply_update(self.root, "v1.1.0", backup_id=backup_id)
+        self.assertEqual(self.git("rev-parse", "HEAD"), self.old)
 
     def test_native_failure_raises(self):
         with self.assertRaisesRegex(RuntimeError, r"failed \(7\)"):

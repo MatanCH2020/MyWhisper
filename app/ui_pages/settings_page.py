@@ -239,6 +239,12 @@ class SettingsPageMixin:
         self._upd_status.setWordWrap(True)
         self._upd_status.setObjectName("hint")
         ubox.addWidget(self._upd_status)
+        self._upd_progress = QProgressBar()
+        self._upd_progress.setAccessibleName("התקדמות העדכון")
+        self._upd_progress.setRange(0, 0)
+        self._upd_progress.setTextVisible(False)
+        self._upd_progress.hide()
+        ubox.addWidget(self._upd_progress)
         self._upd_now_btn = QPushButton("עדכן עכשיו")
         theme.bind_style(self._upd_now_btn, lambda _theme_palette: _primary_btn_qss(_theme_palette), self.p)
         self._upd_now_btn.setCursor(Qt.PointingHandCursor)
@@ -551,6 +557,7 @@ class SettingsPageMixin:
             # keeping the separate opt-in switch off.
             if result.get("connected") and result.get("needs_welcome") and message.startswith("החשבון מחובר"):
                 box = QMessageBox(self)
+                box.setOption(QMessageBox.Option.DontUseNativeDialog, True)
                 box.setWindowTitle("החשבון מחובר ל-MyWhisper")
                 box.setText(message)
                 got_it = box.addButton("הבנתי", QMessageBox.AcceptRole)
@@ -719,14 +726,18 @@ class SettingsPageMixin:
                 QMessageBox.information(self, "עדכון בטא ל־Mac", "הורד את קובץ ה־DMG מהגרסה שנפתחה, סגור את MyWhisper והחלף את האפליקציה ב־Applications. הנתונים נשמרים בנפרד.")
             return
         if self.ui.do_update():
-            QMessageBox.information(
-                self, "MyWhisper",
-                "מתבצעות בדיקות מקדימות. האפליקציה תיסגר רק לאחר שהן יצליחו, "
-                "ותיפתח מחדש לאחר העדכון. כשל בבדיקה יוצג כהודעה.")
+            self._show_update_stage("מוריד ובודק את הגרסה החדשה…")
         else:
-            QMessageBox.warning(
-                self, "MyWhisper",
-                "לא ניתן להפעיל את העדכון. עדכן ידנית בעזרת פקודת ההתקנה מה-README.")
+            self._upd_status.setText("האפליקציה עסוקה. נסה שוב אחרי סיום הפעולה.")
+
+    def _show_update_stage(self, text, percent=-1, failed=False):
+        self._upd_status.setText(f"{text} {percent}%" if percent >= 0 else text)
+        self._upd_progress.setRange(0, 100 if percent >= 0 else 0)
+        if percent >= 0:
+            self._upd_progress.setValue(percent)
+        self._upd_progress.setVisible(not failed)
+        self._upd_btn.setEnabled(failed)
+        self._upd_now_btn.setVisible(failed)
 
 
     def _populate_mics(self):
