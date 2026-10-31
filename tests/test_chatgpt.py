@@ -126,6 +126,13 @@ class EditorTests(unittest.TestCase):
         self.assertEqual(bodies[1]["input"], [{"role": "user", "content": following}])
         self.assertNotIn("previous_response_id", bodies[1])
 
+    def test_whatsapp_markers_and_paragraphs_survive_completed_stream(self):
+        output = "*עדכון לצוות*\n\n_חשוב לדעת_\n~500~ 600 שקלים\n\n> אישרתי את ההצעה\n\n- מצגת\n- מחשב"
+        auth, editor = self.setup_editor(httpx.Response(200, content=completed(output)))
+        auth.set_enabled(True)
+        result = editor.edit("תנסח הודעת WhatsApp עם עיצוב ופסקאות", "gpt-6-luna")
+        self.assertEqual((result.status, result.text), ("edited", output))
+
     def test_completed_item_is_accepted_only_after_successful_response_completion(self):
         item = {"type": "message", "role": "assistant", "status": "completed",
                 "content": [{"type": "output_text", "text": "clean"}]}

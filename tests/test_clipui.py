@@ -3,6 +3,7 @@ import os
 from pathlib import Path
 import sys
 import tempfile
+import time
 import unittest
 from unittest.mock import Mock, patch
 
@@ -228,7 +229,11 @@ class ClipboardWindowTest(unittest.TestCase):
              patch.object(self.window, 'is_foreground', return_value=False), \
              patch.object(QApplication, 'alert') as alert:
             self.window._force_foreground()
-            QTest.qWait(160)
+            # Wait for the observable retry, allowing for loaded CI event loops.
+            # Keep the exact call-count and stopped-timer assertions below.
+            deadline = time.monotonic() + 1
+            while activate.call_count < 2 and time.monotonic() < deadline:
+                QTest.qWait(10)
         self.assertEqual(activate.call_count, 2)
         alert.assert_called_once_with(self.window)
         self.assertFalse(self.window._activation_timer.isActive())

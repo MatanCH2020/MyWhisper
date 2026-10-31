@@ -58,6 +58,12 @@ CASES += [
     ("emoji-cancel", "תנסח הודעה לדני עם אימוג'ים. בעצם בלי אימוג'ים בכלל. הפגישה ביום ראשון בשעה 10:30.", ["דני", "ראשון", "10:30"]),
     ("emoji-quoted", "תעתיק בדיוק את המשפט הבא בלי לשנות אותו: דני ביקש שאוסיף אימוג'ים לכל הודעה.", ["דני ביקש שאוסיף אימוג'ים לכל הודעה"]),
     ("emoji-plain", "דני תודה על העזרה היום הפגישה ביום ראשון בשעה 10:30 תביא בבקשה את המצגת", ["דני", "ראשון", "10:30", "מצגת"]),
+    ("wa-styles", "תנסח הודעת WhatsApp. הכותרת היא עדכון לצוות ותהיה מודגשת. בפסקה הבאה כתוב חשוב לדעת בנטוי. בפסקה נוספת כתוב מחיר קודם 500 עם קו חוצה על 500 בלבד, ומחיר חדש 600 שקלים. בסוף תוסיף בשורה נפרדת את הציטוט המדויק שקיבלנו: אישרתי את ההצעה. בלי אימוג'ים.", ["*עדכון לצוות*", "_חשוב לדעת_", "~500~", "600", "> אישרתי את ההצעה", "\n\n"]),
+    ("wa-paragraphs", "תנסח הודעת וואטסאפ בשלוש פסקאות קצרות עם שורה ריקה ביניהן. דני תודה על העזרה היום. הפגישה שלנו ביום ראשון בשעה 10:30. תביא בבקשה את המצגת ואת המחשב.", ["דני", "ראשון", "10:30", "מצגת", "מחשב"]),
+    ("wa-emoji", "תנסח הודעת וואטסאפ קלילה עם פסקאות קצרות ותשלב אימוג'י אחד או שניים במקומות המתאימים, בלי להעמיס. דני תודה על העזרה היום. הפגישה ביום ראשון בשעה 10:30. תביא בבקשה את המצגת. בסיום נעבור על ההצעה של 600 שקלים.", ["דני", "ראשון", "10:30", "מצגת", "600"]),
+    ("wa-plain", "תנסח הודעת WhatsApp פשוטה בלי שום סימני עיצוב ובלי אימוג'ים. דני תודה על העזרה. הפגישה ביום ראשון בשעה 10:30.", ["דני", "ראשון", "10:30"]),
+    ("wa-mentioned", "דני כתב לי ב-WhatsApp שהפגישה ביום ראשון בשעה 10:30.", ["דני", "WhatsApp", "ראשון", "10:30"]),
+    ("wa-list-link", "תנסח הודעת וואטסאפ בלי אימוג'ים. תציג ברשימת תבליטים שני דברים שצריך להביא: מחשב ומצגת. בפסקה נפרדת תוסיף את הקישור https://example.test/meeting בדיוק כמו שהוא.", ["מחשב", "מצגת", "https://example.test/meeting", "\n\n"]),
 ]
 FORBIDDEN = {
     "email": ["תנסח", "כמובן", "הנה המייל"],
@@ -78,7 +84,23 @@ def checks_passed(name, output, keep):
     if not all(f in output for f in keep) or any(f in output for f in FORBIDDEN.get(name, [])):
         return False
     count = len(EMOJI.findall(output))
-    if name in ("emoji-whatsapp", "emoji-email-end", "emoji-middle"):
+    if name.startswith("wa-"):
+        if any(f in output for f in ("```", "**", "~~", "# ", "<b>", "<i>", "](", "הנה ההודעה", "תנסח")):
+            return False
+        if name == "wa-emoji":
+            return 1 <= count <= 2 and "\n\n" in output
+        if count:
+            return False
+        if name in ("wa-plain", "wa-mentioned"):
+            return not any(c in output for c in "*_~>")
+        if name == "wa-paragraphs":
+            return len(output.split("\n\n")) == 3
+        if name == "wa-list-link":
+            return len(re.findall(r"^- \S", output, re.MULTILINE)) == 2
+        return True
+    if name == "emoji-whatsapp":
+        return count >= 1
+    if name in ("emoji-email-end", "emoji-middle"):
         return count >= 3
     if name in ("emoji-cancel", "emoji-quoted", "emoji-plain"):
         return count == 0
