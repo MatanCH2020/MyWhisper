@@ -113,6 +113,19 @@ class EditorTests(unittest.TestCase):
         result = editor.edit("original", "gpt-6-luna")
         self.assertEqual((result.text, result.status), ("original", "incomplete"))
 
+    def test_emoji_output_and_combined_instructions_survive_transport_without_carryover(self):
+        output = "דני, תודה על העזרה 🙏\nניפגש ביום ראשון בשעה 10:30 📅"
+        auth, editor = self.setup_editor(httpx.Response(200, content=completed(output)))
+        auth.set_enabled(True)
+        spoken = "תנסח הודעה לדני. תודה על העזרה. ניפגש ביום ראשון בשעה 10:30. ותוסיף אימוג'י לכל שורה."
+        self.assertEqual(editor.edit(spoken, "gpt-6-luna").text, output)
+        following = "הפגישה ביום שני."
+        editor.edit(following, "gpt-6-luna")
+        bodies = [json.loads(request.content) for request in self.requests]
+        self.assertEqual(bodies[0]["input"], [{"role": "user", "content": spoken}])
+        self.assertEqual(bodies[1]["input"], [{"role": "user", "content": following}])
+        self.assertNotIn("previous_response_id", bodies[1])
+
     def test_completed_item_is_accepted_only_after_successful_response_completion(self):
         item = {"type": "message", "role": "assistant", "status": "completed",
                 "content": [{"type": "output_text", "text": "clean"}]}

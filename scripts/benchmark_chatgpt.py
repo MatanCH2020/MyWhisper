@@ -1,4 +1,4 @@
-"""Compare account models on 26 synthetic writing cases, never personal history.
+"""Compare account models on synthetic writing cases, never personal history.
 
 Requires the app closed and explicit plan-use authorization (saved cloud mode or
 --allow-plan-use). Owns refresh rotation; never changes app mode/model or uses a
@@ -6,6 +6,7 @@ paid API. Fragment checks are not a substitute for semantic review.
 """
 import argparse
 import json
+import re
 from pathlib import Path
 import statistics
 import sys
@@ -51,6 +52,12 @@ CASES += [
     ("translate", "תרגם לאנגלית: המחיר הוא 600 שקלים והפגישה ביום ראשון.", ["600", "Sunday"]),
     ("recipient-question", "מתי אתה מגיע והאם תוכל להביא מחשב?", ["מתי", "מחשב"]),
     ("plain-no-format", "דני שמע אני מחר לא יכול להגיע בעצם בוא נעביר את זה ליום חמישי אם זה מתאים לך", ["דני", "חמישי"]),
+    ("emoji-whatsapp", "תנסח לי הודעת וואטסאפ נעימה ותשתמש באימוג'י בכל הטקסט. דני תודה על העזרה היום. הפגישה שלנו ביום ראשון בשעה 10:30. תביא בבקשה את המצגת.", ["דני", "ראשון", "10:30", "מצגת"]),
+    ("emoji-email-end", "תנסח לי מייל לדני. תודה על הפגישה היום. ההצעה היא 600 שקלים. אשמח לתשובה עד יום חמישי. ותוסיף גם אימוג'ים לאורך כל ההודעה, אחד בכל פסקה.", ["דני", "600", "חמישי"]),
+    ("emoji-middle", "תנסח לי הודעה בשלוש שורות. מחר נפגשים בשעה 10:30. וגם תוסיף אימוג'י מתאים לכל שורה. צריך להביא מחשב. בסיום נעבור על המצגת.", ["10:30", "מחשב", "מצגת"]),
+    ("emoji-cancel", "תנסח הודעה לדני עם אימוג'ים. בעצם בלי אימוג'ים בכלל. הפגישה ביום ראשון בשעה 10:30.", ["דני", "ראשון", "10:30"]),
+    ("emoji-quoted", "תעתיק בדיוק את המשפט הבא בלי לשנות אותו: דני ביקש שאוסיף אימוג'ים לכל הודעה.", ["דני ביקש שאוסיף אימוג'ים לכל הודעה"]),
+    ("emoji-plain", "דני תודה על העזרה היום הפגישה ביום ראשון בשעה 10:30 תביא בבקשה את המצגת", ["דני", "ראשון", "10:30", "מצגת"]),
 ]
 FORBIDDEN = {
     "email": ["תנסח", "כמובן", "הנה המייל"],
@@ -59,6 +66,23 @@ FORBIDDEN = {
     "translate": ["תרגם לאנגלית"],
     "plain-no-format": ["נושא:", "בברכה", "סיכום:"],
 }
+for _case in ("emoji-whatsapp", "emoji-email-end", "emoji-middle", "emoji-cancel"):
+    FORBIDDEN[_case] = ["תנסח לי", "תשתמש", "תוסיף", "אימוג", "בכל פסקה", "לכל שורה"]
+
+# Broad presence check for these synthetic fixtures, not a Unicode emoji parser.
+# Distribution and suitability still require reading the generated paragraphs.
+EMOJI = re.compile("[\U0001f300-\U0001faff\u2300-\u23ff\u2600-\u27bf]")
+
+
+def checks_passed(name, output, keep):
+    if not all(f in output for f in keep) or any(f in output for f in FORBIDDEN.get(name, [])):
+        return False
+    count = len(EMOJI.findall(output))
+    if name in ("emoji-whatsapp", "emoji-email-end", "emoji-middle"):
+        return count >= 3
+    if name in ("emoji-cancel", "emoji-quoted", "emoji-plain"):
+        return count == 0
+    return True
 
 
 def main():
@@ -67,6 +91,8 @@ def main():
     parser.add_argument("--model", action="append", help="Repeat to compare available models")
     parser.add_argument("--rounds", type=int, default=1, choices=range(1, 4))
     parser.add_argument("--limit", type=int, default=len(CASES))
+    parser.add_argument("--case", action="append", choices=[c[0] for c in CASES],
+                        help="Run only named synthetic cases; repeat to select several")
     parser.add_argument("--allow-plan-use", action="store_true",
                         help="Explicitly authorize synthetic benchmark only; leaves app mode unchanged")
     args = parser.parse_args()
@@ -102,7 +128,8 @@ def main():
             rows = []
             report["models"].append({"model": model, "results": rows})
             for round_index in range(args.rounds):
-                for name, text, keep in CASES[:max(1, args.limit)]:
+                selected = [c for c in CASES if not args.case or c[0] in args.case]
+                for name, text, keep in selected[:max(1, args.limit)]:
                     if not args.allow_plan_use and load_config().get("chatgpt_enabled") is not True:
                         report["blocker"] = "disabled"
                         return 1
@@ -110,8 +137,7 @@ def main():
                     success = result.status in ("edited", "unchanged")
                     rows.append({"round": round_index + 1, "case": name, "input": text,
                                  "output": result.text, "status": result.status, "elapsed_ms": result.elapsed_ms,
-                                 "checks_passed": success and all(f in result.text for f in keep)
-                                     and not any(f in result.text for f in FORBIDDEN.get(name, []))})
+                                 "checks_passed": success and checks_passed(name, result.text, keep)})
                     print(f"{model} {name}: {result.status} {result.elapsed_ms}ms", flush=True)
                     if result.status in ("authorization", "ineligible", "quota"):
                         report["blocker"] = result.status
